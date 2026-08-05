@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Spike S1 — sincronización dual-stream</title>
+<link rel="icon" href="data:,"><!-- evita el 404 de favicon que ensucia el log -->
+
+
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 1.25rem;
+    font: 15px/1.5 system-ui, sans-serif;
+    background: #14161a; color: #e6e8ea;
+  }
+  h1 { font-size: 1.1rem; margin: 0 0 .25rem; }
+  p.sub { margin: 0 0 1.25rem; color: #9aa3ad; font-size: .875rem; }
+  .videos { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+  video { width: 100%; background: #000; border-radius: 6px; display: block; }
+  .label { font-size: .8rem; color: #9aa3ad; margin-bottom: .3rem; }
+  .panel {
+    margin-top: 1.25rem; padding: 1rem;
+    background: #1c1f24; border: 1px solid #2a2f36; border-radius: 8px;
+  }
+  .stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: .75rem; margin-bottom: 1rem;
+  }
+  .stat { }
+  .stat .k { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: #8b939c; }
+  .stat .val { font-size: 1.2rem; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .good { color: #88ff00; }
+  .warn { color: #ffb020; }
+  canvas { width: 100%; height: 130px; background: #101216; border-radius: 6px; display: block; }
+  .chart-legend { font-size: .72rem; color: #8b939c; margin-top: .35rem; }
+  .controls { margin-top: 1rem; display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+  button, select {
+    font: inherit; padding: .4rem .8rem; border-radius: 6px;
+    border: 1px solid #39404a; background: #262b32; color: #e6e8ea; cursor: pointer;
+  }
+  button:hover:not(:disabled), select:hover { background: #303740; }
+  button:disabled { opacity: .45; cursor: default; }
+  label { font-size: .8rem; color: #9aa3ad; display: inline-flex; gap: .35rem; align-items: center; }
+  .times { margin-top: .75rem; font-size: .8rem; color: #8b939c; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+
+<h1>Spike S1 — sincronización dual-stream</h1>
+<p class="sub">
+  Los dos vídeos llevan el timecode incrustado: si divergen, se ve sin instrumentos.
+  Framerates distintos (30 / 25 fps) a propósito.
+</p>
+
+<div class="videos">
+  <div>
+    <div class="label">MAESTRO · presenter · 30fps · con audio</div>
+    <video id="master" src="media/presenter.mp4" controls playsinline preload="auto"></video>
+  </div>
+  <div>
+    <div class="label">ESCLAVO · slides · 25fps · sin audio</div>
+    <video id="slave" src="media/slides.mp4" muted playsinline preload="auto"></video>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="stats">
+    <div class="stat"><div class="k">Deriva</div><div class="val" id="drift">—</div></div>
+    <div class="stat"><div class="k">Deriva máx.</div><div class="val" id="maxdrift">—</div></div>
+    <div class="stat"><div class="k">Rate esclavo</div><div class="val" id="rate">—</div></div>
+    <div class="stat"><div class="k">Acción</div><div class="val" id="action">—</div></div>
+    <div class="stat"><div class="k">Saltos duros</div><div class="val" id="hardseeks">0</div></div>
+    <div class="stat"><div class="k">Stalls</div><div class="val" id="stalls">0</div></div>
+  </div>
+
+  <canvas id="chart" width="1200" height="130"></canvas>
+  <div class="chart-legend">
+    Deriva en el tiempo. La banda verde es la zona muerta (±33 ms, un frame);
+    el borde del gráfico es el umbral de salto duro (±500 ms).
+  </div>
+
+  <div class="controls">
+    <button id="btn-play">Play / Pause</button>
+    <button id="btn-seek">Seek aleatorio</button>
+    <button id="btn-nudge">Desviar +250 ms</button>
+    <button id="btn-shove">Desviar +2 s</button>
+    <button id="btn-stall">Simular stall del esclavo</button>
+    <button id="btn-reset">Reiniciar métricas</button>
+    <label>Velocidad
+      <select id="rate-sel">
+        <option value="0.5">0.5×</option>
+        <option value="1" selected>1×</option>
+        <option value="1.5">1.5×</option>
+        <option value="2">2×</option>
+      </select>
+    </label>
+    <label>Política de stall
+      <select id="stall-sel">
+        <option value="pauseBoth" selected>Pausar ambos</option>
+        <option value="letMasterRun">Dejar correr al maestro</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="times">
+    maestro <span id="mt">0.000</span>s · esclavo <span id="st">0.000</span>s
+  </div>
+</div>
+
+<script src="sync.js"></script>
+</body>
+</html>
