@@ -1,0 +1,70 @@
+name: Publicar sonda de diagnóstico
+
+# Publica spikes/s2-device-matrix como GitHub Pages, para poder pasar el enlace
+# a quien vaya a probar en su dispositivo.
+#
+# La sonda se CONSTRUYE aquí en lugar de versionar el HTML resultante: los
+# vídeos van incrustados en base64 y commitear medio mega de binario en cada
+# cambio ensucia el historial para nada.
+#
+# Requiere repositorio PÚBLICO en plan gratuito: Pages desde repo privado es de
+# planes de pago.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'spikes/s2-device-matrix/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: spikes/s2-device-matrix
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # fonts-dejavu-core aporta la tipografía del timecode incrustado.
+      - name: Instalar ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+
+      - name: Generar medios de prueba
+        run: ./gen-media.sh
+
+      - name: Construir la sonda
+        run: node build.mjs
+
+      - name: Preparar el sitio
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/_site"
+          cp dist/nanoplayer-probe.html "$GITHUB_WORKSPACE/_site/index.html"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

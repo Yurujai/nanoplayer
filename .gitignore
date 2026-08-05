@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.idea/
+.DS_Store
+
+# Medios de prueba generados por los spikes: se regeneran con gen-media.sh
+spikes/*/media/
+
+# Documento de trabajo interno. Se publicará cuando el MVP esté más avanzado.
+ROADMAP.md
