@@ -47,6 +47,9 @@
            background:var(--bg);color:var(--fg);border:1px solid var(--line);
            border-radius:8px;padding:.6rem}
   .status{color:var(--dim);font-size:.9rem;min-height:1.5em}
+  #checklist{list-style:none;margin:0 0 .9rem;padding:0;font-size:.92rem}
+  #checklist li{padding:.15rem 0}
+  button.incomplete{border-color:var(--warn);color:var(--warn)}
   .hint{font-size:.85rem;color:var(--dim);margin:.5rem 0 0}
 </style>
 </head>
@@ -95,6 +98,7 @@
 
   <section>
     <h2>5 · Informe</h2>
+    <ul id="checklist"></ul>
     <button id="copy" class="ghost" disabled>Copiar informe</button>
     <label for="out" class="hint">Si el botón no funciona, copia este texto a mano:</label>
     <textarea id="out" readonly spellcheck="false"></textarea>
@@ -452,15 +456,42 @@ function finishFs(F){
 }
 
 /* ------------------------------------------------------------- 5. informe -- */
-function emit(){
-  $('out').value = JSON.stringify(report, null, 2);
-  $('copy').disabled = false;
+// El botón de copiar está activo desde que carga la página, así que sin este
+// aviso es fácil enviar un informe a medias. La prueba de pantalla completa es
+// la que más se salta —otra sección, otro botón— y es la decisiva en iPhone.
+function copyLabel(){
+  return report.complete ? 'Copiar informe' : 'Copiar informe (incompleto)';
 }
+
+function emit(){
+  const hecho = {
+    'Entorno y capacidades': !!report.caps,
+    'Pruebas de reproducción': !!report.playback,
+    'Pantalla completa': !!report.fullscreen,
+  };
+  report.complete = Object.values(hecho).every(Boolean);
+
+  const ul = $('checklist');
+  ul.innerHTML = '';
+  for (const [k, v] of Object.entries(hecho)) {
+    const li = document.createElement('li');
+    li.textContent = v ? `✓ ${k}` : `○ ${k} — pendiente`;
+    li.className = v ? 'ok' : 'warn';
+    ul.appendChild(li);
+  }
+
+  $('out').value = JSON.stringify(report, null, 2);
+  const btn = $('copy');
+  btn.disabled = false;
+  btn.textContent = copyLabel();
+  btn.classList.toggle('incomplete', !report.complete);
+}
+
 $('copy').onclick = async () => {
   const ta = $('out');
   try { await navigator.clipboard.writeText(ta.value); $('copy').textContent = 'Copiado'; }
   catch { ta.select(); document.execCommand?.('copy'); $('copy').textContent = 'Selecciona y copia'; }
-  setTimeout(() => { $('copy').textContent = 'Copiar informe'; }, 2500);
+  setTimeout(() => { $('copy').textContent = copyLabel(); }, 2500);
 };
 emit();
 </script>
