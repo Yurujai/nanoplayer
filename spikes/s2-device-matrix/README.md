@@ -46,18 +46,31 @@ página: no hay ninguna petición de red.
 Para poder interpretar los resultados de los móviles hace falta un techo
 conocido.
 
-| | Chrome headless (CI) | Chrome 150 · Ubuntu, 16 núcleos |
-|---|---|---|
-| Vídeos simultáneos | **18** | **18** |
-| Dos audios a la vez | sí | sí |
-| Deriva mediana / p95 | 7.8 / 14.6 ms | 7.8 / 15.1 ms |
-| Saltos duros | 0 | 0 |
-| FPS del lazo de control | 26 | 27 |
-| Fullscreen del contenedor | sí, ambos vídeos vivos | sí |
-| MediaSource | sí | sí |
+Todo lo medido hasta ahora es **motor Blink**. Sigue faltando WebKit.
 
-Dos entornos distintos dando lo mismo, y coincidiendo además con lo medido en S1
-con vídeos grandes y servidor propio. La sonda mide de forma consistente.
+| | Chrome headless (CI) | Chrome 150 · Ubuntu, 16 núcleos | Chrome 150 · Mac M2 Pro, 10 núcleos |
+|---|---|---|---|
+| Vídeos simultáneos | **18** | **18** | **18** |
+| Dos audios a la vez | sí | sí | sí |
+| Deriva mediana / p95 | 7.8 / 14.6 ms | 7.8 / 15.1 ms | 8.3 / 19.6 ms |
+| Saltos duros | 0 | 0 | 0 |
+| FPS del lazo de control | 26 | 27 | 24 |
+| Fullscreen del contenedor | sí, ambos vídeos vivos | sí | sí |
+| MediaSource | sí | sí | sí |
+
+Tres entornos dando lo mismo, y coincidiendo con lo medido en S1 con vídeos
+grandes y servidor propio. La sonda mide de forma consistente.
+
+### Hipótesis: los 18 vídeos son un tope de Chrome, no del hardware
+
+Tres máquinas muy distintas —16 núcleos x86, 10 núcleos Apple Silicon y un
+runner de CI— se paran **exactamente en 18**. Si fuera un límite de
+decodificación por hardware, cabría esperar dispersión.
+
+Si se confirma, es buena noticia para el `PlayerRegistry`: el presupuesto sería
+una constante por navegador y no algo que haya que descubrir en cada
+dispositivo. **Queda por comprobar en WebKit y en Gecko**, donde es muy probable
+que el número sea distinto — y en móvil, donde sí debería mandar el hardware.
 
 ### Hallazgo: `audioTracks` no existe en Chrome
 

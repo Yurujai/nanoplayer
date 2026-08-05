@@ -51,11 +51,14 @@
   #checklist li{padding:.15rem 0}
   button.incomplete{border-color:var(--warn);color:var(--warn)}
   .hint{font-size:.85rem;color:var(--dim);margin:.5rem 0 0}
+  #hint{background:var(--card);border:1px solid var(--warn);border-left-width:4px;
+        border-radius:8px;padding:.8rem 1rem;margin:0 0 1rem;font-size:.95rem}
 </style>
 </head>
 <body>
 <main>
   <h1>NanoPlayer · Diagnóstico de dispositivo</h1>
+  <p id="hint" hidden></p>
   <p class="lead">
     Mide qué puede hacer este dispositivo con vídeo. Tarda menos de un minuto y
     no instala nada. Al terminar sale un informe para copiar y enviar.
@@ -157,7 +160,31 @@ const cls = (b) => b ? 'ok' : 'bad';
   const sv = /Version\/(\d+\.\d+).*Safari/.exec(ua);
   e.safariVersion = sv ? sv[1] : null;
 
+  // Identificar navegador y motor explícitamente. Sin esto es fácil recibir un
+  // informe de Chrome sobre un Mac creyendo que trae datos de WebKit: la UA de
+  // Chrome contiene las palabras "AppleWebKit" y "Safari", y despista.
+  e.browser =
+      /CriOS\//.test(ua)   ? 'Chrome (iOS)'
+    : /FxiOS\//.test(ua)   ? 'Firefox (iOS)'
+    : /EdgiOS\//.test(ua)  ? 'Edge (iOS)'
+    : /Edg\//.test(ua)     ? 'Edge'
+    : /OPR\//.test(ua)     ? 'Opera'
+    : /Firefox\//.test(ua) ? 'Firefox'
+    : /Chrome\//.test(ua)  ? 'Chrome'
+    : (e.safariVersion || /Safari\//.test(ua)) ? 'Safari'
+    : 'desconocido';
+
+  const esIOS = /iPhone|iPad|iPod/.test(ua) || e.likelyIPadOS;
+  // En iOS todos los navegadores están obligados a usar WebKit, incluido Chrome.
+  e.engine = esIOS ? 'WebKit'
+    : e.browser === 'Safari' ? 'WebKit'
+    : e.browser === 'Firefox' ? 'Gecko'
+    : e.browser === 'desconocido' ? 'desconocido' : 'Blink';
+
+  e.isApple = esIOS || navigator.platform === 'MacIntel' || /Mac/.test(ua);
+
   const dl = $('env');
+  row(dl, 'Navegador', `${e.browser} · ${e.engine}`);
   row(dl, 'Viewport', e.viewport);
   row(dl, 'Densidad', e.dpr + '×');
   row(dl, 'Núcleos', e.cores ?? 'desconocido');
@@ -165,6 +192,18 @@ const cls = (b) => b ? 'ok' : 'bad';
   if (e.iosVersion) row(dl, 'iOS', e.iosVersion);
   if (e.safariVersion) row(dl, 'Safari', e.safariVersion);
   if (e.likelyIPadOS) row(dl, 'iPadOS disfrazado de Mac', 'sí', 'warn');
+
+  // En un aparato Apple, los datos que faltan están en WebKit, no en Blink.
+  // Pedirlo aquí evita descubrirlo al recibir el informe.
+  if (e.isApple && e.engine !== 'WebKit') {
+    const h = $('hint');
+    h.hidden = false;
+    h.innerHTML = `Estás en <strong>${e.browser}</strong>, que usa el motor
+      ${e.engine}. En un dispositivo Apple los datos que interesan son los de
+      <strong>Safari</strong>, que se comporta distinto. Puedes completar esta
+      prueba igualmente, pero por favor <strong>ábrela también en Safari</strong>
+      y envía los dos informes.`;
+  }
 })();
 
 /* --------------------------------------------------------- 2. capacidades -- */
