@@ -10,6 +10,8 @@
 # distinguirlo de un fallo del algoritmo de sincronización.
 set -euo pipefail
 
+# media/ está en .gitignore, así que en un clon limpio no existe.
+mkdir -p "$(dirname "$0")/media"
 cd "$(dirname "$0")/media"
 
 DUR=${DUR:-90}
