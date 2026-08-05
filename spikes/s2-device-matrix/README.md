@@ -46,17 +46,28 @@ página: no hay ninguna petición de red.
 Para poder interpretar los resultados de los móviles hace falta un techo
 conocido.
 
-| | Chrome / Linux escritorio |
-|---|---|
-| Vídeos simultáneos | **18** |
-| Dos audios a la vez | sí |
-| Deriva mediana / p95 | 7.8 ms / 14.6 ms |
-| Saltos duros | 0 |
-| Fullscreen del contenedor | sí, con los dos vídeos vivos |
-| MediaSource | sí |
+| | Chrome headless (CI) | Chrome 150 · Ubuntu, 16 núcleos |
+|---|---|---|
+| Vídeos simultáneos | **18** | **18** |
+| Dos audios a la vez | sí | sí |
+| Deriva mediana / p95 | 7.8 / 14.6 ms | 7.8 / 15.1 ms |
+| Saltos duros | 0 | 0 |
+| FPS del lazo de control | 26 | 27 |
+| Fullscreen del contenedor | sí, ambos vídeos vivos | sí |
+| MediaSource | sí | sí |
 
-La deriva coincide con la medida en S1 con vídeos grandes y servidor propio, lo
-que da confianza en que la sonda mide lo mismo con medios reducidos.
+Dos entornos distintos dando lo mismo, y coincidiendo además con lo medido en S1
+con vídeos grandes y servidor propio. La sonda mide de forma consistente.
+
+### Hallazgo: `audioTracks` no existe en Chrome
+
+Chrome no implementa `HTMLMediaElement.audioTracks`. **Esto invalida la
+implementación de multi-audio que se daba por supuesta** — delegar las pistas
+embebidas en el navegador — para todo Chrome, que es la mayor parte del parque.
+
+Consecuencia para el diseño: el `AudioTrackProvider` de pistas embebidas tiene
+que apoyarse en la API de hls.js, no en la nativa. Y como hls.js exige MSE, en
+Safari/iOS sin `ManagedMediaSource` habrá que comprobar si queda alguna vía.
 
 ---
 
@@ -67,6 +78,9 @@ que da confianza en que la sonda mide lo mismo con medios reducidos.
 | `maxConcurrentVideos` < 4 | El degradado móvil (S3) es obligatorio, no opcional |
 | `containerFullscreen: false` | En ese dispositivo no hay dual-stream a pantalla completa. Hay que decidir: conmutar a un stream, o desactivar el botón |
 | `mediaSource` y `managedMediaSource` ambos `false` | hls.js no funciona: solo HLS nativo, sin control de calidad propio |
+| `hlsMime` es `"maybe"` | **No es prueba de nada.** Chrome lo devuelve sin soportar HLS nativo. Solo `"probably"` junto a la ausencia de MSE indica HLS nativo real |
+| `audioTracks: false` | El multi-audio no puede ir por la API nativa en ese navegador |
+| `coldAutoplay.muted: false` | Ni siquiera silenciado se puede autoarrancar: el póster y el botón de play son obligatorios, no una optimización |
 | `dualAudio: false` | Confirma que el audio debe venir de un solo stream, como ya asume el diseño maestro/esclavo |
 | `driftP95Ms` > 33 | La sincronización de S1 no se sostiene ahí; hay que revisar umbrales por plataforma |
 | `loopFps` muy bajo | El lazo de control está limitado por CPU; hay que espaciarlo |

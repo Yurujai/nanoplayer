@@ -182,7 +182,10 @@ const cls = (b) => b ? 'ok' : 'bad';
     // Sin alguna de las dos, hls.js no puede funcionar.
     managedMediaSource: !!window.ManagedMediaSource,
     mseH264: MS && MS.isTypeSupported ? MS.isTypeSupported('video/mp4; codecs="avc1.42E01E"') : false,
-    nativeHls: can('application/vnd.apple.mpegurl') !== 'no',
+    // Valor CRUDO de canPlayType, no un booleano. Chrome devuelve "maybe" para
+    // el MIME de HLS aunque no lo reproduce sin MSE: convertirlo a sí/no da un
+    // falso positivo que llevaría a elegir el motor equivocado.
+    hlsMime: can('application/vnd.apple.mpegurl'),
     h264: can('video/mp4; codecs="avc1.42E01E"'),
     hevc: can('video/mp4; codecs="hvc1.1.6.L93.B0"'),
     vp9: can('video/webm; codecs="vp9"'),
@@ -191,7 +194,9 @@ const cls = (b) => b ? 'ok' : 'bad';
     audioTracks: 'audioTracks' in v,
     textTracks: 'textTracks' in v,
     remotePlayback: 'remote' in v,
-    castApi: !!window.chrome?.cast,
+    // No se comprueba window.chrome.cast: solo existe tras cargar el SDK de
+    // Cast, así que un false no distingue "no soportado" de "SDK no cargado".
+    // remotePlayback es la señal útil.
   };
 
   const dl = $('caps');
@@ -200,7 +205,7 @@ const cls = (b) => b ? 'ok' : 'bad';
   row(dl, 'Fullscreen solo del vídeo', yn(c.videoOnlyFullscreen), c.videoOnlyFullscreen ? 'warn' : '');
   row(dl, 'MediaSource (hls.js)', yn(c.mediaSource), cls(c.mediaSource));
   row(dl, 'ManagedMediaSource', yn(c.managedMediaSource), c.managedMediaSource ? 'ok' : '');
-  row(dl, 'HLS nativo', yn(c.nativeHls), cls(c.nativeHls));
+  row(dl, 'MIME de HLS', c.hlsMime || 'no', c.hlsMime === 'probably' ? 'ok' : 'warn');
   row(dl, 'H.264', c.h264, cls(c.h264 !== 'no'));
   row(dl, 'HEVC', c.hevc, c.hevc !== 'no' ? 'ok' : '');
   row(dl, 'VP9', c.vp9, c.vp9 !== 'no' ? 'ok' : '');
@@ -228,6 +233,23 @@ const ready = (v) => new Promise((res) => {
   v.addEventListener('canplay', done); v.addEventListener('error', fail);
 });
 
+/* ------------------------------- autoplay en frío, sin gesto de usuario ---- */
+// Se mide al cargar, ANTES de cualquier clic. La prueba de la sección 3 corre
+// tras pulsar el botón, así que allí ya hay gesto concedido y mide otra cosa:
+// permiso con gesto, no la política del navegador. Para el diseño multi-instancia
+// lo que importa es esta, la de en frío.
+(async function coldAutoplay(){
+  const v = mkVideo(MEDIA.a);
+  v.style.cssText = 'position:fixed;left:-9999px;width:1px;height:1px';
+  document.body.appendChild(v);
+  const okMedia = await ready(v);
+  const c = report.coldAutoplay = { mediaReady: okMedia, muted: null };
+  if (okMedia) c.muted = await v.play().then(() => true).catch(() => false);
+  v.pause(); v.remove();
+  row($('caps'), 'Autoplay en frío (silenciado)', yn(c.muted), c.muted ? 'ok' : 'warn');
+  emit();
+})();
+
 /* ------------------------------------------------ 3. pruebas con playback -- */
 $('run').onclick = async () => {
   const btn = $('run'); btn.disabled = true;
@@ -236,17 +258,20 @@ $('run').onclick = async () => {
   const say = (t) => { $('status').textContent = t; };
   const R = report.playback = {};
 
-  // --- 3a. Política de autoplay ---
-  say('Comprobando política de autoplay…');
+  // --- 3a. Reproducción con gesto ya concedido ---
+  // OJO: esto NO es la política de autoplay. El usuario acaba de pulsar el
+  // botón, así que hay gesto. Mide si el dispositivo deja reproducir con
+  // permiso; la política en frío se mide al cargar la página.
+  say('Comprobando reproducción con gesto…');
   const av = mkVideo(MEDIA.a); document.body.appendChild(av);
   av.style.cssText = 'position:fixed;left:-9999px;width:1px;height:1px';
   await ready(av);
-  R.autoplayMuted = await av.play().then(() => true).catch(() => false);
+  R.afterGestureMuted = await av.play().then(() => true).catch(() => false);
   av.pause(); av.currentTime = 0; av.muted = false;
-  R.autoplayUnmuted = await av.play().then(() => true).catch(() => false);
+  R.afterGestureUnmuted = await av.play().then(() => true).catch(() => false);
   av.pause(); av.remove();
-  row(dl, 'Autoplay silenciado', yn(R.autoplayMuted), cls(R.autoplayMuted));
-  row(dl, 'Autoplay con sonido', yn(R.autoplayUnmuted), R.autoplayUnmuted ? 'ok' : 'warn');
+  row(dl, 'Con gesto · silenciado', yn(R.afterGestureMuted), cls(R.afterGestureMuted));
+  row(dl, 'Con gesto · con sonido', yn(R.afterGestureUnmuted), R.afterGestureUnmuted ? 'ok' : 'warn');
   prog.value = 1;
 
   // --- 3b. Decodificación simultánea ---
