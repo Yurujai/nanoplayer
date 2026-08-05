@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>NanoPlayer · Diagnóstico de dispositivo</title>
+<link rel="icon" href="data:,">
+<style>
+  :root{
+    --bg:#0f1115; --card:#171a20; --line:#262b33; --fg:#e8eaed; --dim:#98a1ac;
+    --ok:#5ddc7a; --bad:#ff6b6b; --warn:#ffb648; --accent:#6aa9ff;
+    color-scheme:dark;
+  }
+  @media (prefers-color-scheme:light){
+    :root{ --bg:#f6f7f9; --card:#fff; --line:#e2e5ea; --fg:#15181d; --dim:#5d6773;
+           --ok:#0f8a3d; --bad:#c62828; --warn:#a35c00; --accent:#0b5fd0; color-scheme:light; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:1rem;background:var(--bg);color:var(--fg);
+       font:16px/1.55 system-ui,-apple-system,sans-serif;
+       padding-bottom:calc(2rem + env(safe-area-inset-bottom))}
+  main{max-width:720px;margin:0 auto}
+  h1{font-size:1.35rem;margin:.25rem 0}
+  h2{font-size:1rem;margin:0 0 .75rem;color:var(--dim);
+     text-transform:uppercase;letter-spacing:.06em}
+  p.lead{color:var(--dim);margin:0 0 1.5rem}
+  section{background:var(--card);border:1px solid var(--line);border-radius:12px;
+          padding:1rem;margin-bottom:1rem}
+  dl{margin:0;display:grid;grid-template-columns:1fr auto;gap:.4rem .75rem;align-items:baseline}
+  dt{color:var(--dim);font-size:.9rem;min-width:0;overflow-wrap:anywhere}
+  dd{margin:0;text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+  .ok{color:var(--ok)} .bad{color:var(--bad)} .warn{color:var(--warn)}
+  button{font:inherit;font-weight:600;padding:.85rem 1.1rem;border-radius:10px;
+         border:1px solid var(--accent);background:var(--accent);color:#fff;
+         cursor:pointer;width:100%;margin-bottom:.5rem;min-height:48px}
+  button.ghost{background:transparent;color:var(--accent)}
+  button:disabled{opacity:.45;cursor:default}
+  button:focus-visible{outline:3px solid var(--warn);outline-offset:2px}
+  #stage{display:flex;flex-wrap:wrap;gap:6px;margin-top:.75rem}
+  #stage video{width:104px;height:58px;background:#000;border-radius:4px}
+  #fsbox{display:flex;gap:6px;background:#000;border-radius:8px;overflow:hidden}
+  #fsbox video{width:50%;display:block}
+  #fsbox .marker{position:absolute;top:8px;left:8px;background:var(--ok);color:#000;
+                 padding:.25rem .5rem;border-radius:4px;font-size:.8rem;font-weight:700}
+  progress{width:100%;height:8px}
+  textarea{width:100%;height:190px;font:12px/1.45 ui-monospace,monospace;
+           background:var(--bg);color:var(--fg);border:1px solid var(--line);
+           border-radius:8px;padding:.6rem}
+  .status{color:var(--dim);font-size:.9rem;min-height:1.5em}
+  .hint{font-size:.85rem;color:var(--dim);margin:.5rem 0 0}
+</style>
+</head>
+<body>
+<main>
+  <h1>NanoPlayer · Diagnóstico de dispositivo</h1>
+  <p class="lead">
+    Mide qué puede hacer este dispositivo con vídeo. Tarda menos de un minuto y
+    no instala nada. Al terminar sale un informe para copiar y enviar.
+  </p>
+
+  <section>
+    <h2>1 · Entorno</h2>
+    <dl id="env"></dl>
+  </section>
+
+  <section>
+    <h2>2 · Capacidades</h2>
+    <dl id="caps"></dl>
+  </section>
+
+  <section>
+    <h2>3 · Pruebas de reproducción</h2>
+    <p class="status" id="status" role="status" aria-live="polite">Sin ejecutar.</p>
+    <progress id="prog" value="0" max="4" hidden></progress>
+    <button id="run">Iniciar pruebas</button>
+    <p class="hint">
+      Sube el volumen si puedes: una de las pruebas comprueba si el dispositivo
+      deja sonar dos vídeos a la vez.
+    </p>
+    <dl id="play"></dl>
+    <div id="stage" aria-hidden="true"></div>
+  </section>
+
+  <section>
+    <h2>4 · Pantalla completa</h2>
+    <p class="hint" style="margin-top:0">
+      La prueba decisiva para iPhone: si al pasar a pantalla completa se ven
+      <strong>los dos</strong> vídeos, el dual-stream funciona. Si solo se ve
+      uno, el sistema ha tomado el control.
+    </p>
+    <div id="fsbox"></div>
+    <button id="fs" class="ghost">Probar pantalla completa</button>
+    <dl id="fsres"></dl>
+  </section>
+
+  <section>
+    <h2>5 · Informe</h2>
+    <button id="copy" class="ghost" disabled>Copiar informe</button>
+    <label for="out" class="hint">Si el botón no funciona, copia este texto a mano:</label>
+    <textarea id="out" readonly spellcheck="false"></textarea>
+  </section>
+</main>
+
+<script>
+/* ------------------------------------------------------------------ medios --
+ * En desarrollo se sirven como ficheros. build.mjs sustituye MEDIA_B64 por los
+ * vídeos en base64 para producir un HTML autocontenido.
+ *
+ * Se convierten a blob: en vez de usar data: directamente porque Safari en iOS
+ * maneja mal las URIs data: en elementos multimedia (problemas con Range).
+ */
+const MEDIA_B64 = null; /* __MEDIA_B64__ */
+
+function b64Blob(b64, type){
+  const bin = atob(b64), buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return URL.createObjectURL(new Blob([buf], {type}));
+}
+const MEDIA = MEDIA_B64
+  ? { a: b64Blob(MEDIA_B64.a, 'video/mp4'), b: b64Blob(MEDIA_B64.b, 'video/mp4') }
+  : { a: 'media/probe-a.mp4', b: 'media/probe-b.mp4' };
+
+/* ----------------------------------------------------------------- utiles -- */
+const $ = (id) => document.getElementById(id);
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const report = { schema: 2, ts: new Date().toISOString() };
+
+function row(dl, k, v, cls){
+  const dt = document.createElement('dt'); dt.textContent = k;
+  const dd = document.createElement('dd'); dd.textContent = v;
+  if (cls) dd.className = cls;
+  dl.append(dt, dd);
+}
+const yn = (b) => b ? 'sí' : 'no';
+const cls = (b) => b ? 'ok' : 'bad';
+
+/* ------------------------------------------------------------- 1. entorno -- */
+(function env(){
+  const ua = navigator.userAgent;
+  const e = report.env = {
+    ua,
+    platform: navigator.platform,
+    viewport: `${innerWidth}x${innerHeight}`,
+    dpr: devicePixelRatio,
+    cores: navigator.hardwareConcurrency ?? null,
+    memoryGB: navigator.deviceMemory ?? null,
+    touchPoints: navigator.maxTouchPoints ?? 0,
+    // iPadOS miente y se presenta como Mac; los puntos táctiles lo delatan.
+    likelyIPadOS: /Macintosh/.test(ua) && (navigator.maxTouchPoints ?? 0) > 1,
+  };
+  const m = /OS (\d+)[_.](\d+)/.exec(ua);
+  e.iosVersion = (/iPhone|iPad|iPod/.test(ua) && m) ? `${m[1]}.${m[2]}` : null;
+  const sv = /Version\/(\d+\.\d+).*Safari/.exec(ua);
+  e.safariVersion = sv ? sv[1] : null;
+
+  const dl = $('env');
+  row(dl, 'Viewport', e.viewport);
+  row(dl, 'Densidad', e.dpr + '×');
+  row(dl, 'Núcleos', e.cores ?? 'desconocido');
+  row(dl, 'Memoria', e.memoryGB ? e.memoryGB + ' GB' : 'no expuesta');
+  if (e.iosVersion) row(dl, 'iOS', e.iosVersion);
+  if (e.safariVersion) row(dl, 'Safari', e.safariVersion);
+  if (e.likelyIPadOS) row(dl, 'iPadOS disfrazado de Mac', 'sí', 'warn');
+})();
+
+/* --------------------------------------------------------- 2. capacidades -- */
+(function caps(){
+  const v = document.createElement('video');
+  const can = (t) => v.canPlayType(t) || 'no';
+  const MS = window.ManagedMediaSource || window.MediaSource;
+
+  const c = report.caps = {
+    rVFC: 'requestVideoFrameCallback' in HTMLVideoElement.prototype,
+    // La ruta que permite pantalla completa con UI propia y dos vídeos.
+    containerFullscreen: !!(document.documentElement.requestFullscreen ||
+                            document.documentElement.webkitRequestFullscreen),
+    // La ruta iPhone: se lleva el vídeo al reproductor del sistema.
+    videoOnlyFullscreen: 'webkitEnterFullscreen' in v,
+    pip: !!document.pictureInPictureEnabled || 'webkitSetPresentationMode' in v,
+    mediaSource: !!window.MediaSource,
+    // iPhone no tuvo MSE hasta que Safari 17 introdujo ManagedMediaSource.
+    // Sin alguna de las dos, hls.js no puede funcionar.
+    managedMediaSource: !!window.ManagedMediaSource,
+    mseH264: MS && MS.isTypeSupported ? MS.isTypeSupported('video/mp4; codecs="avc1.42E01E"') : false,
+    nativeHls: can('application/vnd.apple.mpegurl') !== 'no',
+    h264: can('video/mp4; codecs="avc1.42E01E"'),
+    hevc: can('video/mp4; codecs="hvc1.1.6.L93.B0"'),
+    vp9: can('video/webm; codecs="vp9"'),
+    av1: can('video/mp4; codecs="av01.0.05M.08"'),
+    preservesPitch: 'preservesPitch' in v,
+    audioTracks: 'audioTracks' in v,
+    textTracks: 'textTracks' in v,
+    remotePlayback: 'remote' in v,
+    castApi: !!window.chrome?.cast,
+  };
+
+  const dl = $('caps');
+  row(dl, 'requestVideoFrameCallback', yn(c.rVFC), cls(c.rVFC));
+  row(dl, 'Fullscreen del contenedor', yn(c.containerFullscreen), cls(c.containerFullscreen));
+  row(dl, 'Fullscreen solo del vídeo', yn(c.videoOnlyFullscreen), c.videoOnlyFullscreen ? 'warn' : '');
+  row(dl, 'MediaSource (hls.js)', yn(c.mediaSource), cls(c.mediaSource));
+  row(dl, 'ManagedMediaSource', yn(c.managedMediaSource), c.managedMediaSource ? 'ok' : '');
+  row(dl, 'HLS nativo', yn(c.nativeHls), cls(c.nativeHls));
+  row(dl, 'H.264', c.h264, cls(c.h264 !== 'no'));
+  row(dl, 'HEVC', c.hevc, c.hevc !== 'no' ? 'ok' : '');
+  row(dl, 'VP9', c.vp9, c.vp9 !== 'no' ? 'ok' : '');
+  row(dl, 'AV1', c.av1, c.av1 !== 'no' ? 'ok' : '');
+  row(dl, 'Pistas de audio', yn(c.audioTracks), c.audioTracks ? 'ok' : 'warn');
+  row(dl, 'Picture in Picture', yn(c.pip), c.pip ? 'ok' : '');
+})();
+
+/* --------------------------------------------- helpers de vídeo para 3 y 4 -- */
+function mkVideo(src, {muted = true} = {}){
+  const v = document.createElement('video');
+  v.src = src; v.muted = muted; v.playsInline = true;
+  v.preload = 'auto'; v.setAttribute('playsinline', '');
+  return v;
+}
+const ready = (v) => new Promise((res) => {
+  if (v.readyState >= 3) return res(true);
+  const done = () => { clean(); res(v.readyState >= 3); };
+  const fail = () => { clean(); res(false); };
+  const clean = () => {
+    v.removeEventListener('canplay', done); v.removeEventListener('error', fail);
+    clearTimeout(t);
+  };
+  const t = setTimeout(fail, 12000);
+  v.addEventListener('canplay', done); v.addEventListener('error', fail);
+});
+
+/* ------------------------------------------------ 3. pruebas con playback -- */
+$('run').onclick = async () => {
+  const btn = $('run'); btn.disabled = true;
+  const dl = $('play'); dl.innerHTML = '';
+  const prog = $('prog'); prog.hidden = false; prog.value = 0;
+  const say = (t) => { $('status').textContent = t; };
+  const R = report.playback = {};
+
+  // --- 3a. Política de autoplay ---
+  say('Comprobando política de autoplay…');
+  const av = mkVideo(MEDIA.a); document.body.appendChild(av);
+  av.style.cssText = 'position:fixed;left:-9999px;width:1px;height:1px';
+  await ready(av);
+  R.autoplayMuted = await av.play().then(() => true).catch(() => false);
+  av.pause(); av.currentTime = 0; av.muted = false;
+  R.autoplayUnmuted = await av.play().then(() => true).catch(() => false);
+  av.pause(); av.remove();
+  row(dl, 'Autoplay silenciado', yn(R.autoplayMuted), cls(R.autoplayMuted));
+  row(dl, 'Autoplay con sonido', yn(R.autoplayUnmuted), R.autoplayUnmuted ? 'ok' : 'warn');
+  prog.value = 1;
+
+  // --- 3b. Decodificación simultánea ---
+  // Responde a la vez S2 (¿cuántos aguanta?) y S4 (presupuesto del registry).
+  say('Midiendo cuántos vídeos aguanta a la vez…');
+  const stage = $('stage'); stage.innerHTML = '';
+  const vids = []; const MAXN = 24;
+  let lastAllOk = 0; R.decodeDetail = [];
+  for (let n = 1; n <= MAXN; n++){
+    const v = mkVideo(n % 2 ? MEDIA.a : MEDIA.b);
+    stage.appendChild(v); vids.push(v);
+    await ready(v);
+    const t0 = vids.map(x => x.currentTime);
+    await Promise.all(vids.map(x => x.play().catch(() => {})));
+    await sleep(1100);
+    const advanced = vids.filter((x, i) => x.currentTime - t0[i] > 0.25).length;
+    R.decodeDetail.push({ n, advanced });
+    if (advanced === n) lastAllOk = n; else break;
+  }
+  for (const v of vids){ v.pause(); v.removeAttribute('src'); v.load(); v.remove(); }
+  R.maxConcurrentVideos = lastAllOk;
+  R.decodeCappedAtLimit = lastAllOk === MAXN;
+  row(dl, 'Vídeos simultáneos', lastAllOk + (R.decodeCappedAtLimit ? '+ (tope de la prueba)' : ''),
+      lastAllOk >= 4 ? 'ok' : lastAllOk >= 2 ? 'warn' : 'bad');
+  prog.value = 2;
+
+  // --- 3c. Dos audios a la vez ---
+  say('Comprobando dos audios simultáneos…');
+  const s1 = mkVideo(MEDIA.a, {muted:false}), s2 = mkVideo(MEDIA.a, {muted:false});
+  s1.volume = 0.25; s2.volume = 0.25;
+  for (const v of [s1, s2]){ v.style.cssText='position:fixed;left:-9999px;width:1px;height:1px';
+                             document.body.appendChild(v); }
+  await Promise.all([ready(s1), ready(s2)]);
+  const p1 = await s1.play().then(()=>true).catch(()=>false);
+  const p2 = await s2.play().then(()=>true).catch(()=>false);
+  await sleep(900);
+  R.dualAudio = p1 && p2 && !s1.paused && !s2.paused;
+  for (const v of [s1,s2]){ v.pause(); v.remove(); }
+  row(dl, 'Dos audios a la vez', yn(R.dualAudio), R.dualAudio ? 'ok' : 'warn');
+  prog.value = 3;
+
+  // --- 3d. Sincronización dual-stream (motor de S1) ---
+  say('Midiendo sincronización dual-stream (15 s)…');
+  const sync = await runSync(15000);
+  Object.assign(R, sync);
+  row(dl, 'Deriva mediana', sync.driftMedianMs === null ? 'n/d' : sync.driftMedianMs + ' ms',
+      sync.driftMedianMs !== null && sync.driftMedianMs < 33 ? 'ok' : 'bad');
+  row(dl, 'Deriva p95', sync.driftP95Ms === null ? 'n/d' : sync.driftP95Ms + ' ms',
+      sync.driftP95Ms !== null && sync.driftP95Ms < 33 ? 'ok' : 'warn');
+  row(dl, 'Saltos duros', sync.hardSeeks);
+  row(dl, 'FPS del lazo de control', sync.loopFps);
+  prog.value = 4;
+
+  say('Pruebas terminadas.');
+  btn.textContent = 'Repetir pruebas'; btn.disabled = false;
+  emit();
+};
+
+/* Motor S1 reducido: mismos umbrales, sin UI. */
+async function runSync(ms){
+  const CFG = { deadZone:0.033, releaseZone:0.008, gain:1.2, maxRateDelta:0.25, hardSeek:0.5 };
+  const master = mkVideo(MEDIA.a), slave = mkVideo(MEDIA.b);
+  const stage = $('stage'); stage.innerHTML = '';
+  stage.append(master, slave);
+  const okA = await ready(master), okB = await ready(slave);
+  if (!okA || !okB){
+    master.remove(); slave.remove();
+    return { driftMedianMs:null, driftP95Ms:null, hardSeeks:0, loopFps:0, syncError:'media no cargó' };
+  }
+
+  master.loop = true; slave.loop = true;
+  let correcting = false, hardSeeks = 0, frames = 0;
+  const samples = [];
+  const onSeek = () => { slave.currentTime = master.currentTime; };
+  master.addEventListener('seeking', onSeek);
+
+  await master.play().catch(()=>{}); await slave.play().catch(()=>{});
+  const t0 = performance.now();
+  let stop = false;
+
+  const tick = () => {
+    if (stop) return;
+    frames++;
+    const drift = slave.currentTime - master.currentTime;
+    const a = Math.abs(drift);
+    if (!master.seeking && !slave.seeking){
+      if (a > CFG.hardSeek){
+        slave.currentTime = master.currentTime;
+        slave.playbackRate = master.playbackRate;
+        correcting = false; hardSeeks++;
+      } else {
+        if (!correcting && a > CFG.deadZone) correcting = true;
+        else if (correcting && a < CFG.releaseZone) correcting = false;
+        slave.playbackRate = correcting
+          ? master.playbackRate + Math.max(-CFG.maxRateDelta,
+              Math.min(CFG.maxRateDelta, -CFG.gain * drift))
+          : master.playbackRate;
+        samples.push(drift);
+      }
+    }
+    master.requestVideoFrameCallback ? master.requestVideoFrameCallback(tick)
+                                     : requestAnimationFrame(tick);
+  };
+  tick();
+
+  await sleep(ms);
+  stop = true;
+  const elapsed = (performance.now() - t0) / 1000;
+  master.removeEventListener('seeking', onSeek);
+  for (const v of [master, slave]){ v.pause(); v.removeAttribute('src'); v.load(); v.remove(); }
+
+  if (!samples.length) return { driftMedianMs:null, driftP95Ms:null, hardSeeks, loopFps:0 };
+  const abs = samples.map(Math.abs).sort((x,y)=>x-y);
+  const q = (p) => abs[Math.min(abs.length-1, Math.floor(abs.length*p))];
+  return {
+    driftMedianMs: +(q(0.5)*1000).toFixed(1),
+    driftP95Ms: +(q(0.95)*1000).toFixed(1),
+    driftMaxMs: +(abs[abs.length-1]*1000).toFixed(1),
+    hardSeeks,
+    samples: abs.length,
+    loopFps: Math.round(frames/elapsed),
+  };
+}
+
+/* ------------------------------------------------------ 4. pantalla completa */
+$('fs').onclick = async () => {
+  const box = $('fsbox'); box.innerHTML = '';
+  const a = mkVideo(MEDIA.a), b = mkVideo(MEDIA.b);
+  a.loop = b.loop = true;
+  box.append(a, b);
+  await Promise.all([ready(a), ready(b)]);
+  a.play().catch(()=>{}); b.play().catch(()=>{});
+
+  const F = report.fullscreen = { requested:true };
+  const req = box.requestFullscreen || box.webkitRequestFullscreen;
+  F.apiPresent = !!req;
+
+  if (!req){
+    // Solo queda la ruta del vídeo suelto: el sistema se queda con la pantalla
+    // y el segundo stream desaparece. Es el escenario a evitar.
+    F.entered = false;
+    F.fallbackVideoOnly = 'webkitEnterFullscreen' in a;
+    finishFs(F);
+    return;
+  }
+  try {
+    await req.call(box);
+    await sleep(1200);
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    F.entered = !!fsEl;
+    F.elementIsContainer = fsEl === box;
+    // Si ambos siguen avanzando y visibles, el dual-stream sobrevive.
+    const ta = a.currentTime, tb = b.currentTime;
+    await sleep(700);
+    F.bothStillPlaying = (a.currentTime > ta) && (b.currentTime > tb);
+    F.bothVisible = a.getBoundingClientRect().width > 0 && b.getBoundingClientRect().width > 0;
+    if (document.exitFullscreen) await document.exitFullscreen().catch(()=>{});
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+  } catch (e) {
+    F.entered = false; F.error = String(e);
+  }
+  finishFs(F);
+};
+
+function finishFs(F){
+  const dl = $('fsres'); dl.innerHTML = '';
+  row(dl, 'API disponible', yn(F.apiPresent), cls(F.apiPresent));
+  row(dl, 'Entró en pantalla completa', yn(F.entered), cls(F.entered));
+  if (F.entered){
+    row(dl, 'Los dos siguen reproduciendo', yn(F.bothStillPlaying), cls(F.bothStillPlaying));
+    row(dl, 'Los dos visibles', yn(F.bothVisible), cls(F.bothVisible));
+  } else if (F.fallbackVideoOnly){
+    row(dl, 'Solo fullscreen nativo del vídeo', 'sí', 'bad');
+  }
+  if (F.error) row(dl, 'Error', F.error, 'bad');
+  $('fsbox').innerHTML = '';
+  emit();
+}
+
+/* ------------------------------------------------------------- 5. informe -- */
+function emit(){
+  $('out').value = JSON.stringify(report, null, 2);
+  $('copy').disabled = false;
+}
+$('copy').onclick = async () => {
+  const ta = $('out');
+  try { await navigator.clipboard.writeText(ta.value); $('copy').textContent = 'Copiado'; }
+  catch { ta.select(); document.execCommand?.('copy'); $('copy').textContent = 'Selecciona y copia'; }
+  setTimeout(() => { $('copy').textContent = 'Copiar informe'; }, 2500);
+};
+emit();
+</script>
+</body>
+</html>

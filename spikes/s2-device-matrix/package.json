@@ -1,0 +1,6 @@
+{
+  "name": "s2-device-matrix",
+  "private": true,
+  "type": "module",
+  "devDependencies": { "playwright": "^1.49.0" }
+}
