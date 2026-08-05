@@ -10,7 +10,8 @@
 4. ¿Se sostiene la sincronización de S1 fuera de Chrome sobre escritorio?
 5. ¿Deja sonar dos vídeos a la vez? ¿Cuál es su política de autoplay?
 
-**Estado:** sonda construida y verificada. **Faltan los datos de dispositivos.**
+**Estado:** ✅ respondidas las preguntas decisivas. Queda medir la
+sincronización en iPhone (ver §Pendiente).
 
 ---
 
@@ -46,31 +47,60 @@ página: no hay ninguna petición de red.
 Para poder interpretar los resultados de los móviles hace falta un techo
 conocido.
 
-Todo lo medido hasta ahora es **motor Blink**. Sigue faltando WebKit.
+| | Chrome · Ubuntu 16 núcleos | Chrome · Mac M2 Pro | **Safari 16.4 · Mac** | **iOS 26.5 · iPhone** |
+|---|---|---|---|---|
+| Motor | Blink | Blink | WebKit | WebKit |
+| Vídeos simultáneos | 18 | 18 | 17 | **2** |
+| Fullscreen del contenedor | sí | sí | **sí** | **NO** |
+| Dos audios a la vez | sí | sí | sí | **no** |
+| Deriva mediana / p95 | 7.8 / 15.1 ms | 8.3 / 19.6 ms | **30.6 / 53.9 ms** | sin medir |
+| Saltos duros | 0 | 0 | 0 | — |
+| `audioTracks` | **no** | **no** | **sí** | **sí** |
+| MediaSource | sí | sí | sí | no |
+| ManagedMediaSource | no | no | no (Safari 16) | **sí** |
+| AV1 | probably | probably | no | no |
 
-| | Chrome headless (CI) | Chrome 150 · Ubuntu, 16 núcleos | Chrome 150 · Mac M2 Pro, 10 núcleos |
-|---|---|---|---|
-| Vídeos simultáneos | **18** | **18** | **18** |
-| Dos audios a la vez | sí | sí | sí |
-| Deriva mediana / p95 | 7.8 / 14.6 ms | 7.8 / 15.1 ms | 8.3 / 19.6 ms |
-| Saltos duros | 0 | 0 | 0 |
-| FPS del lazo de control | 26 | 27 | 24 |
-| Fullscreen del contenedor | sí, ambos vídeos vivos | sí | sí |
-| MediaSource | sí | sí | sí |
+### Los cuatro hallazgos que cambian el diseño
 
-Tres entornos dando lo mismo, y coincidiendo con lo medido en S1 con vídeos
-grandes y servidor propio. La sonda mide de forma consistente.
+**1. En iPhone no existe el fullscreen del contenedor.** `requestFullscreen`
+sobre un `<div>` no está implementado: solo queda `webkitEnterFullscreen()`
+sobre el vídeo suelto, que entrega la pantalla al reproductor del sistema y
+hace desaparecer el segundo stream. **El dual-stream a pantalla completa es
+imposible en iPhone.**
 
-### Hipótesis: los 18 vídeos son un tope de Chrome, no del hardware
+En Safari de escritorio sí funciona. **La limitación es de iOS, no de WebKit** —
+justo lo que el Mac estaba en la matriz para distinguir.
 
-Tres máquinas muy distintas —16 núcleos x86, 10 núcleos Apple Silicon y un
-runner de CI— se paran **exactamente en 18**. Si fuera un límite de
-decodificación por hardware, cabría esperar dispersión.
+**2. El iPhone solo aguanta 2 vídeos simultáneos.** El dual-stream consume el
+presupuesto entero, sin margen. El ciclo de vida perezoso deja de ser una
+optimización: es lo único que hace viable una página con varios reproductores.
 
-Si se confirma, es buena noticia para el `PlayerRegistry`: el presupuesto sería
-una constante por navegador y no algo que haya que descubrir en cada
-dispositivo. **Queda por comprobar en WebKit y en Gecko**, donde es muy probable
-que el número sea distinto — y en móvil, donde sí debería mandar el hardware.
+Esto entierra también la hipótesis del "tope de navegador": 18 en Blink, 17 en
+Safari de escritorio, 2 en iPhone. El presupuesto **hay que medirlo en
+ejecución**, no fijarlo por tabla.
+
+**3. El ajuste de S1 es de Chrome, no universal.** En Safari la misma
+configuración da 30.6 ms de mediana y 53.9 de p95, frente a 7.8 / 15.1 en
+Chrome. Cuatro veces peor, con el p95 muy por encima del frame. El modelo
+maestro/esclavo aguanta, pero **umbrales y ganancia necesitan perfil por
+motor**.
+
+**4. `audioTracks` está invertido respecto a lo esperado:** existe en WebKit y
+no en Blink. El `AudioTrackProvider` necesita las dos vías desde el principio
+—nativa en Safari, hls.js en Chrome—, y es la excepción legítima a la regla de
+"una sola implementación hasta que haya consumidor real": aquí ya hay dos.
+
+Y una buena noticia: iOS 26.5 trae `ManagedMediaSource`, así que hls.js es
+viable en iPhone pese a no haber `MediaSource` clásico.
+
+### Pendiente
+
+**La sincronización en iPhone sigue sin medirse.** La primera pasada devolvió
+`syncError: "media no cargó"`: con solo 2 decodificadores, las pruebas
+anteriores no los liberaban a tiempo y la de sincronización se quedaba sin
+recursos. Corregido con `release()` —que suelta el recurso además de quitar el
+elemento del DOM— y un margen de asentamiento. **Requiere otra pasada en el
+iPhone para confirmarlo.**
 
 ### Hallazgo: `audioTracks` no existe en Chrome
 

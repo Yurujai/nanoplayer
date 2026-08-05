@@ -233,7 +233,7 @@ const cls = (b) => b ? 'ok' : 'bad';
     hevc: can('video/mp4; codecs="hvc1.1.6.L93.B0"'),
     vp9: can('video/webm; codecs="vp9"'),
     av1: can('video/mp4; codecs="av01.0.05M.08"'),
-    preservesPitch: 'preservesPitch' in v,
+    preservesPitch: ('preservesPitch' in v) || ('webkitPreservesPitch' in v),
     audioTracks: 'audioTracks' in v,
     textTracks: 'textTracks' in v,
     remotePlayback: 'remote' in v,
@@ -258,22 +258,43 @@ const cls = (b) => b ? 'ok' : 'bad';
 })();
 
 /* --------------------------------------------- helpers de vídeo para 3 y 4 -- */
+// Quitar el elemento del DOM no basta: hay que soltar el recurso multimedia.
+// Con un presupuesto de 2 decodificadores (lo medido en iPhone), una limpieza
+// incompleta deja sin recursos a la prueba siguiente.
+function release(v){
+  try { v.pause(); v.removeAttribute('src'); v.load(); } catch {}
+  v.remove();
+}
+
 function mkVideo(src, {muted = true} = {}){
   const v = document.createElement('video');
   v.src = src; v.muted = muted; v.playsInline = true;
   v.preload = 'auto'; v.setAttribute('playsinline', '');
   return v;
 }
+// Se conforma con `loadeddata` (readyState >= 2) en lugar de `canplay`, y
+// provoca la carga con load() si el elemento aún no ha empezado.
+//
+// Sin efectos sobre la reproducción a propósito: una versión anterior lanzaba
+// un play() para forzar el buffering en iOS, y su promesa pausaba el vídeo por
+// detrás cuando se resolvía después de que quien llamaba ya lo hubiera
+// arrancado. Provocar la carga y controlar la reproducción no pueden vivir en
+// la misma función.
 const ready = (v) => new Promise((res) => {
-  if (v.readyState >= 3) return res(true);
-  const done = () => { clean(); res(v.readyState >= 3); };
+  if (v.readyState >= 2) return res(true);
+  const done = () => { clean(); res(v.readyState >= 2); };
   const fail = () => { clean(); res(false); };
   const clean = () => {
-    v.removeEventListener('canplay', done); v.removeEventListener('error', fail);
+    v.removeEventListener('loadeddata', done);
+    v.removeEventListener('canplay', done);
+    v.removeEventListener('error', fail);
     clearTimeout(t);
   };
   const t = setTimeout(fail, 12000);
-  v.addEventListener('canplay', done); v.addEventListener('error', fail);
+  v.addEventListener('loadeddata', done);
+  v.addEventListener('canplay', done);
+  v.addEventListener('error', fail);
+  if (v.readyState === 0) { try { v.load(); } catch {} }
 });
 
 /* ------------------------------- autoplay en frío, sin gesto de usuario ---- */
@@ -288,7 +309,7 @@ const ready = (v) => new Promise((res) => {
   const okMedia = await ready(v);
   const c = report.coldAutoplay = { mediaReady: okMedia, muted: null };
   if (okMedia) c.muted = await v.play().then(() => true).catch(() => false);
-  v.pause(); v.remove();
+  release(v);
   row($('caps'), 'Autoplay en frío (silenciado)', yn(c.muted), c.muted ? 'ok' : 'warn');
   emit();
 })();
@@ -312,7 +333,7 @@ $('run').onclick = async () => {
   R.afterGestureMuted = await av.play().then(() => true).catch(() => false);
   av.pause(); av.currentTime = 0; av.muted = false;
   R.afterGestureUnmuted = await av.play().then(() => true).catch(() => false);
-  av.pause(); av.remove();
+  release(av);
   row(dl, 'Con gesto · silenciado', yn(R.afterGestureMuted), cls(R.afterGestureMuted));
   row(dl, 'Con gesto · con sonido', yn(R.afterGestureUnmuted), R.afterGestureUnmuted ? 'ok' : 'warn');
   prog.value = 1;
@@ -334,7 +355,7 @@ $('run').onclick = async () => {
     R.decodeDetail.push({ n, advanced });
     if (advanced === n) lastAllOk = n; else break;
   }
-  for (const v of vids){ v.pause(); v.removeAttribute('src'); v.load(); v.remove(); }
+  for (const v of vids) release(v);
   R.maxConcurrentVideos = lastAllOk;
   R.decodeCappedAtLimit = lastAllOk === MAXN;
   row(dl, 'Vídeos simultáneos', lastAllOk + (R.decodeCappedAtLimit ? '+ (tope de la prueba)' : ''),
@@ -352,7 +373,10 @@ $('run').onclick = async () => {
   const p2 = await s2.play().then(()=>true).catch(()=>false);
   await sleep(900);
   R.dualAudio = p1 && p2 && !s1.paused && !s2.paused;
-  for (const v of [s1,s2]){ v.pause(); v.remove(); }
+  for (const v of [s1, s2]) release(v);
+  // Dar margen a que el sistema devuelva los decodificadores antes de la
+  // prueba de sincronización, que necesita dos.
+  await sleep(600);
   row(dl, 'Dos audios a la vez', yn(R.dualAudio), R.dualAudio ? 'ok' : 'warn');
   prog.value = 3;
 
@@ -381,7 +405,7 @@ async function runSync(ms){
   stage.append(master, slave);
   const okA = await ready(master), okB = await ready(slave);
   if (!okA || !okB){
-    master.remove(); slave.remove();
+    release(master); release(slave);
     return { driftMedianMs:null, driftP95Ms:null, hardSeeks:0, loopFps:0, syncError:'media no cargó' };
   }
 
@@ -424,7 +448,7 @@ async function runSync(ms){
   stop = true;
   const elapsed = (performance.now() - t0) / 1000;
   master.removeEventListener('seeking', onSeek);
-  for (const v of [master, slave]){ v.pause(); v.removeAttribute('src'); v.load(); v.remove(); }
+  for (const v of [master, slave]) release(v);
 
   if (!samples.length) return { driftMedianMs:null, driftP95Ms:null, hardSeeks, loopFps:0 };
   const abs = samples.map(Math.abs).sort((x,y)=>x-y);
