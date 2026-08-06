@@ -4,8 +4,8 @@ WEBVTT
 Primera pista de subtítulos, en español.
 
 00:00:06.000 --> 00:00:12.000
-Se renderizan con <track> nativo,
-así respetan los ajustes del sistema.
+Se pintan en una capa propia,
+del ancho del reproductor entero.
 
 00:00:12.000 --> 00:00:20.000
 El interruptor está en la barra;

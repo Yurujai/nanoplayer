@@ -50,7 +50,8 @@ export type { BatchResolverOptions, RegistryOptions } from './registry.js';
 
 // --- anclajes de interfaz ---------------------------------------------------
 export type {
-  BarControlDecl, SettingsOptionDecl, SettingsPanelDecl, UiSlots,
+  BarControlDecl, OverlayDecl, OverlayHandle,
+  SettingsOptionDecl, SettingsPanelDecl, UiSlots,
 } from './slots.js';
 
 // --- plugins ----------------------------------------------------------------

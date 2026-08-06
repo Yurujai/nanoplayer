@@ -28,6 +28,9 @@ export const CSS = `
   --np-transition:120ms ease;
 
   position:relative;
+  /* Permite dimensionar los subtítulos con el ancho del reproductor y no con
+     el de la ventana: un reproductor embebido pequeño necesita texto menor. */
+  container-type:inline-size;
   background:var(--np-color-bg);
   font-family:var(--np-font);
   color:var(--np-color-control);
@@ -146,6 +149,33 @@ button.np__btn[disabled]{opacity:.4;cursor:default}
 .np__volume .np__range{width:0;opacity:0;transition:width var(--np-transition),opacity var(--np-transition)}
 .np__volume:hover .np__range,
 .np__volume:focus-within .np__range{width:5rem;opacity:1;margin:0 .5rem 0 .25rem}
+
+/* --- capas de contenido sobre el vídeo --- */
+.np__overlay{position:absolute;z-index:1;pointer-events:none}
+.np__overlay--fill{inset:0}
+.np__overlay--center{inset:0;display:flex;align-items:center;justify-content:center}
+.np__overlay--captions{
+  left:0;right:0;bottom:1.5rem;
+  display:flex;flex-direction:column;align-items:center;gap:.25rem;
+  padding:0 5%;text-align:center;
+  transition:bottom var(--np-transition);
+}
+/* Con la barra visible, los subtítulos suben para no quedar debajo. */
+.np:not(.np--inactive) .np__overlay--captions{bottom:5.25rem}
+
+/* Estilo de los subtítulos. Es la API para replicar las preferencias que se
+   pierden al no usar el renderizado nativo del navegador. */
+.np__cue{
+  --np-cue-size:clamp(.95rem,2.6cqw,1.6rem);
+  display:inline-block;max-width:100%;
+  background:var(--np-cue-bg,rgba(0,0,0,.78));
+  color:var(--np-cue-color,#fff);
+  font-size:var(--np-cue-size);
+  line-height:1.35;padding:.15em .5em;border-radius:3px;
+  text-wrap:balance;
+}
+.np__cue b,.np__cue strong{font-weight:700}
+.np__cue i,.np__cue em{font-style:italic}
 
 /* --- menú de ajustes --- */
 .np__menu-anchor{position:relative;display:inline-flex}

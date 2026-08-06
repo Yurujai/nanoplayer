@@ -16,7 +16,9 @@
  *   - **Región en vivo** para lo que solo se percibe visualmente: buffering,
  *     errores, cambios de estado.
  */
-import type { BarControlDecl, Player, SettingsPanelDecl, UiSlots } from '@nanoplayer/core';
+import type {
+  BarControlDecl, OverlayDecl, OverlayHandle, Player, SettingsPanelDecl, UiSlots,
+} from '@nanoplayer/core';
 import { formatPercent, formatTime, spokenTime } from './format.js';
 import { ICONS } from './icons.js';
 import { applyLayout, layoutsFor, type LayoutId } from './layouts.js';
@@ -221,6 +223,23 @@ export class ControlBar implements UiSlots {
 
   addSettingsPanel(panel: SettingsPanelDecl): () => void {
     return this.#menu.addPanel(panel);
+  }
+
+  /**
+   * Reserva una capa sobre el vídeo, del ancho del reproductor entero.
+   *
+   * Ese ancho es justamente el motivo de que exista: el navegador dibuja los
+   * subtítulos nativos **dentro del elemento `<video>`**, así que en un layout
+   * lado a lado quedan encajonados en la mitad, y en imagen en imagen podrían
+   * caer dentro del recuadro pequeño.
+   */
+  addOverlay(decl: OverlayDecl): OverlayHandle {
+    const el = this.#root.ownerDocument.createElement('div');
+    el.className = `np__overlay np__overlay--${decl.position ?? 'fill'}`;
+    el.dataset['overlay'] = decl.id;
+    // Antes de la barra en el DOM: los controles siempre por encima.
+    this.#root.insertBefore(el, this.#bar);
+    return { element: el, remove: () => el.remove() };
   }
 
   /** Repinta los controles cuando un plugin cambia su estado. */

@@ -11,11 +11,20 @@
  *   - **Barra** — interruptor activado/desactivado. Binario y frecuente.
  *   - **Ajustes** — elegir idioma. Elección entre varias opciones y ocasional.
  *
- * Y usa `<track>` nativo en lugar de pintar el texto a mano. No es pereza:
- * el renderizado nativo respeta las preferencias de subtítulos del sistema
- * operativo —tamaño, color, fondo, tipografía—, que es de lo primero que
- * configura quien depende de ellos. Pintar los subtítulos por nuestra cuenta
- * las ignoraría todas.
+ * Sobre el renderizado, que tiene truco. El navegador dibuja los subtítulos
+ * nativos **dentro del elemento `<video>`**, y de ahí no hay forma de sacarlos.
+ * En un layout lado a lado eso los encajona en la mitad del ancho, y en imagen
+ * en imagen pueden acabar dentro del recuadro pequeño: ilegibles.
+ *
+ * Así que el `<track>` se deja en modo `hidden` —el navegador sigue parseando
+ * el WebVTT y gestionando los tiempos, que es lo difícil— y el texto se pinta
+ * en una capa del ancho del reproductor entero.
+ *
+ * Lo que se pierde por el camino son las preferencias de subtítulos del sistema
+ * operativo, que quien depende de ellos suele tener configuradas. No es gratis,
+ * y se compensa exponiendo tamaño, color y fondo como variables CSS
+ * (`--np-cue-*`). Unos subtítulos que respetan las preferencias pero no se
+ * pueden leer no sirven de nada.
  */
 import {
   plugins,
@@ -48,6 +57,9 @@ function etiqueta(t: TextTrackDef): string {
 class Captions implements PluginImpl {
   #tracks: TextTrackDef[] = [];
   #elementos: HTMLTrackElement[] = [];
+  #capa: HTMLElement | null = null;
+  #quitarCapa: (() => void) | null = null;
+  #alCambiarCue: (() => void) | null = null;
   #activa: string = APAGADO;
   #ultima: string | null = null;
   #quitar: Array<() => void> = [];
@@ -76,6 +88,12 @@ class Captions implements PluginImpl {
     }
 
     ctx.whenUi((ui) => {
+      // --- anclaje `overlay`: el texto, a todo el ancho del reproductor ---
+      const capa = ui.addOverlay({ id: 'captions', position: 'captions' });
+      this.#capa = capa.element;
+      this.#quitarCapa = capa.remove;
+      this.#pintarCues();
+
       // --- anclaje `bar`: interruptor binario y frecuente ---
       this.#quitar.push(ui.addBarControl({
         id: 'captions',
@@ -110,8 +128,12 @@ class Captions implements PluginImpl {
   deactivate(): void {
     for (const off of this.#quitar) off();
     this.#quitar = [];
+    this.#desatarCue();
     for (const el of this.#elementos) el.remove();
     this.#elementos = [];
+    this.#quitarCapa?.();
+    this.#quitarCapa = null;
+    this.#capa = null;
   }
 
   #montarTracks(m: Manifest | null): void {
@@ -145,16 +167,63 @@ class Captions implements PluginImpl {
   }
 
   /**
-   * Aplica el estado a las pistas del elemento.
+   * Aplica el estado a las pistas.
    *
-   * `disabled` y no `hidden`: con `hidden` el navegador sigue procesando los
-   * cues y disparando eventos, que es trabajo para nada y, en móvil, batería.
+   * La activa va en `hidden`, no en `showing`: así el navegador **procesa los
+   * cues y dispara `cuechange` pero no los dibuja**, que es exactamente lo que
+   * hace falta para pintarlos por nuestra cuenta sin reimplementar el parseo
+   * de WebVTT ni la lógica de tiempos.
+   *
+   * Las inactivas van en `disabled` y no en `hidden`: con `hidden` el navegador
+   * seguiría procesándolas para nada, que en móvil es batería.
    */
   #aplicar(): void {
+    this.#desatarCue();
+    let activa: TextTrack | null = null;
     for (const el of this.#elementos) {
       const t = el.track;
       if (!t) continue;
-      t.mode = el.srclang === this.#activa ? 'showing' : 'disabled';
+      if (el.srclang === this.#activa) { t.mode = 'hidden'; activa = t; }
+      else t.mode = 'disabled';
+    }
+    if (activa) {
+      const fn = () => this.#pintarCues();
+      activa.addEventListener('cuechange', fn);
+      this.#alCambiarCue = () => activa.removeEventListener('cuechange', fn);
+    }
+    this.#pintarCues();
+  }
+
+  #desatarCue(): void {
+    this.#alCambiarCue?.();
+    this.#alCambiarCue = null;
+  }
+
+  /**
+   * Pinta los cues activos.
+   *
+   * Se usa `getCueAsHTML()` en lugar de `cue.text` para conservar el marcado de
+   * WebVTT —negritas, cursivas, etiquetas de voz— en vez de escupir las
+   * etiquetas en crudo. Y se inserta como nodos, nunca como HTML de una
+   * cadena: los subtítulos son contenido de terceros.
+   */
+  #pintarCues(): void {
+    const capa = this.#capa;
+    if (!capa) return;
+    capa.textContent = '';
+    if (this.#activa === APAGADO) return;
+
+    const track = this.#elementos.find((e) => e.srclang === this.#activa)?.track;
+    const activos = track?.activeCues;
+    if (!activos) return;
+
+    for (const cue of Array.from(activos)) {
+      const linea = document.createElement('div');
+      linea.className = 'np__cue';
+      const vtt = cue as VTTCue & { getCueAsHTML?: () => DocumentFragment };
+      if (typeof vtt.getCueAsHTML === 'function') linea.appendChild(vtt.getCueAsHTML());
+      else linea.textContent = vtt.text ?? '';
+      capa.appendChild(linea);
     }
   }
 }

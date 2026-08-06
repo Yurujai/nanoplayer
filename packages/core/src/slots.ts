@@ -66,15 +66,46 @@ export interface SettingsPanelDecl {
   priority?: number;
 }
 
+/** Una capa de contenido sobre el vídeo. */
+export interface OverlayDecl {
+  id: string;
+  /**
+   * Dónde se coloca:
+   *   - `captions` — franja inferior, por encima de la barra de controles
+   *   - `center`   — centrado
+   *   - `fill`     — ocupa el reproductor entero
+   */
+  position?: 'captions' | 'center' | 'fill';
+}
+
+export interface OverlayHandle {
+  /** Nodo que el plugin puede rellenar libremente. */
+  element: HTMLElement;
+  remove(): void;
+}
+
 /**
  * Lo que la interfaz ofrece a los plugins.
  *
- * Cada método devuelve la función para retirar lo añadido, de modo que
- * desactivar un plugin deje la interfaz como estaba.
+ * Cada método devuelve la forma de retirar lo añadido, de modo que desactivar
+ * un plugin deje la interfaz como estaba.
  */
 export interface UiSlots {
   addBarControl(control: BarControlDecl): () => void;
   addSettingsPanel(panel: SettingsPanelDecl): () => void;
+  /**
+   * Reserva una capa sobre el vídeo y devuelve el nodo para rellenarlo.
+   *
+   * Aquí sí se entrega DOM, al contrario que en `bar` y `settings`, y la
+   * distinción es deliberada: lo que va en esas dos son **controles
+   * interactivos**, donde el orden de tabulación y las semánticas ARIA son
+   * responsabilidad de la interfaz. Una capa es **contenido** —el texto de un
+   * subtítulo, una actividad H5P—, y ahí el plugin sí sabe mejor qué pintar.
+   *
+   * Un plugin que meta controles interactivos dentro de una capa se sale del
+   * contrato y se lleva por delante las garantías de accesibilidad.
+   */
+  addOverlay(decl: OverlayDecl): OverlayHandle;
   /** Fuerza un repintado cuando cambia el estado de un control. */
   refresh(): void;
 }

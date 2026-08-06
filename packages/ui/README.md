@@ -48,6 +48,25 @@ sustituye una revisión con lector de pantalla.
 Los atajos ceden las teclas que el control enfocado ya usa: las flechas sobre un
 deslizador son suyas, y el espacio sobre un botón lo activa.
 
+## Subtítulos
+
+Se pintan en una capa del ancho del reproductor, no dentro de un `<video>`. El
+navegador los dibujaría dentro del elemento, y en un layout lado a lado eso los
+encajona en la mitad del ancho.
+
+El `<track>` sigue ahí en modo `hidden`: el navegador parsea el WebVTT y
+gestiona los tiempos —que es lo difícil— y solo se toma el control de dónde se
+pintan. **Lo que se pierde son las preferencias de subtítulos del sistema
+operativo**, así que se exponen como variables:
+
+```css
+.np {
+  --np-cue-color: #fff;
+  --np-cue-bg: rgba(0, 0, 0, .78);
+}
+.np .np__cue { --np-cue-size: 1.4rem; }   /* por defecto escala con el ancho */
+```
+
 ## Theming
 
 Todo lo personalizable son variables CSS. Se puede rediseñar el reproductor
