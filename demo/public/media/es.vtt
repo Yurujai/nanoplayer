@@ -1,0 +1,12 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:06.000
+Primera pista de subtítulos, en español.
+
+00:00:06.000 --> 00:00:12.000
+Se renderizan con <track> nativo,
+así respetan los ajustes del sistema.
+
+00:00:12.000 --> 00:00:20.000
+El interruptor está en la barra;
+el idioma, en el menú de ajustes.

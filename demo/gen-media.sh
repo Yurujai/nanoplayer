@@ -53,6 +53,9 @@ ffmpeg -y -loglevel error \
   -movflags +faststart \
   slides.mp4
 
+echo "Generando poster.jpg (fotograma del ponente)..."
+ffmpeg -y -loglevel error -ss 3 -i presenter.mp4 -frames:v 1 -vf scale=960:-1 poster.jpg
+
 echo
-ls -lh presenter.mp4 slides.mp4
+ls -lh presenter.mp4 slides.mp4 poster.jpg
 echo "Listo."

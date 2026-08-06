@@ -1,0 +1,12 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:06.000
+First subtitle track, in English.
+
+00:00:06.000 --> 00:00:12.000
+Rendered with a native <track> element,
+so it honours the OS caption settings.
+
+00:00:12.000 --> 00:00:20.000
+The toggle lives in the bar;
+the language, in the settings menu.
