@@ -2,3 +2,4 @@ packages:
   - 'packages/*'
   - 'demo'
   - 'e2e'
+  - 'spikes/s5-live-dual'

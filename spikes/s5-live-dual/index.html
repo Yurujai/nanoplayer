@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Spike S5 — directo dual-stream</title>
+<link rel="icon" href="data:,">
+<style>
+  :root{color-scheme:dark}
+  body{margin:0;padding:1.25rem;background:#14161a;color:#e6e8ea;
+       font:15px/1.55 system-ui,sans-serif}
+  main{max-width:1100px;margin:0 auto}
+  h1{font-size:1.15rem;margin:0 0 .25rem}
+  p.lead{color:#9aa3ad;margin:0 0 1rem;font-size:.9rem}
+  .videos{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+  video{width:100%;background:#000;border-radius:6px;display:block}
+  .etq{font-size:.8rem;color:#9aa3ad;margin-bottom:.3rem}
+  section{background:#1c1f24;border:1px solid #2a2f36;border-radius:8px;
+          padding:1rem;margin-top:1rem}
+  .metricas{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));
+            gap:.9rem;margin-bottom:1rem}
+  .k{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:#8b939c}
+  .val{font-size:1.2rem;font-weight:600;font-variant-numeric:tabular-nums}
+  .bien{color:#5ddc7a} .medio{color:#ffb648} .mal{color:#ff6b6b}
+  button{font:inherit;padding:.45rem .85rem;border-radius:7px;border:1px solid #39404a;
+         background:#262b32;color:#e6e8ea;cursor:pointer;margin-right:.4rem}
+  button:hover:not(:disabled){background:#303740}
+  button:disabled{opacity:.4;cursor:default}
+  #registro{max-height:200px;overflow:auto;font:12px/1.5 ui-monospace,monospace;
+            color:#8b939c;margin-top:.8rem}
+  .aviso{background:#1d1a12;border:1px solid #ffb648;border-left-width:4px;
+         border-radius:8px;padding:.7rem .9rem;font-size:.87rem;margin:0 0 1rem}
+</style>
+</head>
+<body>
+<main>
+  <h1>Spike S5 — ¿se pueden sincronizar dos directos independientes?</h1>
+  <p class="lead">
+    Las dos emisiones salen del mismo proceso y el mismo instante: están
+    alineadas en origen por construcción. Lo que se mide es si el
+    <strong>reproductor</strong> las mantiene juntas.
+  </p>
+
+  <p class="aviso">
+    Los vídeos llevan incrustado el <strong>reloj de pared</strong>. Dos
+    fotogramas con la misma hora son el mismo instante, así que la deriva se
+    puede comprobar a simple vista además de medirla.
+  </p>
+
+  <div class="videos">
+    <div>
+      <div class="etq">presenter · 30 fps</div>
+      <video id="vPresenter" muted playsinline></video>
+    </div>
+    <div>
+      <div class="etq">slides · 25 fps</div>
+      <video id="vSlides" muted playsinline></video>
+    </div>
+  </div>
+
+  <section>
+    <div class="metricas">
+      <div><div class="k">Deriva real (por hora)</div><div class="val" id="porHora">—</div></div>
+      <div><div class="k">Diferencia de currentTime</div><div class="val" id="porTiempo">—</div></div>
+      <div><div class="k">Retraso sobre el directo</div><div class="val" id="retraso">—</div></div>
+      <div><div class="k">Mediana</div><div class="val" id="mediana">—</div></div>
+      <div><div class="k">Máxima</div><div class="val" id="maxima">—</div></div>
+      <div><div class="k">Muestras</div><div class="val" id="muestras">0</div></div>
+    </div>
+    <div>
+      <button id="btn-cargar">Cargar los dos directos</button>
+      <button id="btn-medir" disabled>Empezar medición</button>
+      <button id="btn-cortar" disabled>Cortar un flujo 3 s</button>
+      <button id="btn-borde">Llevar ambos al borde</button>
+    </div>
+    <div id="registro"></div>
+  </section>
+</main>
+<script src="node_modules/hls.js/dist/hls.min.js"></script>
+<script src="sync-live.js"></script>
+</body>
+</html>

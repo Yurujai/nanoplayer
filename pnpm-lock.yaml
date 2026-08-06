@@ -88,6 +88,15 @@ importers:
         specifier: ^6.0.0
         version: 6.4.3(@types/node@26.1.2)
 
+  spikes/s5-live-dual:
+    devDependencies:
+      hls.js:
+        specifier: ^1.5.0
+        version: 1.6.17
+      playwright:
+        specifier: ^1.49.0
+        version: 1.62.1
+
 packages:
 
   '@esbuild/aix-ppc64@0.21.5':
