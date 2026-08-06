@@ -67,6 +67,20 @@ operativo**, así que se exponen como variables:
 .np .np__cue { --np-cue-size: 1.4rem; }   /* por defecto escala con el ancho */
 ```
 
+## Dentro de un iframe
+
+Funciona sin más, pero **la pantalla completa necesita permiso explícito**:
+
+```html
+<iframe src="…" allow="fullscreen; autoplay; picture-in-picture"></iframe>
+```
+
+Sin ese atributo la llamada se rechaza con *Disallowed by permissions policy*, y
+el botón **se oculta solo** en lugar de quedarse sin hacer nada.
+
+Ojo con una consecuencia menos obvia: el `PlayerRegistry` no cruza iframes, así
+que varios reproductores en varios iframes dejan de coordinarse entre sí.
+
 ## Theming
 
 Todo lo personalizable son variables CSS. Se puede rediseñar el reproductor

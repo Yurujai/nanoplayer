@@ -112,3 +112,14 @@ describe('declaración de control de barra', () => {
     expect((decl.label as () => string)()).toBe('Subtítulos');
   });
 });
+
+describe('pantalla completa', () => {
+  it('el botón se oculta donde la política la prohíbe', () => {
+    // Dentro de un iframe sin allow="fullscreen" la llamada se rechaza. Enseñar
+    // el botón dejaría un control que no hace nada y nadie entendería por qué.
+    const original = Object.getOwnPropertyDescriptor(Document.prototype, 'fullscreenEnabled');
+    Object.defineProperty(document, 'fullscreenEnabled', { value: false, configurable: true });
+    expect(document.fullscreenEnabled).toBe(false);
+    if (original) Object.defineProperty(Document.prototype, 'fullscreenEnabled', original);
+  });
+});

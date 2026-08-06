@@ -601,8 +601,28 @@ export class ControlBar implements UiSlots {
     this.#volumen.style.setProperty('--np-progress', `${v * 100}%`);
   }
 
+  /**
+   * ¿Se puede usar la pantalla completa aquí?
+   *
+   * Dentro de un `<iframe>` sin `allow="fullscreen"` la llamada se rechaza con
+   * "Disallowed by permissions policy". Enseñar el botón igualmente deja un
+   * control que no hace nada, y quien lo pulse no entenderá por qué.
+   *
+   * En iPhone tampoco existe fullscreen de contenedor —lo midió S2— pero ahí sí
+   * queda la vía del vídeo suelto, así que el botón sigue teniendo sentido.
+   */
+  #hayPantallaCompleta(): boolean {
+    const doc = this.#root.ownerDocument as Document & {
+      webkitFullscreenEnabled?: boolean;
+    };
+    if (doc.fullscreenEnabled ?? doc.webkitFullscreenEnabled) return true;
+    // Recurso de iOS: llevar el vídeo al reproductor del sistema.
+    return 'webkitEnterFullscreen' in this.#root.ownerDocument.createElement('video');
+  }
+
   #pintarPantallaCompleta(): void {
     const doc = this.#root.ownerDocument as Document & { webkitFullscreenElement?: Element };
+    this.#btnFs.hidden = !this.#hayPantallaCompleta();
     const dentro = !!(doc.fullscreenElement ?? doc.webkitFullscreenElement);
     this.#btnFs.innerHTML = dentro ? ICONS.fullscreenExit : ICONS.fullscreenEnter;
     this.#btnFs.setAttribute('aria-label',
