@@ -28,7 +28,7 @@ const MANIFIESTOS: Record<string, unknown> = {
     duration: 60,
     streams: [
       { id: 'cam', role: 'presenter', label: 'Ponente', audio: true,
-        sources: [{ src: '/media/presenter.mp4', type: 'video/mp4' }] },
+        sources: [{ src: 'media/presenter.mp4', type: 'video/mp4' }] },
     ],
   },
   dual: {
@@ -37,9 +37,9 @@ const MANIFIESTOS: Record<string, unknown> = {
     duration: 60,
     streams: [
       { id: 'cam', role: 'presenter', label: 'Ponente', audio: true,
-        sources: [{ src: '/media/presenter.mp4', type: 'video/mp4' }] },
+        sources: [{ src: 'media/presenter.mp4', type: 'video/mp4' }] },
       { id: 'slides', role: 'presentation', label: 'Diapositivas', audio: false,
-        sources: [{ src: '/media/slides.mp4', type: 'video/mp4' }] },
+        sources: [{ src: 'media/slides.mp4', type: 'video/mp4' }] },
     ],
   },
   // Para ver que la validación no es decorativa: dos pistas de audio es
@@ -48,9 +48,9 @@ const MANIFIESTOS: Record<string, unknown> = {
     id: 'demo-roto',
     streams: [
       { id: 'a', role: 'presenter', audio: true,
-        sources: [{ src: '/media/presenter.mp4', type: 'video/mp4' }] },
+        sources: [{ src: 'media/presenter.mp4', type: 'video/mp4' }] },
       { id: 'b', role: 'presentation', audio: true,
-        sources: [{ src: '/media/slides.mp4', type: 'video/mp4' }] },
+        sources: [{ src: 'media/slides.mp4', type: 'video/mp4' }] },
     ],
   },
 };

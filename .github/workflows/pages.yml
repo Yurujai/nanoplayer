@@ -1,11 +1,15 @@
-name: Publicar sonda de diagnóstico
+name: Publicar spikes y demo
 
-# Publica spikes/s2-device-matrix como GitHub Pages, para poder pasar el enlace
-# a quien vaya a probar en su dispositivo.
+# Publica en GitHub Pages un índice con los bancos de pruebas y la demo:
 #
-# La sonda se CONSTRUYE aquí en lugar de versionar el HTML resultante: los
-# vídeos van incrustados en base64 y commitear medio mega de binario en cada
-# cambio ensucia el historial para nada.
+#   /                        índice
+#   /demo/                   banco de pruebas del núcleo
+#   /spikes/s1-dual-sync/    spike de sincronización dual-stream
+#   /probe/                  sonda de diagnóstico de dispositivo (S2)
+#
+# Los medios NO se versionan: se generan aquí con ffmpeg. Con la calidad de
+# trabajo local pesarían unos 40 MB, así que para publicar se usa una versión
+# reducida — de ahí SIZE y CRF.
 #
 # Requiere repositorio PÚBLICO en plan gratuito: Pages desde repo privado es de
 # planes de pago.
@@ -14,7 +18,10 @@ on:
   push:
     branches: [main]
     paths:
-      - 'spikes/s2-device-matrix/**'
+      - 'site/**'
+      - 'demo/**'
+      - 'spikes/**'
+      - 'packages/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -27,33 +34,74 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
+env:
+  # Medios ligeros para publicar. En local se usan los valores por defecto de
+  # cada gen-media.sh, que son de más calidad.
+  SIZE: 960x540
+  CRF: '32'
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: spikes/s2-device-matrix
     steps:
       - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: pnpm
 
       # fonts-dejavu-core aporta la tipografía del timecode incrustado.
       - name: Instalar ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
 
-      - name: Generar medios de prueba
-        run: ./gen-media.sh
-
-      - name: Construir la sonda
-        run: node build.mjs
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
 
       - name: Preparar el sitio
+        run: mkdir -p _site
+
+      # --- índice ---------------------------------------------------------
+      - name: Copiar el índice
+        run: cp site/index.html _site/index.html
+
+      # --- S2: sonda de diagnóstico ---------------------------------------
+      - name: Construir la sonda de diagnóstico
+        working-directory: spikes/s2-device-matrix
         run: |
-          mkdir -p "$GITHUB_WORKSPACE/_site"
-          cp dist/nanoplayer-probe.html "$GITHUB_WORKSPACE/_site/index.html"
+          ./gen-media.sh
+          node build.mjs
+          mkdir -p "$GITHUB_WORKSPACE/_site/probe"
+          cp dist/nanoplayer-probe.html "$GITHUB_WORKSPACE/_site/probe/index.html"
+
+      # --- S1: banco de sincronización ------------------------------------
+      - name: Preparar el spike de sincronización
+        working-directory: spikes/s1-dual-sync
+        env:
+          DUR: '40'
+        run: |
+          ./gen-media.sh
+          dest="$GITHUB_WORKSPACE/_site/spikes/s1-dual-sync"
+          mkdir -p "$dest"
+          cp index.html sync.js "$dest/"
+          cp -r media "$dest/"
+
+      # --- demo -----------------------------------------------------------
+      - name: Construir la demo
+        working-directory: demo
+        env:
+          DUR: '40'
+        run: |
+          ./gen-media.sh
+          pnpm build
+          cp -r dist "$GITHUB_WORKSPACE/_site/demo"
+
+      - name: Tamaño del sitio
+        run: du -sh _site && du -sh _site/*
 
       - uses: actions/upload-pages-artifact@v3
         with:
