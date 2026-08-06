@@ -1,31 +1,25 @@
 /**
  * Banco de pruebas del núcleo.
  *
- * No es el reproductor: no hay barra de controles, ni layouts, ni accesibilidad
- * — eso es la Fase 2. Lo que hace es **cablear a mano** las piezas que ya
- * existen para poder verlas funcionar en un navegador de verdad y no solo en
- * tests unitarios.
+ * Usa la API pública tal cual la usaría un integrador: `createPlayer(...)` y
+ * los métodos del ciclo de vida. Si algo aquí necesitase saltarse la API, sería
+ * señal de que la API está mal.
  *
- * Lo que enseña, y que es justo lo diferencial del proyecto:
- *   - El ciclo de vida perezoso: hasta que no se pide, no se descarga nada.
- *   - Que soltar el motor y volver a engancharlo conserva la posición.
- *   - Que el bus de eventos lo cuenta todo, que es de donde colgará la analítica.
+ * Sigue sin haber barra de controles ni layouts — eso es la Fase 2. Lo que se
+ * ve son los botones del ciclo de vida en crudo, a propósito, porque lo
+ * interesante de enseñar es justamente eso.
  */
 import {
-  EventBus, Lifecycle, NativeEngine, parseManifest,
-  masterStream, slaveStreams,
-  type CoreEvents, type Manifest, type MediaEngine, type Stream,
+  createPlayer, type Manifest, type Player,
 } from '@nanoplayer/core';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
-
-/* ------------------------------------------------------------ manifiestos -- */
 
 const MANIFIESTOS: Record<string, unknown> = {
   mono: {
     id: 'demo-mono',
     title: 'Un solo stream',
-    duration: 60,
+    duration: 40,
     streams: [
       { id: 'cam', role: 'presenter', label: 'Ponente', audio: true,
         sources: [{ src: 'media/presenter.mp4', type: 'video/mp4' }] },
@@ -34,7 +28,7 @@ const MANIFIESTOS: Record<string, unknown> = {
   dual: {
     id: 'demo-dual',
     title: 'Dos streams',
-    duration: 60,
+    duration: 40,
     streams: [
       { id: 'cam', role: 'presenter', label: 'Ponente', audio: true,
         sources: [{ src: 'media/presenter.mp4', type: 'video/mp4' }] },
@@ -55,223 +49,133 @@ const MANIFIESTOS: Record<string, unknown> = {
   },
 };
 
-/* ------------------------------------------------------------- instancia -- */
+let player: Player | null = null;
+let peticiones = 0;
 
-class Demo {
-  readonly bus = new EventBus<CoreEvents>();
-  readonly lc = new Lifecycle(this.bus);
-  #manifest: Manifest | null = null;
-  #engines = new Map<string, MediaEngine>();
-  #peticiones = 0;
-
-  constructor() {
-    this.bus.onAny((type, payload) => log(type, payload));
-    this.bus.on('state:change', () => pintarEstado());
-  }
-
-  get manifest() { return this.#manifest; }
-  get engines() { return this.#engines; }
-  get peticiones() { return this.#peticiones; }
-
-  /** idle → resolved. Aquí es donde se paga la primera petición de red. */
-  async resolver(clave: string): Promise<void> {
-    this.lc.transition('resolving');
-    this.bus.emit('manifest:resolve:start', {});
-    try {
-      // En el reproductor real esto sería un fetch; aquí basta con contarlo
-      // para que se vea cuántas peticiones cuesta cada estado.
-      this.#peticiones++;
-      await new Promise((r) => setTimeout(r, 150));
-      const m = parseManifest(MANIFIESTOS[clave]);
-      this.#manifest = m;
-      this.lc.transition('resolved');
-      this.bus.emit('manifest:resolve:ok', { manifest: m });
-    } catch (error) {
-      this.lc.transition('idle');
-      log('manifest:resolve:fail', { message: String(error) });
-      throw error;
-    }
-  }
-
-  /** resolved → attached. Se crean los `<video>` y empieza a bajar vídeo. */
-  async enganchar(): Promise<void> {
-    const m = this.#manifest;
-    if (!m) return;
-    this.lc.transition('attaching');
-    this.bus.emit('engine:attach:start', {});
-
-    const escenario = $('#escenario');
-    escenario.innerHTML = '';
-
-    try {
-      for (const stream of m.streams) {
-        const caja = document.createElement('div');
-        caja.className = 'stream';
-        caja.innerHTML = `<span class="etiqueta">${stream.label ?? stream.id}` +
-          `${stream.audio ? ' · audio' : ''}</span>`;
-        escenario.appendChild(caja);
-
-        const engine = new NativeEngine();
-        this.#engines.set(stream.id, engine);
-        await engine.attach(caja, stream, {
-          startAt: this.lc.resumeAt,
-          // Solo el maestro lleva audio: S2 midió que iPhone no reproduce dos
-          // pistas a la vez, así que el modelo lo impone desde el principio.
-          muted: !stream.audio,
-          callbacks: this.#callbacks(stream),
-        });
-      }
-      this.lc.transition('attached');
-      this.bus.emit('engine:attach:ok', {
-        engine: 'native', resumeAt: this.lc.resumeAt,
-      });
-    } catch (error) {
-      this.lc.transition('resolved');
-      log('engine:attach:fail', { message: String(error) });
-    }
-  }
-
-  #callbacks(stream: Stream) {
-    return {
-      onTime: (current: number, duration: number) => {
-        if (stream.audio) {
-          this.bus.emit('time', { current, duration });
-          pintarDeriva(this);
-        }
-      },
-      onPlay: () => { if (stream.audio) this.bus.emit('play', { at: this.tiempo }); },
-      onPause: () => { if (stream.audio) this.bus.emit('pause', { at: this.tiempo }); },
-      onEnded: () => { if (stream.audio) this.bus.emit('ended', { at: this.tiempo }); },
-      onStallStart: () => this.bus.emit('stall:start', { stream: stream.id }),
-      onStallEnd: (durationMs: number) =>
-        this.bus.emit('stall:end', { stream: stream.id, durationMs }),
-      onError: (error: unknown) => log('error', error),
-    };
-  }
-
-  get tiempo(): number {
-    const m = this.#manifest;
-    if (!m) return 0;
-    return this.#engines.get(masterStream(m).id)?.currentTime ?? 0;
-  }
-
-  async reproducir(): Promise<void> {
-    for (const e of this.#engines.values()) await e.play().catch(() => {});
-    if (this.lc.can('active')) this.lc.transition('active');
-  }
-
-  pausar(): void {
-    for (const e of this.#engines.values()) e.pause();
-    if (this.lc.can('attached')) this.lc.transition('attached');
-  }
-
-  /**
-   * attached → resolved. Suelta los decodificadores conservando la posición.
-   *
-   * Es la transición que hace posible una página con muchos reproductores: S2
-   * midió el techo del navegador en 17 elementos simultáneos (WebKit) y 18
-   * (Blink), así que sin soltar no se sostiene.
-   */
-  desalojar(): void {
-    if (this.lc.state === 'active') this.pausar();
-    this.lc.rememberPosition(this.tiempo);
-    for (const e of this.#engines.values()) e.destroy();
-    this.#engines.clear();
-    $('#escenario').innerHTML = '<p class="vacio">Motor soltado. ' +
-      'Cero elementos &lt;video&gt; en el DOM, posición conservada.</p>';
-    this.lc.transition('resolved');
-    this.bus.emit('engine:detach', { at: this.lc.resumeAt });
-  }
-
-  reiniciar(): void {
-    if (this.lc.hasEngine) {
-      if (this.lc.state === 'active') this.pausar();
-      for (const e of this.#engines.values()) e.destroy();
-      this.#engines.clear();
-      this.lc.transition('resolved');
-    }
-    if (this.lc.state === 'resolved') this.lc.transition('idle');
-    this.#manifest = null;
-    this.#peticiones = 0;
-    $('#escenario').innerHTML = '<p class="vacio">Estado <code>idle</code>: ' +
-      'solo el póster. Ni una petición de red.</p>';
-  }
-}
-
-/* ------------------------------------------------------------------- UI --- */
-
-let demo = new Demo();
+/* ------------------------------------------------------------------- log -- */
 
 function log(type: string, payload: unknown): void {
+  // La deriva llega a ~30 Hz; en el registro ahogaría todo lo demás.
+  if (type === 'sync:drift' || type === 'time') return;
   const linea = document.createElement('div');
   linea.className = 'ev';
   const corto = JSON.stringify(payload, (k, v) =>
     (k === 'manifest' ? '…' : typeof v === 'number' ? Math.round(v * 1000) / 1000 : v));
-  linea.innerHTML = `<span class="t">${type}</span> <span class="p">${corto}</span>`;
+  linea.innerHTML = `<span class="t">${type}</span> <span class="p">${corto ?? ''}</span>`;
   const cont = $('#eventos');
   cont.prepend(linea);
   while (cont.childElementCount > 120) cont.lastElementChild?.remove();
 }
 
-function pintarEstado(): void {
-  const s = demo.lc.state;
+/* --------------------------------------------------------------- creación -- */
+
+function crear(clave: string): Player {
+  const p = createPlayer({
+    container: $('#escenario'),
+    manifest: MANIFIESTOS[clave] as Manifest,
+  });
+
+  p.bus.onAny((type, payload) => log(type, payload));
+  p.on('state:change', pintar);
+  p.on('time', pintar);
+
+  p.on('sync:drift', ({ drift, action }) => {
+    const ms = drift * 1000;
+    const el = $('#deriva');
+    el.textContent = (ms >= 0 ? '+' : '') + ms.toFixed(0) + ' ms';
+    el.className = 'val ' + (Math.abs(ms) > 33 ? 'mal' : 'bien');
+    $('#accion').textContent = action;
+  });
+
+  return p;
+}
+
+function limpiarEscenario(mensaje: string): void {
+  $('#escenario').innerHTML = `<p class="vacio">${mensaje}</p>`;
+}
+
+/* ------------------------------------------------------------------- UI --- */
+
+function pintar(): void {
+  const s = player?.state ?? 'idle';
   $('#estado').textContent = s;
   $('#estado').dataset['s'] = s;
-  $('#resumeAt').textContent = demo.lc.resumeAt.toFixed(2) + ' s';
-  $('#peticiones').textContent = String(demo.peticiones);
+  $('#resumeAt').textContent = (player?.resumeAt ?? 0).toFixed(2) + ' s';
+  $('#peticiones').textContent = String(peticiones);
   $('#videos').textContent = String(document.querySelectorAll('#escenario video').length);
+  $('#tiempo').textContent = (player?.currentTime ?? 0).toFixed(2) + ' s';
 
-  const set = (sel: string, on: boolean) => { $<HTMLButtonElement>(sel).disabled = !on; };
-  set('#btn-resolver', s === 'idle');
-  set('#btn-enganchar', s === 'resolved');
-  set('#btn-play', s === 'attached');
-  set('#btn-pause', s === 'active');
-  set('#btn-desalojar', s === 'attached' || s === 'active');
+  const on = (sel: string, v: boolean) => { $<HTMLButtonElement>(sel).disabled = !v; };
+  on('#btn-resolver', s === 'idle');
+  on('#btn-enganchar', s === 'resolved');
+  on('#btn-play', s === 'attached');
+  on('#btn-pause', s === 'active');
+  on('#btn-desalojar', s === 'attached' || s === 'active');
+  on('#btn-seek', s === 'attached' || s === 'active');
 }
+
+$('#btn-resolver').addEventListener('click', async () => {
+  player ??= crear($<HTMLSelectElement>('#fuente').value);
+  peticiones++;
+  await player.resolve().catch(() => {});
+  pintar();
+});
+
+$('#btn-enganchar').addEventListener('click', async () => {
+  const vacio = $('#escenario').querySelector('.vacio');
+  vacio?.remove();
+  await player?.attach().catch(() => {});
+  pintar();
+});
+
+$('#btn-play').addEventListener('click', async () => {
+  await player?.play().catch(() => {});
+  pintar();
+});
+
+$('#btn-pause').addEventListener('click', () => { player?.pause(); pintar(); });
+
+$('#btn-seek').addEventListener('click', () => {
+  player?.seek(Math.random() * 30);
+  pintar();
+});
+
+$('#btn-desalojar').addEventListener('click', () => {
+  player?.detach();
+  limpiarEscenario('Motor soltado. Cero elementos &lt;video&gt; en el DOM, ' +
+    'posición conservada.');
+  pintar();
+});
+
+$('#btn-reiniciar').addEventListener('click', () => {
+  player?.destroy();
+  player = null;
+  peticiones = 0;
+  $('#eventos').innerHTML = '';
+  $('#deriva').textContent = '—';
+  $('#deriva').className = 'val';
+  $('#accion').textContent = '—';
+  limpiarEscenario('Estado <code>idle</code>: solo el póster. Ni una petición de red.');
+  pintar();
+});
+
+$('#fuente').addEventListener('change', () => {
+  $<HTMLButtonElement>('#btn-reiniciar').click();
+});
 
 /**
- * Deriva entre el maestro y los esclavos.
+ * Desincroniza los esclavos a mano para ver cómo se recuperan.
  *
- * Aquí se ve el hueco que llena la Fase 3: sin sincronizador, dos vídeos con
- * framerates distintos se separan solos. El spike S1 midió que con corrección
- * la mediana queda en 9.8 ms; sin ella, esto crece sin freno.
+ * Es la forma de hacer visible el sincronizador: 400 ms está por encima del
+ * umbral de salto duro de Blink (500 ms no, 200 ms de WebKit sí), así que
+ * según el motor se verá una corrección suave o un salto.
  */
-function pintarDeriva(d: Demo): void {
-  const m = d.manifest;
-  if (!m || d.engines.size < 2) { $('#deriva').textContent = '—'; return; }
-  const maestro = d.engines.get(masterStream(m).id);
-  if (!maestro) return;
-  const derivas = slaveStreams(m)
-    .map((s) => d.engines.get(s.id))
-    .filter((e): e is MediaEngine => !!e)
-    .map((e) => e.currentTime - maestro.currentTime);
-  if (!derivas.length) return;
-  const peor = derivas.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a));
-  const ms = peor * 1000;
-  const el = $('#deriva');
-  el.textContent = (ms >= 0 ? '+' : '') + ms.toFixed(0) + ' ms';
-  el.className = Math.abs(ms) > 33 ? 'val mal' : 'val bien';
-}
-
-$('#btn-resolver').addEventListener('click', () => {
-  const clave = $<HTMLSelectElement>('#fuente').value;
-  demo.resolver(clave).catch(() => {});
-});
-$('#btn-enganchar').addEventListener('click', () => { demo.enganchar(); });
-$('#btn-play').addEventListener('click', () => { demo.reproducir(); });
-$('#btn-pause').addEventListener('click', () => { demo.pausar(); });
-$('#btn-desalojar').addEventListener('click', () => { demo.desalojar(); });
-$('#btn-reiniciar').addEventListener('click', () => {
-  demo.reiniciar();
-  $('#eventos').innerHTML = '';
-  pintarEstado();
-});
-$('#fuente').addEventListener('change', () => {
-  demo.reiniciar();
-  pintarEstado();
+$('#btn-sync').addEventListener('click', () => {
+  const esclavos = [...document.querySelectorAll<HTMLVideoElement>('#escenario video')]
+    .filter((v) => v.muted);
+  for (const v of esclavos) v.currentTime = Math.max(0, v.currentTime - 0.4);
+  log('demo:desincronizado', { streams: esclavos.length, ms: -400 });
 });
 
-pintarEstado();
-setInterval(() => {
-  $('#videos').textContent = String(document.querySelectorAll('#escenario video').length);
-}, 500);
+pintar();
+setInterval(pintar, 500);

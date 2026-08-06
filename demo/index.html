@@ -40,10 +40,12 @@
   #estado[data-s="active"]{color:var(--ok)}
   #escenario{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
              gap:.75rem;min-height:120px}
-  .stream{position:relative;background:#000;border-radius:8px;overflow:hidden}
-  .stream video{width:100%;display:block}
-  .etiqueta{position:absolute;top:8px;left:8px;z-index:1;background:#000a;
-            padding:.2rem .5rem;border-radius:4px;font-size:.75rem}
+  #escenario > [data-stream]{position:relative;background:#000;border-radius:8px;
+                             overflow:hidden}
+  #escenario > [data-stream] video{width:100%;display:block}
+  #escenario > [data-stream]::before{content:attr(data-stream);position:absolute;
+    top:8px;left:8px;z-index:1;background:#000a;padding:.2rem .5rem;
+    border-radius:4px;font-size:.75rem;color:#e8eaed}
   .vacio{color:var(--dim);font-size:.9rem;margin:0;padding:2rem 0;text-align:center}
   #eventos{max-height:280px;overflow:auto;font:12px/1.5 ui-monospace,monospace}
   .ev{padding:.15rem 0;border-bottom:1px solid #1e222a}
@@ -56,22 +58,22 @@
 <main>
   <h1>NanoPlayer · banco de pruebas del núcleo</h1>
   <p class="lead">
-    Cablea a mano las piezas que ya existen: manifiesto validado, ciclo de vida,
-    bus de eventos y motor nativo.
+    Usa la API pública tal cual la usaría un integrador: <code>createPlayer()</code>
+    y los métodos del ciclo de vida.
   </p>
 
   <p class="aviso">
-    <strong>Esto no es el reproductor.</strong> No hay barra de controles ni
-    layouts (Fase&nbsp;2) ni sincronizador (Fase&nbsp;3).
+    <strong>Esto no es el reproductor terminado.</strong> No hay barra de
+    controles ni layouts: eso es la Fase&nbsp;2. Los botones del ciclo de vida
+    están en crudo a propósito, porque lo interesante de enseñar es justamente
+    eso.
   </p>
   <p class="aviso">
-    Con dos streams verás un desfase de unos <strong>70&nbsp;ms</strong>: los
-    motores se enganchan y arrancan en secuencia, así que el segundo empieza
-    tarde. Con ficheros locales el desfase se queda quieto —no crece— pero
-    <strong>nada lo corrige</strong>, y un stall o un salto lo empeorarían para
-    siempre. Eso es exactamente lo que resuelve el sincronizador de la
-    Fase&nbsp;3, que en el spike S1 dejó la mediana en 9,8&nbsp;ms. Compara los
-    timecodes incrustados de los dos vídeos.
+    Con dos streams el sincronizador ya está activo. Pulsa
+    <strong>Desincronizar 400&nbsp;ms</strong> o <strong>Saltar al azar</strong>
+    y observa cómo se cierra la deriva: el indicador de <em>acción del lazo</em>
+    muestra si corrige de forma suave o con un salto duro. Los timecodes
+    incrustados en los vídeos permiten comprobarlo a simple vista.
   </p>
 
   <section>
@@ -81,7 +83,9 @@
       <div><div class="k">Peticiones de red</div><div class="val" id="peticiones">0</div></div>
       <div><div class="k">Elementos &lt;video&gt;</div><div class="val" id="videos">0</div></div>
       <div><div class="k">Posición guardada</div><div class="val" id="resumeAt">0.00 s</div></div>
+      <div><div class="k">Tiempo</div><div class="val" id="tiempo">0.00 s</div></div>
       <div><div class="k">Deriva</div><div class="val" id="deriva">—</div></div>
+      <div><div class="k">Acción del lazo</div><div class="val" id="accion">—</div></div>
     </div>
     <div class="barra">
       <select id="fuente" aria-label="Manifiesto">
@@ -93,6 +97,8 @@
       <button id="btn-enganchar">2 · Enganchar motor</button>
       <button id="btn-play">3 · Reproducir</button>
       <button id="btn-pause">Pausar</button>
+      <button id="btn-seek">Saltar al azar</button>
+      <button id="btn-sync">Desincronizar 400 ms</button>
       <button id="btn-desalojar">Soltar motor</button>
       <button id="btn-reiniciar">Reiniciar</button>
     </div>

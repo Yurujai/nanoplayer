@@ -33,3 +33,13 @@ export type {
   AttachOptions, Confidence, EngineCallbacks, EngineFactory, MediaEngine,
 } from './engine.js';
 export { NativeEngine, nativeEngineFactory } from './native-engine.js';
+
+// --- sincronización ---------------------------------------------------------
+export { defaultScheduler, detectProfile, SYNC_PROFILES, Synchronizer } from './sync.js';
+export type {
+  Scheduler, SyncAction, SyncProfile, SyncProfileName, SyncSample, SynchronizerOptions,
+} from './sync.js';
+
+// --- reproductor ------------------------------------------------------------
+export { createPlayer, Player } from './player.js';
+export type { ManifestResolver, PlayerOptions } from './player.js';
