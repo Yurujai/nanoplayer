@@ -13,7 +13,7 @@
   }
   @media (prefers-color-scheme:light){
     :root{ --bg:#f6f7f9; --card:#fff; --line:#e2e5ea; --fg:#15181d; --dim:#5a636e;
-           --ok:#0f8a3d; --bad:#c62828; --warn:#8a4d00; --accent:#0b5fd0; color-scheme:light; }
+           --ok:#0a6f31; --bad:#c62828; --warn:#8a4d00; --accent:#0b5fd0; color-scheme:light; }
   }
   *{box-sizing:border-box}
   body{margin:0;padding:1.5rem 1rem 4rem;background:var(--bg);color:var(--fg);
@@ -70,17 +70,33 @@
 
   <a class="tarjeta" href="demo/">
     <div class="cab">
-      <h3>Banco de pruebas del núcleo</h3>
-      <span class="marca curso">Fase 1 · en curso</span>
+      <h3>El reproductor</h3>
+      <span class="marca curso">En construcción</span>
     </div>
     <p>
-      Cablea a mano las piezas que ya existen —manifiesto validado, ciclo de
-      vida, bus de eventos y motor nativo— para verlas funcionar en un navegador
-      real. Sin barra de controles ni sincronizador todavía.
+      Lo que vería quien lo integre: dual-stream sincronizado, barra de
+      controles accesible, menú de ajustes y subtítulos en dos idiomas. Se irán
+      añadiendo aquí los plugins según se construyan.
     </p>
     <ul class="hallazgos">
-      <li>El ciclo de vida perezoso, con el contador de peticiones y de
-          elementos <code>&lt;video&gt;</code> a la vista</li>
+      <li>Mientras se ve el póster no hay ningún <code>&lt;video&gt;</code> en
+          el DOM ni un byte de vídeo descargado</li>
+      <li>Navegable entero con el teclado; verificado en CI con axe-core</li>
+      <li>Los subtítulos se activan solos porque el manifiesto trae pistas</li>
+    </ul>
+  </a>
+
+  <a class="tarjeta" href="demo/banco.html">
+    <div class="cab">
+      <h3>Banco de pruebas del núcleo</h3>
+      <span class="marca curso">Instrumentado</span>
+    </div>
+    <p>
+      El mismo núcleo con el ciclo de vida en crudo: botones para resolver,
+      enganchar, soltar el motor y desincronizar a propósito.
+    </p>
+    <ul class="hallazgos">
+      <li>Contadores de peticiones de red y de elementos <code>&lt;video&gt;</code></li>
       <li>Soltar el motor libera los decodificadores y conserva la posición</li>
       <li>El registro de eventos es literalmente lo que ve <code>onAny()</code></li>
     </ul>

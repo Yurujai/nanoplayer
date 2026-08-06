@@ -60,16 +60,32 @@ async function auditar(etiqueta) {
 console.log(`Auditando ${URL_BASE}\n`);
 await page.goto(URL_BASE, { waitUntil: 'load' });
 
-await auditar('página inicial');
+// Estado inicial: solo el póster. Es el que ve la mayoría de visitantes, y
+// el que más se olvida de auditar.
+await auditar('estado inicial (póster)');
 
-// Montar el reproductor con controles.
-await page.selectOption('#fuente', 'dual');
-await page.click('#btn-resolver');
-await page.waitForTimeout(600);
-await page.click('#btn-enganchar');
-await page.waitForFunction(() => document.querySelector('.np__bar') !== null,
+const posterAccesible = await page.evaluate(() => {
+  const b = document.querySelector('.np__poster-play');
+  return b ? { tag: b.tagName.toLowerCase(), label: b.getAttribute('aria-label') } : null;
+});
+if (posterAccesible?.tag === 'button' && posterAccesible.label) {
+  bien(`el botón del póster es accesible ("${posterAccesible.label}")`);
+} else {
+  nota('el botón de reproducción del póster no es un button con nombre accesible');
+}
+
+// Que el póster no descargue vídeo no es solo rendimiento: es el objetivo O7.
+const mp4Antes = await page.evaluate(() => performance.getEntriesByType('resource')
+  .filter((r) => r.name.endsWith('.mp4')).length);
+if (mp4Antes === 0) bien('con el póster visible no se ha descargado vídeo');
+else nota(`${mp4Antes} peticiones de vídeo antes de interactuar`);
+
+// Arrancar desde el propio póster, como haría cualquiera.
+await page.click('.np__poster-play');
+await page.waitForFunction(() => document.querySelectorAll('.np video').length > 0,
   null, { timeout: 20000 });
-await page.waitForTimeout(500);
+await page.waitForTimeout(1200);
+await page.hover('#player');
 
 await auditar('con barra de controles');
 
@@ -160,7 +176,7 @@ for (let i = 0; i < 8; i++) {
 }
 console.log('  alcanzados: ' + (alcanzados.join(', ') || 'ninguno'));
 
-const ESPERADOS = ['Reproducir', 'Silenciar', 'Volumen', 'Posición', 'Pantalla completa'];
+const ESPERADOS = ['Pausar', 'Silenciar', 'Volumen', 'Posición', 'Pantalla completa'];
 for (const e of ESPERADOS) {
   if (alcanzados.some((a) => a.includes(e))) bien(`"${e}" es alcanzable con Tab`);
   else nota(`"${e}" NO se alcanza con Tab`);
@@ -206,12 +222,11 @@ await page.evaluate(() => document.querySelector('.np')?.focus());
 
 await page.keyboard.press('Space');
 await page.waitForTimeout(700);
-const trasEspacio = await page.evaluate(() => window.__np?.state ?? null);
-if (await page.evaluate(() => !document.querySelector('.np video')?.paused)) {
-  bien('Espacio inicia la reproducción');
-} else {
-  nota(`Espacio no inició la reproducción (estado: ${trasEspacio})`);
-}
+const pausado = await page.evaluate(() => document.querySelector('.np video')?.paused);
+if (pausado) bien('Espacio pausa la reproducción');
+else nota('Espacio no pausó la reproducción');
+await page.keyboard.press('Space');
+await page.waitForTimeout(500);
 
 const antes = await page.evaluate(() => document.querySelector('.np video').currentTime);
 await page.keyboard.press('ArrowRight');

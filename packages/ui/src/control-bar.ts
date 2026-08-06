@@ -20,6 +20,7 @@ import type { BarControlDecl, Player, SettingsPanelDecl, UiSlots } from '@nanopl
 import { formatPercent, formatTime, spokenTime } from './format.js';
 import { ICONS } from './icons.js';
 import { applyLayout, layoutsFor, type LayoutId } from './layouts.js';
+import { Poster } from './poster.js';
 import { SettingsMenu, type SettingsPanel } from './settings-menu.js';
 import { injectStyles } from './styles.js';
 
@@ -32,6 +33,11 @@ export interface ControlBarOptions {
   injectStyles?: boolean;
   /** Etiqueta accesible de la región del reproductor. */
   label?: string;
+  /**
+   * Mostrar el póster con botón de reproducción mientras no hay medios.
+   * Activado por defecto: es la cara visible del ciclo perezoso.
+   */
+  poster?: boolean;
 }
 
 interface Textos {
@@ -77,10 +83,12 @@ export class ControlBar implements UiSlots {
   readonly #hideAfterMs: number;
 
   #bar!: HTMLElement;
+  #escenario!: HTMLElement;
   #btnPlay!: HTMLButtonElement;
   #btnMute!: HTMLButtonElement;
   #btnFs!: HTMLButtonElement;
   #menu!: SettingsMenu;
+  #poster: Poster | null = null;
   #zonaControles!: HTMLElement;
   readonly #controles: BarControlDecl[] = [];
   readonly #botonesPlugin = new Map<string, HTMLButtonElement>();
@@ -110,6 +118,8 @@ export class ControlBar implements UiSlots {
     this.#construir(options.label);
     this.#conectar();
     this.#pintar();
+    if (options.poster !== false) this.#poster = new Poster(player, this.#lang);
+
     // Anunciarse al final: un plugin puede añadir controles en cuanto lo sepa,
     // y para entonces la barra tiene que estar completa.
     player.setUi(this);
@@ -136,14 +146,12 @@ export class ControlBar implements UiSlots {
     this.#root.setAttribute('aria-label', label ?? this.#t.region);
     if (!this.#root.hasAttribute('tabindex')) this.#root.tabIndex = 0;
 
-    // El Player monta los streams directamente en el contenedor; se envuelven
-    // para poder colocarlos sin pelearse con la barra.
-    const escenario = doc.createElement('div');
-    escenario.className = 'np__stage';
-    for (const hijo of [...this.#root.children]) {
-      if (hijo instanceof HTMLElement && hijo.dataset['stream']) escenario.appendChild(hijo);
-    }
-    this.#root.appendChild(escenario);
+    // El Player monta los streams directamente en el contenedor; se recogen en
+    // un escenario propio para poder colocarlos sin pelearse con la barra.
+    this.#escenario = doc.createElement('div');
+    this.#escenario.className = 'np__stage';
+    this.#root.appendChild(this.#escenario);
+    this.#recogerStreams();
 
     this.#vivo = doc.createElement('div');
     this.#vivo.className = 'np__sr';
@@ -298,10 +306,19 @@ export class ControlBar implements UiSlots {
     });
 
     // Solo tiene sentido con más de un stream: ofrecer "lado a lado" en un
-    // mono-stream sería un ajuste que no hace nada.
-    const streams = this.#player.manifest?.streams.length ?? 1;
-    const layouts = layoutsFor(streams, this.#lang);
-    if (layouts.length === 0) return;
+    // mono-stream sería un ajuste que no hace nada. Y el manifiesto puede no
+    // estar todavía, porque la barra puede montarse antes de resolverlo.
+    const registrarLayouts = () => {
+      const streams = this.#player.manifest?.streams.length ?? 1;
+      const layouts = layoutsFor(streams, this.#lang);
+      if (layouts.length === 0) return;
+      this.#registrarLayouts(layouts);
+    };
+    if (this.#player.manifest) registrarLayouts();
+    else this.#desatar.push(this.#player.on('manifest:resolve:ok', registrarLayouts));
+  }
+
+  #registrarLayouts(layouts: ReturnType<typeof layoutsFor>): void {
 
     applyLayout(this.#root, this.#layout);
     this.#menu.addPanel({
@@ -316,6 +333,15 @@ export class ControlBar implements UiSlots {
         this.#player.bus.emit('layout:change', { layout: this.#layout });
       },
     });
+  }
+
+  /** Mueve al escenario los streams que el Player haya montado. */
+  #recogerStreams(): void {
+    for (const hijo of [...this.#root.children]) {
+      if (hijo instanceof HTMLElement && hijo.dataset['stream']) {
+        this.#escenario.appendChild(hijo);
+      }
+    }
   }
 
   #boton(etiqueta: string, icono: string): HTMLButtonElement {
@@ -370,6 +396,12 @@ export class ControlBar implements UiSlots {
       this.#pintarVolumen(v, v === 0);
     });
 
+    // El Player monta los streams en el contenedor, y puede hacerlo después de
+    // que exista la barra: con el ciclo perezoso, `attach()` llega más tarde.
+    this.#desatar.push(p.on('engine:attach:ok', () => {
+      this.#recogerStreams();
+      this.#pintar();
+    }));
     this.#desatar.push(p.on('state:change', () => this.#pintar()));
     this.#desatar.push(p.on('time', () => this.#pintarProgreso()));
     this.#desatar.push(p.on('play', () => { this.#anunciar(this.#t.playing); this.#pintar(); }));
@@ -593,6 +625,8 @@ export class ControlBar implements UiSlots {
     if (this.#temporizador) clearTimeout(this.#temporizador);
     for (const off of this.#desatar) off();
     this.#desatar = [];
+    this.#poster?.destroy();
+    this.#poster = null;
     this.#observador?.disconnect();
     this.#observador = null;
     this.#player.setUi(null);

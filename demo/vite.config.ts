@@ -15,5 +15,13 @@ export default defineConfig({
         new URL('../packages/plugin-captions/src/index.ts', import.meta.url)),
     },
   },
+  build: {
+    rollupOptions: {
+      input: {
+        index: fileURLToPath(new URL('index.html', import.meta.url)),
+        banco: fileURLToPath(new URL('banco.html', import.meta.url)),
+      },
+    },
+  },
   server: { port: 5180 },
 });

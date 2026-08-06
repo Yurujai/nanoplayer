@@ -42,6 +42,15 @@ export interface PlayerOptions {
    * reproductores, convierte 32 llamadas en una.
    */
   manifestResolver?: ManifestResolver;
+  /**
+   * Imagen previa, disponible **sin resolver el manifiesto**.
+   *
+   * Hay un círculo vicioso si el póster solo vive dentro del manifiesto: para
+   * enseñarlo habría que pedirlo, que es justo la petición que el estado `idle`
+   * existe para evitar. En la práctica quien integra ya tiene la miniatura a
+   * mano —viene en el listado que pinta la página—, así que se pasa aquí.
+   */
+  poster?: string;
   muted?: boolean;
   volume?: number;
   /** Perfil de sincronización. Por defecto se detecta el del motor. */
@@ -94,6 +103,21 @@ export class Player {
 
   get state(): PlayerState { return this.#lc.state; }
   get manifest(): Manifest | null { return this.#manifest; }
+
+  /**
+   * URL del póster, si se conoce, sin obligar a resolver nada.
+   *
+   * Por orden: lo que dijo el integrador, lo que trae el manifiesto si vino ya
+   * cargado, y por último el manifiesto resuelto.
+   */
+  get poster(): string | undefined {
+    if (this.#opts.poster) return this.#opts.poster;
+    const src = this.#opts.manifest;
+    if (typeof src === 'object' && typeof src['poster'] === 'string') {
+      return src['poster'] as string;
+    }
+    return this.#manifest?.poster;
+  }
   get resumeAt(): number { return this.#lc.resumeAt; }
 
   /** Motor del stream que lleva el audio: el que gobierna el reloj. */

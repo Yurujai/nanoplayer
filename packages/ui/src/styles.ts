@@ -39,6 +39,30 @@ export const CSS = `
 .np__stage>[data-stream]{position:relative;flex:1;min-width:0}
 .np__stage video{display:block;width:100%;height:auto}
 
+/* --- póster: el estado inicial, sin un byte de vídeo descargado --- */
+.np__poster{
+  position:absolute;inset:0;z-index:2;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--np-color-bg) center/cover no-repeat;
+}
+.np__poster[hidden]{display:none}
+/* Sin medios detrás, el contenedor no tiene altura propia. */
+.np--con-poster{aspect-ratio:16/9}
+button.np__poster-play{
+  width:4.5rem;height:4.5rem;border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;
+  border:0;background:rgba(0,0,0,.55);color:var(--np-color-control);
+  cursor:pointer;transition:background var(--np-transition),transform var(--np-transition);
+}
+button.np__poster-play:hover:not([disabled]){background:rgba(0,0,0,.75);transform:scale(1.06)}
+button.np__poster-play:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:3px}
+button.np__poster-play svg{width:45%;height:45%;fill:currentColor;pointer-events:none}
+.np__poster--cargando button{opacity:.5;cursor:progress}
+.np__poster--cargando button svg{animation:np-latido 1s ease-in-out infinite}
+@keyframes np-latido{50%{opacity:.35}}
+/* Con la barra oculta no hay dónde volver: mientras se ve el póster, se ve. */
+.np--con-poster .np__bar{opacity:0;pointer-events:none}
+
 /* --- barra de controles --- */
 .np__bar{
   position:absolute;left:0;right:0;bottom:0;

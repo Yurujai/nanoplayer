@@ -41,6 +41,8 @@ export interface CreateConfig {
   plugins?: Record<string, PluginConfig>;
   engines?: readonly EngineFactory[];
   manifestResolver?: ManifestResolver;
+  /** Imagen previa, disponible sin resolver el manifiesto. */
+  poster?: string;
   muted?: boolean;
   volume?: number;
   syncProfile?: SyncProfile;
@@ -88,6 +90,7 @@ export function create(
     manifest: config.manifest,
     ...(config.engines ? { engines: config.engines } : {}),
     ...(config.manifestResolver ? { manifestResolver: config.manifestResolver } : {}),
+    ...(config.poster ? { poster: config.poster } : {}),
     ...(config.muted !== undefined ? { muted: config.muted } : {}),
     ...(config.volume !== undefined ? { volume: config.volume } : {}),
     ...(config.syncProfile ? { syncProfile: config.syncProfile } : {}),
