@@ -31,10 +31,38 @@ import {
   type Manifest, type PluginContext, type PluginImpl, type TextTrackDef,
 } from '@nanoplayer/core';
 
-const ICONO_ON =
-  '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zM7.5 14.5A2.5 2.5 0 0 1 7.5 9.5h1.2v1.6H7.5a.9.9 0 0 0 0 1.8h1.2v1.6H7.5zm7 0a2.5 2.5 0 0 1 0-5h1.2v1.6h-1.2a.9.9 0 0 0 0 1.8h1.2v1.6z"/></svg>';
-const ICONO_OFF =
-  '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 14H5V6h14v12zM7.5 14.5A2.5 2.5 0 0 1 7.5 9.5h1.2v1.6H7.5a.9.9 0 0 0 0 1.8h1.2v1.6H7.5zm7 0a2.5 2.5 0 0 1 0-5h1.2v1.6h-1.2a.9.9 0 0 0 0 1.8h1.2v1.6z" opacity=".55"/></svg>';
+/*
+ * Iconos de subtítulos.
+ *
+ * La mitad superior de la caja se deja **vacía a propósito**: representa la
+ * imagen, y el texto va abajo, que es donde aparecen los subtítulos de verdad.
+ * Con las barras repartidas por toda la caja el dibujo se lee como una rejilla
+ * y no como texto sobre vídeo.
+ *
+ * El conmutador se distingue por **relleno frente a contorno**, no por
+ * opacidad: quien no distinga bien los tonos necesita una diferencia de forma.
+ * El contorno mide 1,7 unidades sobre un lienzo de 24, o sea 1,7 px al tamaño
+ * real; con menos se confunde con el estado relleno.
+ *
+ * `fill-rule="evenodd"` abre los huecos: las barras se dibujan como
+ * rectángulos y la regla par-impar los convierte en calados.
+ */
+const CAJA =
+  'M4 4.5h16a2.5 2.5 0 0 1 2.5 2.5v10a2.5 2.5 0 0 1-2.5 2.5H4A2.5 2.5 0 0 1 1.5 17V7A2.5 2.5 0 0 1 4 4.5z';
+const HUECO =
+  'M4.1 6.2h15.8c.5 0 .9.4.9.9v9.8c0 .5-.4.9-.9.9H4.1a.9.9 0 0 1-.9-.9V7.1c0-.5.4-.9.9-.9z';
+const TEXTO =
+  'M5.2 11.2h3.9v1.8H5.2zM10.8 11.2h8v1.8h-8z'
+  + 'M5.2 14.4h7.6v1.8H5.2zM14.5 14.4h4.3v1.8h-4.3z';
+
+const svg = (d: string) =>
+  `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">`
+  + `<path fill-rule="evenodd" d="${d}"/></svg>`;
+
+/** Activo: caja rellena con el texto calado. */
+const ICONO_ON = svg(CAJA + TEXTO);
+/** Inactivo: solo el contorno, con el texto dentro. */
+const ICONO_OFF = svg(CAJA + HUECO + TEXTO);
 
 const TEXTOS: Record<string, { captions: string; off: string; on: string }> = {
   es: { captions: 'Subtítulos', off: 'Desactivados', on: 'Activar subtítulos' },
