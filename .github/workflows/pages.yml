@@ -32,7 +32,11 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  # NO cancelar en curso. Es lo contrario de lo que conviene en el resto de
+  # workflows, y aquí es deliberado: cancelar una publicación a medias deja el
+  # servicio de Pages con un despliegue colgado, y el siguiente expira con
+  # "Timeout reached, aborting!". Pasó de verdad con b7ad27f.
+  cancel-in-progress: false
 
 env:
   # Medios ligeros para publicar. En local se usan los valores por defecto de
@@ -116,3 +120,7 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          # Por encima de los 10 minutos por defecto: el sitio ronda los 8 MB
+          # entre vídeos de prueba, y con la red de GitHub lenta se acercaba.
+          timeout: 900000
