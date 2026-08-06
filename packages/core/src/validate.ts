@@ -1,9 +1,20 @@
 /**
  * Validación del manifiesto, escrita a mano y sin dependencias.
  *
- * Sin librería de esquemas a propósito: el objetivo O6 fija el núcleo por
- * debajo de 50 KB, y meter un validador genérico se come una parte grande de
- * ese presupuesto para un esquema que cambia poco.
+ * Sin librería de esquemas, y **no por ahorrar kilobytes** — hay opciones que
+ * pesan poco. Por dos motivos que no dependen del tamaño:
+ *
+ *   1. Cero dependencias en tiempo de ejecución. Esto acaba incrustado en
+ *      aplicaciones ajenas, y los conflictos de versiones los paga quien
+ *      integra, no quien publica.
+ *   2. Los mensajes de error llevan razonamiento de dominio dentro. Un
+ *      validador genérico diría "esperaba 1, recibí 2"; aquí interesa explicar
+ *      *por qué* dos pistas de audio rompen en iOS.
+ *
+ * El riesgo real de hacerlo a mano es que los tipos y las comprobaciones se
+ * separen con el tiempo. Se ataca de frente con el guardián de deriva de
+ * `test/manifest-drift.test.ts`, que deja de compilar si se añade un campo sin
+ * decidir qué hacer con él.
  *
  * Las reglas no son burocracia: varias codifican lo medido en los spikes, y
  * saltarse cualquiera de ellas produce un reproductor que falla en runtime en
