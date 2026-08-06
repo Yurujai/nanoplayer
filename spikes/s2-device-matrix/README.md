@@ -10,8 +10,8 @@
 4. ¿Se sostiene la sincronización de S1 fuera de Chrome sobre escritorio?
 5. ¿Deja sonar dos vídeos a la vez? ¿Cuál es su política de autoplay?
 
-**Estado:** ✅ respondidas las preguntas decisivas. Queda medir la
-sincronización en iPhone (ver §Pendiente).
+**Estado:** ✅ **completo.** Medido en Blink (Ubuntu, Mac M2 Pro), Safari de
+escritorio y dos iPhone (Safari 26 y Chrome iOS).
 
 ---
 
@@ -42,10 +42,7 @@ página: no hay ninguna petición de red.
 
 ---
 
-## Referencia: escritorio
-
-Para poder interpretar los resultados de los móviles hace falta un techo
-conocido.
+## Resultados
 
 | | Chrome · Ubuntu | Chrome · Mac M2 Pro | Safari 16.4 · Mac | **iPhone** (Safari 26 y Chrome iOS) |
 |---|---|---|---|---|
@@ -53,7 +50,8 @@ conocido.
 | Vídeos simultáneos | 18 | 18 | 17 | **17** |
 | Fullscreen del contenedor | sí | sí | sí | **NO** |
 | Dos audios a la vez | sí | sí | sí | **no** |
-| Deriva mediana / p95 | 7.8 / 15.1 ms | 8.3 / 19.6 ms | **30.6 / 53.9 ms** | sin medir |
+| Deriva mediana / p95 / máx | 7.8 / 15.1 / 39 ms | 8.3 / 19.6 / 41 ms | 30.6 / 53.9 / 118 ms | **28.1 / 209 / 405 ms** |
+| Saltos duros | 0 | 0 | 0 | **1** |
 | `audioTracks` | **no** | **no** | sí | sí |
 | MediaSource | sí | sí | sí | no |
 | ManagedMediaSource | no | no | no (Safari 16) | **sí** |
@@ -85,11 +83,27 @@ prueba que se rendericen con fluidez, y los vídeos de prueba son de 320x180. El
 presupuesto del `PlayerRegistry` debe seguir midiéndose en ejecución, pero
 partiendo de que el orden de magnitud es holgado y no de 2.
 
-**3. El ajuste de S1 es de Chrome, no universal.** En Safari la misma
-configuración da 30.6 ms de mediana y 53.9 de p95, frente a 7.8 / 15.1 en
-Chrome. Cuatro veces peor, con el p95 muy por encima del frame. El modelo
-maestro/esclavo aguanta, pero **umbrales y ganancia necesitan perfil por
-motor**.
+**3. El ajuste de S1 es de Chrome, no universal** — y falla de forma distinta
+en cada sitio.
+
+En Safari de escritorio la degradación es uniforme: 30.6 ms de mediana frente a
+7.8. Eso es calibración.
+
+En iPhone la firma es otra y más interesante: **mediana de 28.1 ms (buena, por
+debajo del frame) con un p95 de 209 ms y un máximo de 405**. No es un desajuste
+de ganancia — si las constantes estuvieran mal, la mediana también lo estaría.
+Son **excursiones puntuales severas** sobre un comportamiento base correcto.
+
+Dos causas plausibles, sin distinguir todavía:
+- Buffering momentáneo por contención de decodificación en el dispositivo.
+- WebKit en móvil no aplica los cambios de `playbackRate` con la finura que el
+  controlador da por supuesta.
+
+Consecuencia para la Fase 3: el arreglo **no es subir la ganancia** sino bajar
+el umbral de salto duro en el perfil de WebKit, para que una excursión de 200 ms
+se corrija en vez de quedarse. Distinguir entre ambas causas requiere
+instrumentar los eventos de stall durante la reproducción, y se hace mejor con
+el reproductor real que con la sonda.
 
 **4. `audioTracks` está invertido respecto a lo esperado:** existe en WebKit y
 no en Blink. El `AudioTrackProvider` necesita las dos vías desde el principio
@@ -99,24 +113,16 @@ no en Blink. El `AudioTrackProvider` necesita las dos vías desde el principio
 Y una buena noticia: iOS 26.5 trae `ManagedMediaSource`, así que hls.js es
 viable en iPhone pese a no haber `MediaSource` clásico.
 
-### Pendiente
+### Lo que queda fuera del alcance de este spike
 
-**La sincronización en iPhone sigue sin medirse.** La primera pasada devolvió
-`syncError: "media no cargó"`: con solo 2 decodificadores, las pruebas
-anteriores no los liberaban a tiempo y la de sincronización se quedaba sin
-recursos. Corregido con `release()` —que suelta el recurso además de quitar el
-elemento del DOM— y un margen de asentamiento. **Requiere otra pasada en el
-iPhone para confirmarlo.**
-
-### Hallazgo: `audioTracks` no existe en Chrome
-
-Chrome no implementa `HTMLMediaElement.audioTracks`. **Esto invalida la
-implementación de multi-audio que se daba por supuesta** — delegar las pistas
-embebidas en el navegador — para todo Chrome, que es la mayor parte del parque.
-
-Consecuencia para el diseño: el `AudioTrackProvider` de pistas embebidas tiene
-que apoyarse en la API de hls.js, no en la nativa. Y como hls.js exige MSE, en
-Safari/iOS sin `ManagedMediaSource` habrá que comprobar si queda alguna vía.
+- **Distinguir la causa de las excursiones en iPhone** (stalls vs. `playbackRate`
+  no honrado). Necesita instrumentar eventos de stall durante la reproducción;
+  se hace mejor con el reproductor real en la Fase 3.
+- **HLS.** La sonda usa MP4 progresivo para mantenerse autocontenida. Con MSE y
+  hls.js el buffering es otro mundo y hay que repetir la medición.
+- **Red real.** Todo son blobs en memoria: sin latencia ni ancho de banda
+  limitado.
+- **Consumo de batería y CPU** sostenido.
 
 ---
 
@@ -124,7 +130,7 @@ Safari/iOS sin `ManagedMediaSource` habrá que comprobar si queda alguna vía.
 
 | Hallazgo | Consecuencia para el producto |
 |---|---|
-| `maxConcurrentVideos` < 4 | El degradado móvil (S3) es obligatorio, no opcional |
+| `maxConcurrentVideos` < 4 | Sospechar primero de la sonda: medido 17-18 en todos los motores. Si se confirma, el degradado es obligatorio |
 | `containerFullscreen: false` | En ese dispositivo no hay dual-stream a pantalla completa. Hay que decidir: conmutar a un stream, o desactivar el botón |
 | `mediaSource` y `managedMediaSource` ambos `false` | hls.js no funciona: solo HLS nativo, sin control de calidad propio |
 | `hlsMime` es `"maybe"` | **No es prueba de nada.** Chrome lo devuelve sin soportar HLS nativo. Solo `"probably"` junto a la ausencia de MSE indica HLS nativo real |
