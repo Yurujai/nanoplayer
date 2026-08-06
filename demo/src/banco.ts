@@ -15,7 +15,8 @@ import {
 import { attachControls, type ControlBar } from '@nanoplayer/ui';
 // Basta con importarlo: el plugin se auto-registra. El núcleo no lo conoce.
 import '@nanoplayer/plugin-captions';
-import { plugins } from '@nanoplayer/core';
+import { plugins, nativeEngineFactory } from '@nanoplayer/core';
+import { enginesWithHls } from '@nanoplayer/engine-hls';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 
@@ -42,6 +43,21 @@ const MANIFIESTOS: Record<string, unknown> = {
     textTracks: [
       { src: 'media/es.vtt', lang: 'es', label: 'Español', kind: 'subtitles' },
       { src: 'media/en.vtt', lang: 'en', label: 'English', kind: 'subtitles' },
+    ],
+  },
+  // Mismo contenido servido como HLS: el selector debe preferir hls.js donde
+  // haya MSE, sin que nada más cambie.
+  hls: {
+    id: 'demo-hls',
+    title: 'Dos streams por HLS',
+    duration: 40,
+    streams: [
+      { id: 'cam', role: 'presenter', label: 'Ponente', audio: true,
+        sources: [{ src: 'media/hls/presenter.m3u8',
+                    type: 'application/vnd.apple.mpegurl' }] },
+      { id: 'slides', role: 'presentation', label: 'Diapositivas', audio: false,
+        sources: [{ src: 'media/hls/slides.m3u8',
+                    type: 'application/vnd.apple.mpegurl' }] },
     ],
   },
   // Para ver que la validación no es decorativa: dos pistas de audio es
@@ -82,9 +98,13 @@ function crear(clave: string): Player {
   const p = createPlayer({
     container: $('#player'),
     manifest: MANIFIESTOS[clave] as Manifest,
+    // Registrar hls.js delante basta para que gane donde puede. El selector
+    // decide con `canPlay`, no con condicionales repartidos.
+    engines: enginesWithHls(nativeEngineFactory),
   });
 
   p.bus.onAny((type, payload) => log(type, payload));
+  p.on('engine:attach:ok', ({ engine }) => log('motor elegido', { engine }));
   p.on('state:change', pintar);
   p.on('time', pintar);
 

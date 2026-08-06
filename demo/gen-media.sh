@@ -53,9 +53,22 @@ ffmpeg -y -loglevel error \
   -movflags +faststart \
   slides.mp4
 
+# --- HLS, para el motor con hls.js ---
+# `-c copy` reempaqueta sin recodificar: los segmentos pesan lo mismo que el
+# MP4 de origen y la generación es instantánea.
+echo "Generando HLS (segmentos de 2 s)..."
+rm -rf hls && mkdir -p hls
+ffmpeg -y -loglevel error -i presenter.mp4 \
+  -c copy -f hls -hls_time 2 -hls_playlist_type vod \
+  -hls_segment_filename 'hls/presenter%03d.ts' hls/presenter.m3u8
+ffmpeg -y -loglevel error -i slides.mp4 \
+  -c copy -f hls -hls_time 2 -hls_playlist_type vod \
+  -hls_segment_filename 'hls/slides%03d.ts' hls/slides.m3u8
+
 echo "Generando poster.jpg (fotograma del ponente)..."
 ffmpeg -y -loglevel error -ss 3 -i presenter.mp4 -frames:v 1 -vf scale=960:-1 poster.jpg
 
 echo
 ls -lh presenter.mp4 slides.mp4 poster.jpg
+ls hls/*.m3u8 | sed "s/^/  /"
 echo "Listo."

@@ -261,7 +261,20 @@ export class Player {
    */
   detach(): void {
     if (!this.#lc.hasEngine) return;
-    if (this.#lc.state === 'active') this.pause();
+    if (this.#lc.state === 'active') {
+      this.pause();
+      /*
+       * El evento `pause` del elemento es asíncrono, así que puede no haber
+       * llegado todavía y el estado seguir en `active`. Como la máquina de
+       * estados prohíbe `active` → `resolved` a propósito —para que nadie
+       * arranque el motor de debajo de una reproducción en curso—, aquí se
+       * cierra el paso intermedio a mano.
+       *
+       * Con MP4 no se notaba porque el evento llega en el mismo turno; con
+       * hls.js sí, y así apareció.
+       */
+      if (this.#lc.state === 'active') this.#lc.transition('attached');
+    }
     const at = this.currentTime;
     this.#lc.rememberPosition(at);
     this.#soltarMotores();

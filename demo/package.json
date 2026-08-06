@@ -12,9 +12,11 @@
   "dependencies": {
     "@nanoplayer/core": "workspace:*",
     "@nanoplayer/ui": "workspace:*",
-    "@nanoplayer/plugin-captions": "workspace:*"
+    "@nanoplayer/plugin-captions": "workspace:*",
+    "@nanoplayer/engine-hls": "workspace:*"
   },
   "devDependencies": {
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "hls.js": "^1.5.0"
   }
 }

@@ -9,6 +9,7 @@ spikes/*/media/
 # contenido, y dejarlos fuera del repositorio los hacía desaparecer en CI.
 demo/public/media/*.mp4
 demo/public/media/*.jpg
+demo/public/media/hls/
 
 # Capturas sueltas
 *.png

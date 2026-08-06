@@ -203,6 +203,21 @@ describe('Player · desalojo', () => {
     expect(fn).toHaveBeenCalledWith({ at: 17 });
   });
 
+  it('desaloja aunque el aviso de pausa llegue tarde', async () => {
+    // Con un motor cuyo `pause` es asíncrono —hls.js lo es— el estado seguía
+    // en `active` al intentar soltar, y la transición prohibida lanzaba.
+    const { factory, creados } = factoriaFalsa();
+    const p = new Player({ container, manifest: DUAL as never, engines: [factory] });
+    await p.play();
+    expect(p.state).toBe('active');
+
+    // El falso deja de avisar: simula el aviso que aún no ha llegado.
+    for (const e of creados) e._cb().onPause = undefined;
+
+    expect(() => p.detach()).not.toThrow();
+    expect(p.state).toBe('resolved');
+  });
+
   it('desalojar sin motor enganchado no hace nada', async () => {
     const { p } = nuevo(MONO);
     await p.resolve();
