@@ -17,12 +17,75 @@
  *   node a11y.mjs [url]
  */
 import { chromium } from 'playwright';
-import { readFileSync } from 'node:fs';
+import { createReadStream, readFileSync, statSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
+import { extname, join, normalize } from 'node:path';
 
 const require = createRequire(import.meta.url);
 const AXE = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
-const URL_BASE = process.argv[2] ?? 'http://127.0.0.1:5180/';
+
+/*
+ * Puede auditar una URL ya servida, o servir él mismo un directorio:
+ *
+ *   node a11y.mjs http://127.0.0.1:5180/     (servidor de desarrollo)
+ *   node a11y.mjs --serve ../demo/dist       (build estático)
+ *
+ * La segunda forma es la que usa CI. Levantar un servidor de desarrollo en
+ * segundo plano dentro de un paso de Actions es frágil —el proceso puede no
+ * sobrevivir al paso, y Vite se ata a `localhost`, que en el runner resuelve a
+ * IPv6 mientras la comprobación pregunta por 127.0.0.1— y además auditar el
+ * build es más fiel: es lo que de verdad se despliega.
+ */
+const TIPOS = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8', '.mp4': 'video/mp4',
+  '.vtt': 'text/vtt; charset=utf-8', '.jpg': 'image/jpeg', '.png': 'image/png',
+  '.json': 'application/json; charset=utf-8', '.map': 'application/json',
+};
+
+function servir(raiz, puerto) {
+  return new Promise((listo) => {
+    const srv = createServer((req, res) => {
+      const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+      let ruta = join(raiz, normalize(url).replace(/^(\.\.[/\\])+/, ''));
+      try { if (statSync(ruta).isDirectory()) ruta = join(ruta, 'index.html'); } catch { /* 404 */ }
+      let st;
+      try { st = statSync(ruta); } catch { res.writeHead(404); return res.end('404'); }
+
+      const tipo = TIPOS[extname(ruta)] ?? 'application/octet-stream';
+      // Range: sin esto el navegador no puede buscar dentro del vídeo.
+      const rango = req.headers.range && /^bytes=(\d*)-(\d*)$/.exec(req.headers.range);
+      if (rango) {
+        const ini = Number(rango[1] || 0);
+        const fin = rango[2] ? Number(rango[2]) : st.size - 1;
+        res.writeHead(206, {
+          'content-type': tipo, 'content-length': fin - ini + 1,
+          'content-range': `bytes ${ini}-${fin}/${st.size}`, 'accept-ranges': 'bytes',
+        });
+        return createReadStream(ruta, { start: ini, end: fin }).pipe(res);
+      }
+      res.writeHead(200, {
+        'content-type': tipo, 'content-length': st.size, 'accept-ranges': 'bytes',
+      });
+      createReadStream(ruta).pipe(res);
+    });
+    srv.listen(puerto, '127.0.0.1', () => listo(srv));
+  });
+}
+
+const args = process.argv.slice(2);
+let servidor = null;
+let URL_BASE;
+if (args[0] === '--serve') {
+  const raiz = args[1];
+  if (!raiz) { console.error('Falta el directorio a servir'); process.exit(2); }
+  servidor = await servir(raiz, 5199);
+  URL_BASE = 'http://127.0.0.1:5199/';
+  console.log(`Sirviendo ${raiz}`);
+} else {
+  URL_BASE = args[0] ?? 'http://127.0.0.1:5180/';
+}
 
 const REGLAS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'];
 
@@ -257,6 +320,7 @@ else nota('la barra se ocultó con el foco dentro: se pierde de vista el control
 /* --- veredicto ----------------------------------------------------------- */
 
 await browser.close();
+servidor?.close();
 console.log('\n' + '─'.repeat(66));
 if (problemas.length === 0) {
   console.log('ACCESIBILIDAD: sin problemas automatizables detectados.');

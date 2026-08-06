@@ -56,11 +56,13 @@ jobs:
           CRF: '32'
           DUR: '40'
 
-      - name: Levantar la demo
-        run: |
-          pnpm --filter @nanoplayer/demo dev &
-          npx --yes wait-on http://127.0.0.1:5180 --timeout 90000
+      # Se audita el BUILD, no el servidor de desarrollo. Levantar un servidor
+      # en segundo plano dentro de un paso de Actions es frágil, y auditar lo
+      # que realmente se despliega es más fiel. El propio script sirve los
+      # ficheros, así que no hay proceso suelto que pueda no sobrevivir.
+      - name: Construir la demo
+        run: pnpm --filter @nanoplayer/demo build
 
       - name: Auditar accesibilidad
-        run: node a11y.mjs http://127.0.0.1:5180/
+        run: node a11y.mjs --serve ../demo/dist
         working-directory: e2e
