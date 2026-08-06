@@ -4,6 +4,7 @@ export type {
   Source, Stream, StreamRole, TextTrackDef, TrimAnnotation,
 } from './manifest.js';
 export {
+  isAudioOnly, isAudioOnlyManifest,
   masterStream, parseManifest, slaveStreams, trimOf, validateManifest,
 } from './validate.js';
 export type { ValidationIssue, ValidationResult } from './validate.js';

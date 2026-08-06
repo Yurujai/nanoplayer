@@ -10,6 +10,15 @@
  * un `::part` por cada elemento para poder darle estilo desde fuera.
  */
 export const CSS = `
+:where(.np) [hidden]{
+  /* El atributo hidden lo aplica el navegador como display:none, pero
+     cualquier regla display explícita gana. Los botones de la barra y el del
+     póster declaran display:inline-flex, así que sin esto se quedaban a la
+     vista con el atributo puesto. Se vio en el caso de solo audio.
+     (Sin comillas invertidas aquí: esto vive dentro de una plantilla.) */
+  display:none!important;
+}
+
 .np{
   /* --- API de theming: sobrescribe estas variables y ya --- */
   --np-color-accent:#6aa9ff;
@@ -73,6 +82,16 @@ button.np__poster-play svg{width:45%;height:45%;fill:currentColor;pointer-events
 @keyframes np-latido{50%{opacity:.35}}
 /* Con la barra oculta no hay dónde volver: mientras se ve el póster, se ve. */
 .np--con-poster .np__bar{opacity:0;pointer-events:none}
+
+/* Solo audio: la capa se queda de fondo. Baja por debajo de todo —deja de ser
+   póster y pasa a ser fondo— o taparía la barra de controles, que está en un
+   nivel inferior al del póster. */
+.np__poster--fondo{z-index:0;pointer-events:none}
+.np--solo-audio .np__stage{display:none}
+.np--solo-audio{aspect-ratio:16/9}
+/* Sin carátula no tiene sentido reservar un hueco de vídeo: basta la barra. */
+.np--solo-audio.np--sin-poster{aspect-ratio:auto;min-height:5.5rem}
+.np--solo-audio.np--sin-poster .np__bar{background:#000}
 
 /* --- barra de controles --- */
 .np__bar{

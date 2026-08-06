@@ -123,6 +123,49 @@ Con `@nanoplayer/plugin-captions` cargado, esto **activa los subtítulos sin
 configurar nada**: el plugin declara que le corresponde actuar cuando el
 manifiesto trae pistas.
 
+### Solo audio
+
+No hace falta declarar nada: el tipo MIME basta.
+
+```json
+{
+  "id": "podcast-1",
+  "poster": "https://ejemplo/caratula.jpg",
+  "streams": [
+    {
+      "id": "locucion", "role": "presenter", "audio": true,
+      "sources": [{ "src": "audio.m4a", "type": "audio/mp4" }]
+    }
+  ]
+}
+```
+
+La carátula **se queda puesta durante la reproducción** en lugar de dejar un
+rectángulo negro. Sin `poster`, el reproductor se reduce a la barra de
+controles: reservar un hueco de vídeo vacío no aporta nada.
+
+Cuando el MIME no basta —HLS con solo audio, donde el tipo es el mismo que para
+vídeo— se declara explícitamente:
+
+```json
+{ "id": "x", "role": "presenter", "audio": true, "kind": "audio",
+  "sources": [{ "src": "audio.m3u8", "type": "application/vnd.apple.mpegurl" }] }
+```
+
+### Audio con diapositivas
+
+Una clase sin cámara pero con la presentación. El modelo maestro/esclavo no
+cambia: **el audio es el maestro** y el vídeo mudo lo persigue.
+
+```json
+"streams": [
+  { "id": "locucion", "role": "presenter", "audio": true,
+    "sources": [{ "src": "audio.m4a", "type": "audio/mp4" }] },
+  { "id": "slides", "role": "presentation", "audio": false,
+    "sources": [{ "src": "slides.mp4", "type": "video/mp4" }] }
+]
+```
+
 ### Anotaciones
 
 Datos anclados al timeline. Unifica lo que parecen features sueltas: recorte,
@@ -173,6 +216,7 @@ Un recorte sobre un directo se rechaza: no tiene sentido.
 | `role` | `string` | **Requerido**. `presenter`, `presentation` u otro |
 | `audio` | `boolean` | **Requerido**. Exactamente uno a `true` |
 | `sources` | `Source[]` | **Requerido**, al menos una |
+| `kind` | `'video' \| 'audio'` | Se deduce del MIME; solo hace falta si es ambiguo |
 | `label` | `string` | |
 | `poster` | `string` | |
 

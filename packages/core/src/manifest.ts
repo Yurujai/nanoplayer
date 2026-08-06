@@ -23,11 +23,20 @@ export interface Source {
  */
 export type StreamRole = 'presenter' | 'presentation' | (string & {});
 
-/** Un flujo de vídeo. Un manifiesto dual-stream tiene dos. */
+/** Un flujo de medios. Un manifiesto dual-stream tiene dos. */
 export interface Stream {
   id: string;
   role: StreamRole;
   label?: string;
+  /**
+   * Si el flujo trae imagen o solo sonido.
+   *
+   * **Casi nunca hace falta ponerlo**: se deduce del tipo MIME de las fuentes,
+   * y un `audio/mpeg` no deja lugar a dudas. Solo es necesario cuando el MIME
+   * es ambiguo, que en la práctica es HLS con solo audio: ahí el tipo es el
+   * mismo que para vídeo y no hay forma de saberlo sin descargarlo.
+   */
+  kind?: 'video' | 'audio';
   /**
    * Si este stream aporta el audio.
    *

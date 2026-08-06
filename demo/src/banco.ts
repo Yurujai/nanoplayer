@@ -60,6 +60,31 @@ const MANIFIESTOS: Record<string, unknown> = {
                     type: 'application/vnd.apple.mpegurl' }] },
     ],
   },
+  // Solo sonido. No hace falta declarar nada: el tipo `audio/mp4` ya lo dice.
+  audio: {
+    id: 'demo-audio',
+    title: 'Solo audio',
+    duration: 40,
+    poster: 'media/poster.jpg',
+    streams: [
+      { id: 'locucion', role: 'presenter', label: 'Locución', audio: true,
+        sources: [{ src: 'media/audio.m4a', type: 'audio/mp4' }] },
+    ],
+  },
+  // El caso probablemente más útil: una clase sin cámara, pero con las
+  // diapositivas. El audio es el maestro y el vídeo mudo lo persigue.
+  'audio-slides': {
+    id: 'demo-audio-slides',
+    title: 'Audio con diapositivas',
+    duration: 40,
+    poster: 'media/poster.jpg',
+    streams: [
+      { id: 'locucion', role: 'presenter', label: 'Locución', audio: true,
+        sources: [{ src: 'media/audio.m4a', type: 'audio/mp4' }] },
+      { id: 'slides', role: 'presentation', label: 'Diapositivas', audio: false,
+        sources: [{ src: 'media/slides.mp4', type: 'video/mp4' }] },
+    ],
+  },
   // Para ver que la validación no es decorativa: dos pistas de audio es
   // exactamente lo que S2 midió que rompe en iPhone.
   invalido: {
@@ -88,6 +113,10 @@ const CLAVES: Record<string, string> = {
   hls: 'Mismo contenido, pero las fuentes son <b>application/vnd.apple.mpegurl</b>. ' +
        'Eso hace que gane el motor de hls.js donde hay MediaSource, y el nativo donde no. ' +
        'No cambia nada más del manifiesto.',
+  audio: 'Sin declarar nada: el tipo <b>audio/mp4</b> basta para saber que no hay imagen. ' +
+         'La carátula se queda puesta durante la reproducción en vez de dejar un rectángulo negro.',
+  'audio-slides': 'Una clase sin cámara pero con la presentación. El <b>audio es el maestro</b> ' +
+                  'y el vídeo mudo lo persigue: el modelo de sincronización no cambia nada.',
   invalido: 'Los <b>dos</b> streams llevan <b>audio: true</b>. La validación lo rechaza ' +
             'con el motivo, en vez de dejar un reproductor que falla solo en iPhone.',
 };

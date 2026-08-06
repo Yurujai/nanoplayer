@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BarControlDecl } from '@nanoplayer/core';
 import { SettingsMenu } from '../src/settings-menu.js';
+import { injectStyles } from '../src/styles.js';
 
 let host: HTMLElement;
 
@@ -22,6 +23,18 @@ describe('SettingsMenu · contrato con los plugins', () => {
     expect(m.button.hidden).toBe(true);
     m.addPanel(panel('speed'));
     expect(m.button.hidden).toBe(false);
+  });
+
+  it('el atributo hidden de verdad lo esconde', () => {
+    // Comprobar solo el atributo no bastaba: `button.np__btn` declara
+    // `display:inline-flex`, que gana al display:none que aporta `hidden`.
+    // El botón quedaba con el atributo puesto y a la vista.
+    injectStyles(document);
+    host.classList.add('np');
+    const m = new SettingsMenu(host);
+    expect(getComputedStyle(m.button).display).toBe('none');
+    m.addPanel(panel('speed'));
+    expect(getComputedStyle(m.button).display).not.toBe('none');
   });
 
   it('retirar el último panel vuelve a esconder el engranaje', () => {

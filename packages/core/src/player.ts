@@ -20,7 +20,9 @@ import { nativeEngineFactory } from './native-engine.js';
 import type { UiSlots } from './slots.js';
 import type { PlayerState } from './state.js';
 import { Synchronizer, type SyncProfile } from './sync.js';
-import { masterStream, slaveStreams, validateManifest } from './validate.js';
+import {
+  isAudioOnlyManifest, masterStream, slaveStreams, validateManifest,
+} from './validate.js';
 
 /** Resuelve el origen del manifiesto. Reemplazable para agrupar peticiones. */
 export type ManifestResolver = (src: string) => Promise<unknown>;
@@ -125,6 +127,24 @@ export class Player {
   get master(): MediaEngine | null {
     if (!this.#manifest) return null;
     return this.#instancias.get(masterStream(this.#manifest).id) ?? null;
+  }
+
+  /**
+   * Si no hay ninguna imagen que enseñar.
+   *
+   * Lo consulta la interfaz para mantener el póster puesto durante la
+   * reproducción, en vez de dejar un rectángulo negro. Se puede saber sin
+   * resolver si el manifiesto vino ya cargado.
+   */
+  get audioOnly(): boolean {
+    const m = this.#manifest;
+    if (m) return isAudioOnlyManifest(m);
+    const src = this.#opts.manifest;
+    if (typeof src === 'object') {
+      const r = validateManifest(src);
+      return r.ok ? isAudioOnlyManifest(r.manifest) : false;
+    }
+    return false;
   }
 
   get currentTime(): number { return this.master?.currentTime ?? this.#lc.resumeAt; }

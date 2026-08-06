@@ -32,6 +32,7 @@ const STREAM: Record<keyof Stream, Estado> = {
   role: 'validado',
   audio: 'validado',
   sources: 'validado',
+  kind: 'validado',
   label: 'libre',
   poster: 'libre',
 };

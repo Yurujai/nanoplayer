@@ -75,6 +75,14 @@ export function validateManifest(input: unknown): ValidationResult {
       if (typeof s['audio'] !== 'boolean') err(`${at}.audio`, 'Requerido, booleano');
       else if (s['audio']) withAudio++;
 
+      if (s['kind'] !== undefined && s['kind'] !== 'video' && s['kind'] !== 'audio') {
+        err(`${at}.kind`, 'Solo puede ser "video" o "audio"');
+      }
+      // Un stream sin imagen que además no lleva sonido no reproduce nada.
+      if (s['kind'] === 'audio' && s['audio'] === false) {
+        err(at, 'Un stream de solo audio con `audio: false` no aporta nada');
+      }
+
       const sources = s['sources'];
       if (!Array.isArray(sources) || sources.length === 0) {
         err(`${at}.sources`, 'Requerido, al menos una fuente');
@@ -171,6 +179,23 @@ export function parseManifest(input: unknown): Manifest {
     throw new Error(`Manifiesto inválido:\n${detail}`);
   }
   return r.manifest;
+}
+
+/**
+ * Si un stream es de solo sonido.
+ *
+ * Se deduce del tipo MIME salvo que el manifiesto lo diga explícitamente, así
+ * que el caso habitual —una fuente `audio/mpeg`— no necesita configuración.
+ */
+export function isAudioOnly(stream: Stream): boolean {
+  if (stream.kind !== undefined) return stream.kind === 'audio';
+  return stream.sources.length > 0
+    && stream.sources.every((s) => s.type.toLowerCase().startsWith('audio/'));
+}
+
+/** Si el manifiesto entero es de solo sonido: ni un stream trae imagen. */
+export function isAudioOnlyManifest(m: Manifest): boolean {
+  return m.streams.every(isAudioOnly);
 }
 
 /** El stream maestro: el que lleva el audio y gobierna el reloj. */

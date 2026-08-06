@@ -84,13 +84,24 @@ export class Poster {
     // del manifiesto si vino ya cargado.
     const src = this.#player.poster;
     if (src) this.#capa.style.backgroundImage = `url("${src.replace(/"/g, '%22')}")`;
+    this.#raiz.classList.toggle('np--sin-poster', !src);
   }
 
   #pintar(): void {
-    // Se retira en cuanto hay imagen que enseñar detrás. Mantenerlo hasta
-    // `active` dejaría un velo sobre el primer fotograma.
     const conMedios = this.#player.state === 'attached' || this.#player.state === 'active';
-    this.#capa.hidden = conMedios;
+    /*
+     * Con solo audio la capa **se queda**: no hay imagen detrás que enseñar, y
+     * retirarla dejaría un rectángulo negro donde estaba la carátula. Lo que sí
+     * desaparece es el botón grande, porque a partir de ahí manda la barra.
+     *
+     * Con vídeo se retira entera en cuanto hay medios: mantenerla hasta
+     * `active` dejaría un velo sobre el primer fotograma.
+     */
+    const soloAudio = this.#player.audioOnly;
+    this.#capa.hidden = conMedios && !soloAudio;
+    this.#capa.classList.toggle('np__poster--fondo', conMedios && soloAudio);
+    this.#boton.hidden = conMedios && soloAudio;
+    this.#raiz.classList.toggle('np--solo-audio', soloAudio);
     this.#raiz.classList.toggle('np--con-poster', !conMedios);
     if (!conMedios) {
       this.#boton.disabled = false;

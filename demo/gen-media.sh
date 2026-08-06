@@ -53,6 +53,16 @@ ffmpeg -y -loglevel error \
   -movflags +faststart \
   slides.mp4
 
+# --- solo audio ---
+# Una locución sintética serviría, pero un tono con armónicos basta para oír
+# que suena y para que la duración sea la misma que la del vídeo.
+echo "Generando audio.m4a (solo sonido)..."
+ffmpeg -y -loglevel error \
+  -f lavfi -i "sine=frequency=330:sample_rate=44100:duration=${DUR}" \
+  -f lavfi -i "sine=frequency=495:sample_rate=44100:duration=${DUR}" \
+  -filter_complex "[0:a][1:a]amix=inputs=2:duration=first,volume=0.5[a]" \
+  -map "[a]" -c:a aac -b:a 96k audio.m4a
+
 # --- HLS, para el motor con hls.js ---
 # `-c copy` reempaqueta sin recodificar: los segmentos pesan lo mismo que el
 # MP4 de origen y la generación es instantánea.
@@ -69,6 +79,6 @@ echo "Generando poster.jpg (fotograma del ponente)..."
 ffmpeg -y -loglevel error -ss 3 -i presenter.mp4 -frames:v 1 -vf scale=960:-1 poster.jpg
 
 echo
-ls -lh presenter.mp4 slides.mp4 poster.jpg
+ls -lh presenter.mp4 slides.mp4 poster.jpg audio.m4a
 ls hls/*.m3u8 | sed "s/^/  /"
 echo "Listo."
