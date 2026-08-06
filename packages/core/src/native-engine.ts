@@ -175,6 +175,7 @@ export class NativeEngine implements MediaEngine {
       this.#stallDesde = this.#ahora();
       this.#cb.onStallStart?.();
     });
+    on('playing', () => this.#cb.onPlaying?.());
     const finStall = () => {
       if (this.#stallDesde === null) return;
       const dur = this.#ahora() - this.#stallDesde;
@@ -259,6 +260,23 @@ export class NativeEngine implements MediaEngine {
 
   get buffered(): TimeRanges | null {
     return this.#el?.buffered ?? null;
+  }
+
+  /**
+   * Hora absoluta de la posición actual.
+   *
+   * En HLS nativo lo aporta `getStartDate()`, una API de WebKit que devuelve la
+   * hora del `EXT-X-PROGRAM-DATE-TIME` del inicio del flujo. Existe justamente
+   * en los navegadores donde HLS se reproduce de forma nativa —Safari e iOS—,
+   * que son los que no pueden usar hls.js.
+   */
+  getProgramTime(): number | null {
+    const el = this.#el as (HTMLVideoElement & { getStartDate?: () => Date }) | null;
+    if (!el?.getStartDate) return null;
+    const inicio = el.getStartDate();
+    const t = inicio instanceof Date ? inicio.getTime() : Number.NaN;
+    if (!Number.isFinite(t)) return null;
+    return t + el.currentTime * 1000;
   }
 
   getPlaybackRate(): number {

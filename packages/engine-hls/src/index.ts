@@ -216,6 +216,7 @@ export class HlsEngine implements MediaEngine {
       this.#stallDesde = this.#ahora();
       this.#cb.onStallStart?.();
     });
+    on('playing', () => this.#cb.onPlaying?.());
     const finStall = () => {
       if (this.#stallDesde === null) return;
       const dur = this.#ahora() - this.#stallDesde;
@@ -289,6 +290,18 @@ export class HlsEngine implements MediaEngine {
   get paused(): boolean { return this.#el?.paused ?? true; }
   get ended(): boolean { return this.#el?.ended ?? false; }
   get buffered(): TimeRanges | null { return this.#el?.buffered ?? null; }
+  /**
+   * Hora absoluta de la posición actual, según `EXT-X-PROGRAM-DATE-TIME`.
+   *
+   * hls.js la calcula por nosotros en `playingDate`. Devuelve `null` si la
+   * lista no trae la etiqueta, que es la señal de que la sincronización de
+   * directos no se puede medir y por tanto no se debe intentar.
+   */
+  getProgramTime(): number | null {
+    const d = this.#hls?.playingDate;
+    return d instanceof Date && Number.isFinite(d.getTime()) ? d.getTime() : null;
+  }
+
   getPlaybackRate(): number { return this.#el?.playbackRate ?? 1; }
 
   setPlaybackRate(rate: number): void {

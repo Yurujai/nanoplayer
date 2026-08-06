@@ -79,6 +79,7 @@ export class Player {
   #cajas: HTMLElement[] = [];
   #ui: UiSlots | null = null;
   #pausadoPorStall = false;
+  #sonando = false;
 
   constructor(options: PlayerOptions) {
     this.#opts = options;
@@ -264,6 +265,7 @@ export class Player {
     this.#sync = new Synchronizer({
       master: { id: masterStream(m).id, engine: maestro },
       slaves: esclavos,
+      live: m.live === true,
       bus: this.bus,
       ...(this.#opts.syncProfile ? { profile: this.#opts.syncProfile } : {}),
     });
@@ -337,6 +339,7 @@ export class Player {
   pause(): void {
     this.#sync?.stop();
     this.#pausadoPorStall = false;
+    this.#sonando = false;
     for (const e of this.#instancias.values()) e.pause();
   }
 
@@ -401,8 +404,15 @@ export class Player {
         if (this.#lc.can('active')) this.#lc.transition('active');
         this.bus.emit('play', { at: this.currentTime });
       },
+      /*
+       * Marca que la reproducción **ha empezado de verdad**, no solo que se ha
+       * pedido. Es lo que separa el buffering inicial —normal— de un corte a
+       * mitad de reproducción, que son dos cosas con respuestas opuestas.
+       */
+      onPlaying: () => { if (esMaestro) this.#sonando = true; },
       onPause: () => {
         if (!esMaestro) return;
+        this.#sonando = false;
         if (this.#lc.state === 'active') this.#lc.transition('attached');
         this.bus.emit('pause', { at: this.currentTime });
       },
@@ -416,18 +426,26 @@ export class Player {
         this.bus.emit('stall:start', { stream: stream.id });
         /*
          * Que uno se quede sin buffer y los demás sigan destroza la
-         * sincronización: S1 midió que pausar a todos deja el pico de deriva
-         * en 7 ms, frente a dejar correr al maestro.
+         * sincronización: S1 midió que frenarlos deja el pico de deriva en
+         * 7 ms, frente a dejar correr al maestro.
          *
-         * Pero **solo si ya se estaba reproduciendo**. Al arrancar, el
-         * `waiting` inicial es lo normal —el navegador está llenando el
-         * buffer— y pausar ahí aborta el `play()` que acaba de empezar con un
-         * `AbortError`. Ocurría de verdad: el vídeo no llegaba a arrancar y el
-         * botón se quedaba en "Reproducir" porque esa era la verdad.
+         * Dos condiciones, ambas aprendidas a base de fallos:
+         *
+         * 1. **Solo si ya sonaba de verdad.** El evento `play` significa que se
+         *    ha pedido, no que suene; con HLS enganchar termina al parsear la
+         *    lista, antes de tener un solo segmento, así que el `waiting`
+         *    inicial es inevitable. Por eso mira `#sonando` y no el estado.
+         *
+         * 2. **Al que se atasca no se le pausa.** Ya está parado por falta de
+         *    datos, así que pausarlo no frena nada — y en cambio aborta su
+         *    propio `play()` en vuelo con un `AbortError`. Lo que hay que
+         *    frenar son los demás, para que no se escapen mientras recupera.
          */
-        if (this.#lc.state !== 'active') return;
+        if (!this.#sonando) return;
         this.#pausadoPorStall = true;
-        for (const e of this.#instancias.values()) e.pause();
+        for (const [id, e] of this.#instancias) {
+          if (id !== stream.id) e.pause();
+        }
       },
       onStallEnd: (durationMs: number) => {
         this.bus.emit('stall:end', { stream: stream.id, durationMs });
@@ -435,7 +453,9 @@ export class Player {
         // resucitaría un vídeo que el usuario había pausado a propósito.
         if (!this.#pausadoPorStall) return;
         this.#pausadoPorStall = false;
-        for (const e of this.#instancias.values()) void e.play().catch(() => {});
+        for (const [id, e] of this.#instancias) {
+          if (id !== stream.id) void e.play().catch(() => {});
+        }
       },
       onError: (error: PlayerError) => this.bus.emit('error', { error }),
     };

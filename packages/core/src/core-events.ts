@@ -53,6 +53,11 @@ export interface CoreEvents {
    */
   'sync:drift': { stream: string; drift: number; action: 'ok' | 'correcting' | 'hard-seek' };
   'layout:change': { layout: string };
+  /**
+   * La sincronización entre flujos no se puede medir, así que no se corrige.
+   * Hoy ocurre con directos sin `EXT-X-PROGRAM-DATE-TIME`.
+   */
+  'sync:unavailable': { reason: string };
 
   // --- red y buffering ----------------------------------------------------
   'stall:start': { stream: string };

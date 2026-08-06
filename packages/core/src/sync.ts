@@ -100,6 +100,15 @@ export interface SynchronizerOptions {
   master: { id: string; engine: MediaEngine };
   slaves: ReadonlyArray<{ id: string; engine: MediaEngine }>;
   profile?: SyncProfile;
+  /**
+   * Si el contenido es un directo.
+   *
+   * Cambia de dónde sale la medida, no el modelo. En directo `currentTime` no
+   * es comparable entre flujos —su origen lo fija cuándo empezó a cargar cada
+   * reproductor— así que hay que usar la hora absoluta. Si no se puede, **no se
+   * corrige**: ver `#modo`.
+   */
+  live?: boolean;
   bus?: EventBus<CoreEvents>;
   /** Inyectable para las pruebas; por defecto rVFC con recurso a rAF. */
   scheduler?: Scheduler;
@@ -152,14 +161,17 @@ export class Synchronizer {
   readonly #profile: SyncProfile;
   readonly #bus: EventBus<CoreEvents> | undefined;
   readonly #scheduler: Scheduler;
+  readonly #live: boolean;
   #corriendo = false;
   #saltosDuros = 0;
+  #avisado = false;
 
   constructor(options: SynchronizerOptions) {
     this.#master = options.master;
     this.#slaves = options.slaves.map((s) => ({ ...s, correcting: false }));
     this.#profile = options.profile ?? SYNC_PROFILES[detectProfile()];
     this.#bus = options.bus;
+    this.#live = options.live === true;
     this.#scheduler = options.scheduler
       ?? defaultScheduler(options.master.engine.element);
   }
@@ -174,6 +186,30 @@ export class Synchronizer {
 
   get profile(): SyncProfile {
     return this.#profile;
+  }
+
+  /**
+   * De dónde sale la medida ahora mismo.
+   *
+   *   - `timeline`   — diferencia de `currentTime`. Válido bajo demanda, donde
+   *                    ambos flujos comparten origen.
+   *   - `program`    — diferencia de hora absoluta. La vía del directo.
+   *   - `imposible`  — es un directo y los flujos no traen hora absoluta.
+   *
+   * El tercer caso **no corrige nada**, y es deliberado. S5 midió dos flujos
+   * sincronizados a 28 ms cuyos `currentTime` diferían en 20 segundos por
+   * haberse cargado con esa separación: corregir sobre esa lectura daría un
+   * salto duro que destrozaría una reproducción correcta. Fingir una
+   * sincronización que no se puede medir es peor que no ofrecerla.
+   */
+  get mode(): 'timeline' | 'program' | 'imposible' {
+    if (!this.#live) return 'timeline';
+    return this.#horaDe(this.#master.engine) !== null ? 'program' : 'imposible';
+  }
+
+  #horaDe(engine: MediaEngine): number | null {
+    const t = engine.getProgramTime?.();
+    return typeof t === 'number' && Number.isFinite(t) ? t : null;
   }
 
   start(): void {
@@ -200,6 +236,19 @@ export class Synchronizer {
     const base = maestro.getPlaybackRate();
     const muestras: SyncSample[] = [];
 
+    if (this.mode === 'imposible') {
+      // Sin hora absoluta en un directo no hay nada que medir. Se avisa una vez
+      // para que la interfaz pueda decirlo, y se deja de corregir.
+      if (!this.#avisado) {
+        this.#avisado = true;
+        this.#bus?.emit('sync:unavailable', {
+          reason: 'El directo no trae EXT-X-PROGRAM-DATE-TIME: la sincronización '
+            + 'entre flujos no se puede medir, así que no se corrige',
+        });
+      }
+      return [];
+    }
+
     for (const s of this.#slaves) {
       const muestra = this.#corregir(s, maestro.currentTime, base);
       muestras.push(muestra);
@@ -214,9 +263,32 @@ export class Synchronizer {
     return muestras;
   }
 
+  /**
+   * Deriva del esclavo respecto al maestro, en segundos.
+   *
+   * En directo se compara la **hora absoluta** de cada posición. El desfase
+   * entre hora y `currentTime` es constante en cada flujo, así que la
+   * diferencia de horas es la deriva real aunque los `currentTime` no tengan
+   * nada que ver entre sí.
+   */
+  #deriva(s: Slave, tiempoMaestro: number): number | null {
+    if (this.mode === 'program') {
+      const hm = this.#horaDe(this.#master.engine);
+      const hs = this.#horaDe(s.engine);
+      if (hm === null || hs === null) return null;
+      return (hs - hm) / 1000;
+    }
+    return s.engine.currentTime - tiempoMaestro;
+  }
+
   #corregir(s: Slave, tiempoMaestro: number, base: number): SyncSample {
     const p = this.#profile;
-    const drift = s.engine.currentTime - tiempoMaestro;
+    const medida = this.#deriva(s, tiempoMaestro);
+    if (medida === null) {
+      // Un esclavo puede quedarse sin hora un instante al recargar la lista.
+      return { stream: s.id, drift: 0, action: 'seeking', rate: s.engine.getPlaybackRate() };
+    }
+    const drift = medida;
     const a = Math.abs(drift);
 
     // Durante un salto la medida no significa nada: el navegador está entre
@@ -226,7 +298,17 @@ export class Synchronizer {
     }
 
     if (a > p.hardSeek) {
-      s.engine.seek(tiempoMaestro);
+      /*
+       * En directo no se puede saltar al `currentTime` del maestro: son
+       * timelines distintas. Se salta **restando la deriva** a la propia
+       * posición, que es válido en ambos modos porque el desfase entre hora y
+       * posición es constante dentro de cada flujo.
+       *
+       * Y el salto duro es lo correcto aquí: S5 midió que un corte de 3 s deja
+       * 3 s de desfase permanente, y absorberlos al 25 % de velocidad extra
+       * tardaría doce segundos.
+       */
+      s.engine.seek(s.engine.currentTime - drift);
       s.engine.setPlaybackRate(base);
       s.correcting = false;
       this.#saltosDuros++;
@@ -258,10 +340,14 @@ export class Synchronizer {
    * es deriva acumulada sino retraso de partida, y nada lo corregiría solo.
    */
   align(): void {
+    if (this.mode === 'imposible') return;
     const t = this.#master.engine.currentTime;
     const base = this.#master.engine.getPlaybackRate();
     for (const s of this.#slaves) {
-      s.engine.seek(t);
+      const d = this.#deriva(s, t);
+      // En directo cada flujo tiene su propia timeline: se cuadra restando la
+      // deriva medida, no copiando la posición del maestro.
+      s.engine.seek(d === null ? t : s.engine.currentTime - d);
       s.engine.setPlaybackRate(base);
       s.correcting = false;
     }

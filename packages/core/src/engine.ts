@@ -19,7 +19,16 @@ export type Confidence = 'probably' | 'maybe' | 'no';
 export interface EngineCallbacks {
   /** Progreso de reproducción. */
   onTime?(current: number, duration: number): void;
+  /** La reproducción se ha **solicitado**. Aún puede no haber empezado. */
   onPlay?(): void;
+  /**
+   * La reproducción **está sonando de verdad**.
+   *
+   * No es lo mismo que `onPlay`: entre uno y otro el navegador puede estar
+   * llenando el buffer. Con HLS ese hueco siempre existe, porque enganchar
+   * termina al parsear la lista, antes de tener un solo segmento.
+   */
+  onPlaying?(): void;
   onPause?(): void;
   onEnded?(): void;
   /** Se quedó sin buffer. */
@@ -72,6 +81,23 @@ export interface MediaEngine {
   readonly paused: boolean;
   readonly ended: boolean;
   readonly buffered: TimeRanges | null;
+
+  /**
+   * Hora absoluta de la posición actual, en milisegundos desde epoch, o `null`
+   * si no se puede saber.
+   *
+   * Solo existe cuando el flujo trae `EXT-X-PROGRAM-DATE-TIME`. Es lo que
+   * permite sincronizar dos directos independientes: **en directo,
+   * `currentTime` no es comparable entre flujos** — su origen lo fija el
+   * instante en que cada reproductor empezó a cargar, no el contenido. S5 midió
+   * dos flujos sincronizados a 28 ms cuyos `currentTime` diferían en 20
+   * segundos por haberse cargado con esa separación.
+   *
+   * Basta con esto para corregir: el desfase entre hora y posición es constante
+   * en cada flujo, así que buscar una hora concreta es
+   * `currentTime + (destino - getProgramTime()) / 1000`.
+   */
+  getProgramTime?(): number | null;
 
   getPlaybackRate(): number;
   /** Cambiar la velocidad del stream con audio se oye: solo para los esclavos. */

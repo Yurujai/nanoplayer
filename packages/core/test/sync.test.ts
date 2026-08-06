@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { CoreEvents } from '../src/core-events.js';
 import type { MediaEngine } from '../src/engine.js';
+import { EventBus } from '../src/events.js';
 import {
   SYNC_PROFILES, Synchronizer, detectProfile,
   type Scheduler, type SyncProfile,
@@ -230,5 +232,133 @@ describe('Synchronizer · varios esclavos', () => {
     const muestras = s.tick();
     expect(muestras.map((m) => m.action)).toEqual(['correcting', 'ok']);
     expect(muestras.map((m) => m.stream)).toEqual(['a', 'b']);
+  });
+});
+
+/* ---------------------------------------------------------- modo directo -- */
+
+/** Motor de mentira que además sabe decir su hora absoluta. */
+function motorConHora(currentTime: number, hora: number | null) {
+  const m = motorFalso(currentTime) as ReturnType<typeof motorFalso> & {
+    getProgramTime(): number | null;
+    _hora(h: number | null): void;
+  };
+  let h = hora;
+  m.getProgramTime = () => h;
+  m._hora = (v: number | null) => { h = v; };
+  return m;
+}
+
+describe('Synchronizer · directo', () => {
+  const T0 = 1_700_000_000_000;
+
+  it('mide por hora absoluta, no por currentTime', () => {
+    /*
+     * El caso que midió S5: dos flujos SINCRONIZADOS cuyos currentTime difieren
+     * en 20 s por haberse cargado con esa separación. Medir por currentTime
+     * daría un salto duro y destrozaría una reproducción correcta.
+     */
+    const maestro = motorConHora(30, T0);
+    const esclavo = motorConHora(10, T0);      // 20 s de diferencia en currentTime
+    const s = new Synchronizer({
+      master: { id: 'cam', engine: maestro },
+      slaves: [{ id: 'slides', engine: esclavo }],
+      live: true, profile: P,
+    });
+
+    expect(s.mode).toBe('program');
+    const [m] = s.tick();
+    expect(m!.drift).toBe(0);
+    expect(m!.action, 'no debe corregir nada').toBe('ok');
+    expect(esclavo._seeks, 'ni un salto').toHaveLength(0);
+  });
+
+  it('detecta la deriva real aunque los currentTime coincidan', () => {
+    // El caso inverso: currentTime idénticos pero tres segundos de desfase real.
+    const maestro = motorConHora(30, T0);
+    const esclavo = motorConHora(30, T0 - 3000);
+    const s = new Synchronizer({
+      master: { id: 'cam', engine: maestro },
+      slaves: [{ id: 'slides', engine: esclavo }],
+      live: true, profile: P,
+    });
+    const [m] = s.tick();
+    expect(m!.drift).toBeCloseTo(-3, 2);
+    expect(m!.action).toBe('hard-seek');
+  });
+
+  it('el salto duro cuadra por hora, no copiando la posición del maestro', () => {
+    // Copiar el currentTime del maestro sería saltar a otra timeline.
+    const maestro = motorConHora(30, T0);
+    const esclavo = motorConHora(100, T0 - 3000);
+    new Synchronizer({
+      master: { id: 'cam', engine: maestro },
+      slaves: [{ id: 'slides', engine: esclavo }],
+      live: true, profile: P,
+    }).tick();
+    // 100 - (-3) = 103, no 30.
+    expect(esclavo._seeks[0]).toBeCloseTo(103, 2);
+  });
+
+  it('sin hora absoluta NO corrige, y avisa una sola vez', () => {
+    // Conclusión de S5: fingir una sincronización que no se puede medir es peor
+    // que no ofrecerla.
+    const bus = new EventBus<CoreEvents>({ onListenerError: () => {} });
+    const avisos: string[] = [];
+    bus.on('sync:unavailable', ({ reason }) => avisos.push(reason));
+
+    const maestro = motorConHora(30, null);
+    const esclavo = motorConHora(10, null);
+    const s = new Synchronizer({
+      master: { id: 'cam', engine: maestro },
+      slaves: [{ id: 'slides', engine: esclavo }],
+      live: true, profile: P, bus,
+    });
+
+    expect(s.mode).toBe('imposible');
+    s.tick(); s.tick(); s.tick();
+
+    expect(esclavo._seeks, 'no debe tocar nada').toHaveLength(0);
+    expect(esclavo.getPlaybackRate()).toBe(1);
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0]).toMatch(/PROGRAM-DATE-TIME/);
+  });
+
+  it('align tampoco toca nada si no se puede medir', () => {
+    const maestro = motorConHora(30, null);
+    const esclavo = motorConHora(10, null);
+    new Synchronizer({
+      master: { id: 'cam', engine: maestro },
+      slaves: [{ id: 'slides', engine: esclavo }],
+      live: true, profile: P,
+    }).align();
+    expect(esclavo._seeks).toHaveLength(0);
+  });
+
+  it('bajo demanda sigue midiendo por currentTime', () => {
+    // El modo directo no debe cambiar el comportamiento del resto.
+    const maestro = motorConHora(30, T0);
+    const esclavo = motorConHora(29.9, T0);
+    const s = new Synchronizer({
+      master: { id: 'cam', engine: maestro },
+      slaves: [{ id: 'slides', engine: esclavo }],
+      profile: P,                       // sin `live`
+    });
+    expect(s.mode).toBe('timeline');
+    expect(s.tick()[0]!.drift).toBeCloseTo(-0.1, 3);
+  });
+
+  it('un esclavo sin hora momentáneamente no rompe el lazo', () => {
+    // Puede pasar al recargar la lista.
+    const maestro = motorConHora(30, T0);
+    const esclavo = motorConHora(30, null);
+    const s = new Synchronizer({
+      master: { id: 'cam', engine: maestro },
+      slaves: [{ id: 'slides', engine: esclavo }],
+      live: true, profile: P,
+    });
+    const [m] = s.tick();
+    expect(m!.action).toBe('seeking');
+    expect(esclavo._seeks).toHaveLength(0);
   });
 });

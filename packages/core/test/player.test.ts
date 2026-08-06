@@ -27,7 +27,9 @@ function factoriaFalsa() {
         detach() { attached = false; },
         // Un motor de verdad avisa por callback, y el Player se apoya en eso
         // para saber si de verdad está sonando. Sin esto el falso miente.
-        async play() { paused = false; cb.onPlay?.(); },
+        // Un <video> real dispara `play` al pedirlo y `playing` al empezar a
+        // sonar de verdad. Con HLS entre ambos hay siempre un hueco.
+        async play() { paused = false; cb.onPlay?.(); cb.onPlaying?.(); },
         pause() { paused = true; cb.onPause?.(); },
         seek(s: number) { currentTime = s; },
         get currentTime() { return currentTime; },
@@ -227,10 +229,11 @@ describe('Player · desalojo', () => {
 });
 
 describe('Player · stalls', () => {
-  it('al recuperarse vuelven a arrancar', async () => {
+  it('al recuperarse vuelven a arrancar los que se frenaron', async () => {
     const { p, creados } = nuevo(DUAL);
     await p.play();
     creados[1]!._cb().onStallStart();
+    expect(creados[0]!.paused).toBe(true);
     creados[1]!._cb().onStallEnd(250);
     await Promise.resolve();
     expect(creados.every((e) => !e.paused)).toBe(true);
@@ -254,13 +257,43 @@ describe('Player · el arranque no se aborta a sí mismo', () => {
     expect(creados.every((e) => !e.paused)).toBe(true);
   });
 
-  it('ya reproduciendo, un stall sí pausa a todos', async () => {
+  it('el stall entre "pedir" y "sonar" tampoco pausa', async () => {
+    /*
+     * Lo destapó el motor HLS: el evento `play` significa que se ha pedido, no
+     * que suene. Enganchar HLS termina al parsear la lista, antes de tener un
+     * segmento, así que el `waiting` posterior encontraba el estado ya en
+     * `active` y abortaba el propio play() con un AbortError.
+     */
+    const { p, creados } = nuevo(DUAL);
+    await p.attach();
+    // Se pide la reproducción pero aún no suena.
+    creados[0]!._cb().onPlay();
+    expect(p.state).toBe('active');
+
+    creados[1]!._cb().onStallStart();
+    expect(creados.every((e) => e.paused), 'nadie debe pausarse aún').toBe(true);
+  });
+
+  it('ya reproduciendo, un stall frena a los DEMÁS', async () => {
     // La política de S1 sigue vigente donde tiene sentido: con la reproducción
-    // en marcha, dejar correr al maestro dispara la deriva.
+    // en marcha, dejar correr al resto dispara la deriva.
     const { p, creados } = nuevo(DUAL);
     await p.play();
     creados[1]!._cb().onStallStart();
-    expect(creados.every((e) => e.paused)).toBe(true);
+    expect(creados[0]!.paused, 'el otro se frena').toBe(true);
+  });
+
+  it('al que se atasca no se le pausa: abortaría su propio play()', async () => {
+    /*
+     * Así se manifestaba con HLS en directo: el flujo atascado se pausaba a sí
+     * mismo y su play() en vuelo moría con un AbortError. Pausarlo además no
+     * frena nada, porque ya está parado por falta de datos.
+     */
+    const { p, creados } = nuevo(DUAL);
+    await p.play();
+    creados[0]!._cb().onStallStart();
+    expect(creados[0]!.paused, 'el que se atasca sigue sin pausarse').toBe(false);
+    expect(creados[1]!.paused, 'el otro sí').toBe(true);
   });
 
   it('no resucita un vídeo que el usuario había pausado', async () => {
