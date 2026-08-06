@@ -47,15 +47,14 @@ página: no hay ninguna petición de red.
 Para poder interpretar los resultados de los móviles hace falta un techo
 conocido.
 
-| | Chrome · Ubuntu 16 núcleos | Chrome · Mac M2 Pro | **Safari 16.4 · Mac** | **iOS 26.5 · iPhone** |
+| | Chrome · Ubuntu | Chrome · Mac M2 Pro | Safari 16.4 · Mac | **iPhone** (Safari 26 y Chrome iOS) |
 |---|---|---|---|---|
 | Motor | Blink | Blink | WebKit | WebKit |
-| Vídeos simultáneos | 18 | 18 | 17 | **2** |
-| Fullscreen del contenedor | sí | sí | **sí** | **NO** |
+| Vídeos simultáneos | 18 | 18 | 17 | **17** |
+| Fullscreen del contenedor | sí | sí | sí | **NO** |
 | Dos audios a la vez | sí | sí | sí | **no** |
 | Deriva mediana / p95 | 7.8 / 15.1 ms | 8.3 / 19.6 ms | **30.6 / 53.9 ms** | sin medir |
-| Saltos duros | 0 | 0 | 0 | — |
-| `audioTracks` | **no** | **no** | **sí** | **sí** |
+| `audioTracks` | **no** | **no** | sí | sí |
 | MediaSource | sí | sí | sí | no |
 | ManagedMediaSource | no | no | no (Safari 16) | **sí** |
 | AV1 | probably | probably | no | no |
@@ -71,13 +70,20 @@ imposible en iPhone.**
 En Safari de escritorio sí funciona. **La limitación es de iOS, no de WebKit** —
 justo lo que el Mac estaba en la matriz para distinguir.
 
-**2. El iPhone solo aguanta 2 vídeos simultáneos.** El dual-stream consume el
-presupuesto entero, sin margen. El ciclo de vida perezoso deja de ser una
-optimización: es lo único que hace viable una página con varios reproductores.
+**2. El límite de vídeos simultáneos es del motor, no del hardware.** 18 en
+Blink, 17 en WebKit — y un iPhone de 4 núcleos da los mismos 17 que un Mac.
 
-Esto entierra también la hipótesis del "tope de navegador": 18 en Blink, 17 en
-Safari de escritorio, 2 en iPhone. El presupuesto **hay que medirlo en
-ejecución**, no fijarlo por tabla.
+> **Corrección.** Una versión anterior de este documento afirmaba que el iPhone
+> aguantaba solo 2. Era un defecto de la sonda: las pruebas previas no liberaban
+> los decodificadores y la rampa arrancaba sin recursos. Corregido con
+> `release()`, y confirmado con dos navegadores del mismo iPhone. Sirva de aviso:
+> **un número sorprendente es más probable que sea un fallo del instrumento que
+> un hallazgo.**
+
+Matiz: la métrica es "cuántos elementos siguen avanzando su `currentTime`". No
+prueba que se rendericen con fluidez, y los vídeos de prueba son de 320x180. El
+presupuesto del `PlayerRegistry` debe seguir midiéndose en ejecución, pero
+partiendo de que el orden de magnitud es holgado y no de 2.
 
 **3. El ajuste de S1 es de Chrome, no universal.** En Safari la misma
 configuración da 30.6 ms de mediana y 53.9 de p95, frente a 7.8 / 15.1 en

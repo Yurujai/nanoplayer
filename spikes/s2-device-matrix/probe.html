@@ -320,7 +320,12 @@ $('run').onclick = async () => {
   const dl = $('play'); dl.innerHTML = '';
   const prog = $('prog'); prog.hidden = false; prog.value = 0;
   const say = (t) => { $('status').textContent = t; };
-  const R = report.playback = {};
+  const R = report.playback = { done: false };
+
+  // Envoltorio de captura: una excepción a mitad dejaba el informe con las
+  // pruebas a medias y sin rastro de la causa. Ocurrió en Safari de iPhone, y
+  // sin poder depurar el dispositivo no había forma de saber qué pasó.
+  try {
 
   // --- 3a. Reproducción con gesto ya concedido ---
   // OJO: esto NO es la política de autoplay. El usuario acaba de pulsar el
@@ -392,9 +397,16 @@ $('run').onclick = async () => {
   row(dl, 'FPS del lazo de control', sync.loopFps);
   prog.value = 4;
 
+  R.done = true;
   say('Pruebas terminadas.');
-  btn.textContent = 'Repetir pruebas'; btn.disabled = false;
-  emit();
+
+  } catch (e) {
+    R.error = String((e && e.stack) || e);
+    say('Las pruebas fallaron. El informe recoge el error: envíalo igualmente.');
+  } finally {
+    btn.textContent = 'Repetir pruebas'; btn.disabled = false;
+    emit();
+  }
 };
 
 /* Motor S1 reducido: mismos umbrales, sin UI. */
@@ -405,8 +417,18 @@ async function runSync(ms){
   stage.append(master, slave);
   const okA = await ready(master), okB = await ready(slave);
   if (!okA || !okB){
+    // Diagnóstico antes de soltar los elementos: en iOS esta rama se dispara y
+    // sin estos datos no hay forma de distinguir "no llegó a cargar" de
+    // "cargó pero el navegador no lo declara reproducible".
+    const diag = {
+      masterReadyState: master.readyState, slaveReadyState: slave.readyState,
+      masterNetworkState: master.networkState, slaveNetworkState: slave.networkState,
+      masterError: master.error ? `${master.error.code}: ${master.error.message}` : null,
+      slaveError: slave.error ? `${slave.error.code}: ${slave.error.message}` : null,
+    };
     release(master); release(slave);
-    return { driftMedianMs:null, driftP95Ms:null, hardSeeks:0, loopFps:0, syncError:'media no cargó' };
+    return { driftMedianMs:null, driftP95Ms:null, hardSeeks:0, loopFps:0,
+             syncError:'media no cargó', syncDiag: diag };
   }
 
   master.loop = true; slave.loop = true;
@@ -415,7 +437,12 @@ async function runSync(ms){
   const onSeek = () => { slave.currentTime = master.currentTime; };
   master.addEventListener('seeking', onSeek);
 
-  await master.play().catch(()=>{}); await slave.play().catch(()=>{});
+  // Registrar por qué falla un play(): en iOS el gesto de usuario ya ha
+  // caducado a estas alturas y el rechazo es la explicación más probable de
+  // que no salga ninguna muestra.
+  const playErrors = [];
+  await master.play().catch((e) => playErrors.push(`master: ${e.name} — ${e.message}`));
+  await slave.play().catch((e) => playErrors.push(`slave: ${e.name} — ${e.message}`));
   const t0 = performance.now();
   let stop = false;
 
@@ -450,7 +477,11 @@ async function runSync(ms){
   master.removeEventListener('seeking', onSeek);
   for (const v of [master, slave]) release(v);
 
-  if (!samples.length) return { driftMedianMs:null, driftP95Ms:null, hardSeeks, loopFps:0 };
+  if (!samples.length) {
+    return { driftMedianMs:null, driftP95Ms:null, hardSeeks, loopFps:Math.round(frames/elapsed),
+             syncError:'sin muestras: los vídeos no avanzaron',
+             playErrors, masterPaused:master.paused, slavePaused:slave.paused };
+  }
   const abs = samples.map(Math.abs).sort((x,y)=>x-y);
   const q = (p) => abs[Math.min(abs.length-1, Math.floor(abs.length*p))];
   return {
@@ -460,6 +491,7 @@ async function runSync(ms){
     hardSeeks,
     samples: abs.length,
     loopFps: Math.round(frames/elapsed),
+    ...(playErrors.length ? { playErrors } : {}),
   };
 }
 
@@ -529,7 +561,10 @@ function copyLabel(){
 function emit(){
   const hecho = {
     'Entorno y capacidades': !!report.caps,
-    'Pruebas de reproducción': !!report.playback,
+    // Comprobar que TERMINARON, no que empezaron. El objeto se crea al pulsar
+    // el botón, así que mirar su existencia marcaba la casilla al instante y
+    // daba por completo un informe al que le faltaba media sección.
+    'Pruebas de reproducción': report.playback?.done === true,
     'Pantalla completa': !!report.fullscreen,
   };
   report.complete = Object.values(hecho).every(Boolean);
