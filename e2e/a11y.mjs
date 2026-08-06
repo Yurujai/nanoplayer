@@ -166,6 +166,39 @@ for (const e of ESPERADOS) {
   else nota(`"${e}" NO se alcanza con Tab`);
 }
 
+/* --- lo que aporta un plugin ---------------------------------------------- */
+
+// La garantía que justifica que el plugin declare en vez de pintar su DOM: lo
+// que aporta queda sujeto a las mismas reglas que el resto de la interfaz.
+console.log('\n[plugins] los controles aportados cumplen el mismo contrato');
+const ctrlPlugin = await page.evaluate(() => {
+  const b = document.querySelector('[data-control]');
+  if (!b) return null;
+  return {
+    id: b.dataset.control,
+    tag: b.tagName.toLowerCase(),
+    label: b.getAttribute('aria-label'),
+    pressed: b.getAttribute('aria-pressed'),
+    tabbable: b.tabIndex >= 0,
+  };
+});
+if (!ctrlPlugin) {
+  nota('ningún plugin aportó control a la barra: no se puede verificar el contrato');
+} else {
+  if (ctrlPlugin.tag === 'button') bien(`"${ctrlPlugin.id}" es un <button> nativo`);
+  else nota(`"${ctrlPlugin.id}" no es un <button>: pierde rol y teclado nativos`);
+
+  if (ctrlPlugin.label) bien(`"${ctrlPlugin.id}" tiene nombre accesible ("${ctrlPlugin.label}")`);
+  else nota(`"${ctrlPlugin.id}" no tiene nombre accesible`);
+
+  if (ctrlPlugin.pressed !== null) bien(`"${ctrlPlugin.id}" expone aria-pressed`);
+  else nota(`"${ctrlPlugin.id}" es un conmutador sin aria-pressed`);
+
+  if (alcanzados.some((a) => a.includes(ctrlPlugin.label)))
+    bien(`"${ctrlPlugin.id}" es alcanzable con Tab`);
+  else nota(`"${ctrlPlugin.id}" NO se alcanza con Tab`);
+}
+
 /* --- operable con teclado ------------------------------------------------ */
 
 console.log('\n[teclado] atajos');

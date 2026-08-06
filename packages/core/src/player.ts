@@ -17,6 +17,7 @@ import { EventBus, type Unsubscribe } from './events.js';
 import { Lifecycle } from './lifecycle.js';
 import type { Manifest, Stream } from './manifest.js';
 import { nativeEngineFactory } from './native-engine.js';
+import type { UiSlots } from './slots.js';
 import type { PlayerState } from './state.js';
 import { Synchronizer, type SyncProfile } from './sync.js';
 import { masterStream, slaveStreams, validateManifest } from './validate.js';
@@ -65,6 +66,7 @@ export class Player {
   #instancias = new Map<string, MediaEngine>();
   #sync: Synchronizer | null = null;
   #cajas: HTMLElement[] = [];
+  #ui: UiSlots | null = null;
 
   constructor(options: PlayerOptions) {
     this.#opts = options;
@@ -74,6 +76,21 @@ export class Player {
   /** El elemento donde se montan los medios. Lo necesita el registro para
    *  observar visibilidad sin que el integrador tenga que repetírselo. */
   get container(): HTMLElement { return this.#opts.container; }
+
+  /**
+   * Los anclajes de interfaz, si hay una montada.
+   *
+   * El núcleo no depende de la capa de interfaz: solo guarda quien se anuncie
+   * y avisa por el bus. Un plugin usa `whenUi()` para no tener que preocuparse
+   * de si llegó antes o después.
+   */
+  get ui(): UiSlots | null { return this.#ui; }
+
+  /** Lo llama la capa de interfaz al montarse. */
+  setUi(slots: UiSlots | null): void {
+    this.#ui = slots;
+    if (slots) this.bus.emit('ui:ready', {});
+  }
 
   get state(): PlayerState { return this.#lc.state; }
   get manifest(): Manifest | null { return this.#manifest; }

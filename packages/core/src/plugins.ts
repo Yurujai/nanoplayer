@@ -23,6 +23,7 @@ import type { CoreEvents } from './core-events.js';
 import type { EventBus } from './events.js';
 import type { Manifest } from './manifest.js';
 import type { Player } from './player.js';
+import type { UiSlots } from './slots.js';
 
 /** Lo que un plugin recibe al activarse. */
 export interface PluginContext {
@@ -30,6 +31,14 @@ export interface PluginContext {
   bus: EventBus<CoreEvents>;
   /** Configuración que el integrador pasó para este plugin. */
   config: Record<string, unknown>;
+  /**
+   * Ejecuta el callback cuando haya interfaz, ahora o más tarde.
+   *
+   * Los plugins se activan al resolver el manifiesto y la interfaz puede
+   * montarse antes o después. Sin esto, cada plugin tendría que resolver ese
+   * orden por su cuenta, y la mitad lo haría mal.
+   */
+  whenUi: (fn: (ui: UiSlots) => void) => void;
 }
 
 /** La parte pesada de un plugin. Se carga solo si toca activarlo. */
@@ -189,6 +198,10 @@ export class PluginRegistry {
           player,
           bus: player.bus,
           config: (typeof cfg === 'object' && cfg !== null) ? cfg : {},
+          whenUi: (fn) => {
+            if (player.ui) fn(player.ui);
+            else player.bus.once('ui:ready', () => { if (player.ui) fn(player.ui); });
+          },
         };
         const impl = await m.load();
         await impl.activate(ctx);

@@ -23,6 +23,9 @@ importers:
       '@nanoplayer/core':
         specifier: workspace:*
         version: link:../packages/core
+      '@nanoplayer/plugin-captions':
+        specifier: workspace:*
+        version: link:../packages/plugin-captions
       '@nanoplayer/ui':
         specifier: workspace:*
         version: link:../packages/ui
@@ -41,6 +44,16 @@ importers:
         version: 1.62.1
 
   packages/core:
+    devDependencies:
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.3(@types/node@26.1.2)
+
+  packages/plugin-captions:
+    dependencies:
+      '@nanoplayer/core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       vite:
         specifier: ^6.0.0

@@ -16,7 +16,7 @@
  *   - **Región en vivo** para lo que solo se percibe visualmente: buffering,
  *     errores, cambios de estado.
  */
-import type { Player } from '@nanoplayer/core';
+import type { BarControlDecl, Player, SettingsPanelDecl, UiSlots } from '@nanoplayer/core';
 import { formatPercent, formatTime, spokenTime } from './format.js';
 import { ICONS } from './icons.js';
 import { applyLayout, layoutsFor, type LayoutId } from './layouts.js';
@@ -38,7 +38,7 @@ interface Textos {
   region: string; play: string; pause: string; replay: string;
   progress: string; volume: string; mute: string; unmute: string;
   fullscreenEnter: string; fullscreenExit: string;
-  speed: string; normal: string; layout: string;
+  speed: string; normal: string; layout: string; more: string;
   playing: string; paused: string; buffering: string; ended: string;
   liveRegion: string;
 }
@@ -49,7 +49,7 @@ const TEXTOS: Record<string, Textos> = {
     replay: 'Volver a reproducir', progress: 'Posición', volume: 'Volumen',
     mute: 'Silenciar', unmute: 'Activar sonido',
     fullscreenEnter: 'Pantalla completa', fullscreenExit: 'Salir de pantalla completa',
-    speed: 'Velocidad', normal: 'Normal', layout: 'Disposición',
+    speed: 'Velocidad', normal: 'Normal', layout: 'Disposición', more: 'Más opciones',
     playing: 'Reproduciendo', paused: 'En pausa', buffering: 'Cargando',
     ended: 'Vídeo terminado', liveRegion: 'Estado del reproductor',
   },
@@ -58,7 +58,7 @@ const TEXTOS: Record<string, Textos> = {
     replay: 'Replay', progress: 'Seek', volume: 'Volume',
     mute: 'Mute', unmute: 'Unmute',
     fullscreenEnter: 'Full screen', fullscreenExit: 'Exit full screen',
-    speed: 'Speed', normal: 'Normal', layout: 'Layout',
+    speed: 'Speed', normal: 'Normal', layout: 'Layout', more: 'More options',
     playing: 'Playing', paused: 'Paused', buffering: 'Buffering',
     ended: 'Video ended', liveRegion: 'Player status',
   },
@@ -69,7 +69,7 @@ const SALTO_LARGO = 10;
 const PASO_VOLUMEN = 0.05;
 const VELOCIDADES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
-export class ControlBar {
+export class ControlBar implements UiSlots {
   readonly #player: Player;
   readonly #root: HTMLElement;
   readonly #t: Textos;
@@ -81,6 +81,11 @@ export class ControlBar {
   #btnMute!: HTMLButtonElement;
   #btnFs!: HTMLButtonElement;
   #menu!: SettingsMenu;
+  #zonaControles!: HTMLElement;
+  readonly #controles: BarControlDecl[] = [];
+  readonly #botonesPlugin = new Map<string, HTMLButtonElement>();
+  #quitarDesborde: (() => void) | null = null;
+  #observador: ResizeObserver | null = null;
   #progreso!: HTMLInputElement;
   #volumen!: HTMLInputElement;
   #tiempo!: HTMLElement;
@@ -105,6 +110,9 @@ export class ControlBar {
     this.#construir(options.label);
     this.#conectar();
     this.#pintar();
+    // Anunciarse al final: un plugin puede añadir controles en cuanto lo sepa,
+    // y para entonces la barra tiene que estar completa.
+    player.setUi(this);
   }
 
   get element(): HTMLElement {
@@ -174,13 +182,97 @@ export class ControlBar {
     const espaciador = doc.createElement('span');
     espaciador.className = 'np__spacer';
 
-    filaBotones.append(this.#btnPlay, volumen, this.#tiempo, espaciador);
+    // Los controles que aporten los plugins caen aquí, entre el espaciador y
+    // el engranaje: a la derecha, que es donde se esperan las acciones.
+    this.#zonaControles = doc.createElement('span');
+    this.#zonaControles.className = 'np__plugins';
+
+    filaBotones.append(this.#btnPlay, volumen, this.#tiempo, espaciador, this.#zonaControles);
     this.#menu = new SettingsMenu(filaBotones, this.#lang);
     filaBotones.append(this.#btnFs);
 
     this.#bar.append(filaProgreso, filaBotones);
     this.#root.appendChild(this.#bar);
     this.#registrarPanelesPropios();
+  }
+
+  /* ------------------------------------------------- anclajes para plugins -- */
+
+  /** Añade un botón a la barra. Lo llama un plugin a través de `ctx.whenUi()`. */
+  addBarControl(control: BarControlDecl): () => void {
+    this.#controles.push(control);
+    this.#pintarControles();
+    return () => {
+      const i = this.#controles.indexOf(control);
+      if (i >= 0) this.#controles.splice(i, 1);
+      this.#botonesPlugin.get(control.id)?.remove();
+      this.#botonesPlugin.delete(control.id);
+      this.#pintarControles();
+    };
+  }
+
+  addSettingsPanel(panel: SettingsPanelDecl): () => void {
+    return this.#menu.addPanel(panel);
+  }
+
+  /** Repinta los controles cuando un plugin cambia su estado. */
+  refresh(): void {
+    this.#pintarControles();
+  }
+
+  /**
+   * Coloca los controles de plugins, y desborda al menú lo que no cabe.
+   *
+   * La barra es un recurso escaso: en móvil entran cuatro o cinco controles, y
+   * si cada plugin puede añadir botón, tres plugins la dejan inservible. Lo que
+   * no cabe **no desaparece**: se agrupa en un panel "Más opciones" del menú de
+   * ajustes, donde sigue siendo alcanzable por teclado y por lector de pantalla.
+   */
+  #pintarControles(): void {
+    const disponibles = this.#controles
+      .filter((c) => c.available?.() ?? true)
+      .sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100));
+
+    // Ancho libre de la fila, descontando lo fijo. Con `--np-control-size` de
+    // 2.5rem, cada botón ocupa unos 40 px.
+    const anchoBoton = this.#zonaControles.getBoundingClientRect().height || 40;
+    const anchoFila = this.#bar.getBoundingClientRect().width;
+    const reservado = 4 * anchoBoton + 90;   // play, volumen, tiempo, ajustes, fullscreen
+    const caben = Math.max(0, Math.floor((anchoFila - reservado) / anchoBoton));
+
+    const enBarra = disponibles.slice(0, caben);
+    const desbordados = disponibles.slice(caben);
+
+    this.#zonaControles.textContent = '';
+    this.#botonesPlugin.clear();
+    for (const c of enBarra) {
+      const b = this.#boton(this.#texto(c.label), this.#texto(c.icon));
+      b.dataset['control'] = c.id;
+      if (c.pressed) b.setAttribute('aria-pressed', String(c.pressed()));
+      b.addEventListener('click', () => { c.onActivate(); this.#pintarControles(); });
+      this.#zonaControles.appendChild(b);
+      this.#botonesPlugin.set(c.id, b);
+    }
+
+    this.#quitarDesborde?.();
+    this.#quitarDesborde = null;
+    if (desbordados.length > 0) {
+      this.#quitarDesborde = this.#menu.addPanel({
+        id: '__overflow',
+        label: this.#t.more,
+        priority: 900,
+        options: desbordados.map((c) => ({ value: c.id, label: this.#texto(c.label) })),
+        getValue: () => '',
+        onSelect: (id) => {
+          this.#controles.find((c) => c.id === id)?.onActivate();
+          this.#pintarControles();
+        },
+      });
+    }
+  }
+
+  #texto(v: string | (() => string)): string {
+    return typeof v === 'function' ? v() : v;
   }
 
   /**
@@ -294,6 +386,12 @@ export class ControlBar {
     const doc = this.#root.ownerDocument;
     this.#on(doc, 'fullscreenchange', () => this.#pintarPantallaCompleta());
     this.#on(doc, 'webkitfullscreenchange', () => this.#pintarPantallaCompleta());
+
+    // Al cambiar el ancho cambia cuántos controles caben.
+    if (typeof ResizeObserver !== 'undefined') {
+      this.#observador = new ResizeObserver(() => this.#pintarControles());
+      this.#observador.observe(this.#root);
+    }
 
     this.#despertar();
   }
@@ -495,6 +593,9 @@ export class ControlBar {
     if (this.#temporizador) clearTimeout(this.#temporizador);
     for (const off of this.#desatar) off();
     this.#desatar = [];
+    this.#observador?.disconnect();
+    this.#observador = null;
+    this.#player.setUi(null);
     this.#menu.destroy();
     this.#bar.remove();
     this.#vivo.remove();

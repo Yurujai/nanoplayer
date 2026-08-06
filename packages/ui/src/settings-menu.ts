@@ -68,6 +68,9 @@ export class SettingsMenu {
     this.#boton.setAttribute('aria-label', this.#t.settings);
     this.#boton.setAttribute('aria-haspopup', 'true');
     this.#boton.setAttribute('aria-expanded', 'false');
+    // Oculto hasta que alguien aporte ajustes: un engranaje que abre un menú
+    // vacío es ruido, y en la barra el sitio es escaso.
+    this.#boton.hidden = true;
 
     this.#popup = doc.createElement('div');
     this.#popup.className = 'np__menu';

@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@nanoplayer/core": "workspace:*",
-    "@nanoplayer/ui": "workspace:*"
+    "@nanoplayer/ui": "workspace:*",
+    "@nanoplayer/plugin-captions": "workspace:*"
   },
   "devDependencies": {
     "vite": "^6.0.0"

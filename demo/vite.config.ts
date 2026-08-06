@@ -11,6 +11,8 @@ export default defineConfig({
     alias: {
       '@nanoplayer/core': fileURLToPath(new URL('../packages/core/src/index.ts', import.meta.url)),
       '@nanoplayer/ui': fileURLToPath(new URL('../packages/ui/src/index.ts', import.meta.url)),
+      '@nanoplayer/plugin-captions': fileURLToPath(
+        new URL('../packages/plugin-captions/src/index.ts', import.meta.url)),
     },
   },
   server: { port: 5180 },

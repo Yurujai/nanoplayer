@@ -19,6 +19,8 @@ export interface CoreEvents {
   // --- ciclo de vida ------------------------------------------------------
   'state:change': { from: PlayerState; to: PlayerState };
   'destroy': Empty;
+  /** Hay una interfaz montada y sus anclajes están disponibles. */
+  'ui:ready': Empty;
 
   // --- manifiesto ---------------------------------------------------------
   'manifest:resolve:start': Empty;

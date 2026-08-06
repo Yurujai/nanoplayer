@@ -13,6 +13,9 @@ import {
   createPlayer, type Manifest, type Player,
 } from '@nanoplayer/core';
 import { attachControls, type ControlBar } from '@nanoplayer/ui';
+// Basta con importarlo: el plugin se auto-registra. El núcleo no lo conoce.
+import '@nanoplayer/plugin-captions';
+import { plugins } from '@nanoplayer/core';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 
@@ -35,6 +38,10 @@ const MANIFIESTOS: Record<string, unknown> = {
         sources: [{ src: 'media/presenter.mp4', type: 'video/mp4' }] },
       { id: 'slides', role: 'presentation', label: 'Diapositivas', audio: false,
         sources: [{ src: 'media/slides.mp4', type: 'video/mp4' }] },
+    ],
+    textTracks: [
+      { src: 'media/es.vtt', lang: 'es', label: 'Español', kind: 'subtitles' },
+      { src: 'media/en.vtt', lang: 'en', label: 'English', kind: 'subtitles' },
     ],
   },
   // Para ver que la validación no es decorativa: dos pistas de audio es
@@ -130,7 +137,11 @@ $('#btn-enganchar').addEventListener('click', async () => {
   $('#escenario').querySelector('.vacio')?.remove();
   await player?.attach().catch(() => {});
   // La barra se monta después de enganchar, cuando ya hay streams que envolver.
-  if (player && !controles) controles = attachControls(player, { lang: 'es' });
+  if (player && !controles) {
+    controles = attachControls(player, { lang: 'es' });
+    const res = await plugins.activate(player, {}, player.manifest);
+    log('plugins:activados', { activados: res.activated, omitidos: res.skipped });
+  }
   pintar();
 });
 

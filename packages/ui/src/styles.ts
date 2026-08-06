@@ -71,6 +71,7 @@ button.np__btn[disabled]{opacity:.4;cursor:default}
   color:var(--np-color-control-dim);padding:0 .5rem;white-space:nowrap;
 }
 .np__spacer{flex:1 1 auto}
+.np__plugins{display:inline-flex;align-items:center}
 
 /* --- deslizadores ---
    Son <input type="range"> nativos a propósito: traen teclado, gestos táctiles

@@ -6,7 +6,8 @@
     // en vez de a su dist/, que no hace falta construir para desarrollar.
     "paths": {
       "@nanoplayer/core": ["../packages/core/src/index.ts"],
-      "@nanoplayer/ui": ["../packages/ui/src/index.ts"]
+      "@nanoplayer/ui": ["../packages/ui/src/index.ts"],
+      "@nanoplayer/plugin-captions": ["../packages/plugin-captions/src/index.ts"]
     }
   },
   "include": ["src", "vite.config.ts"]

@@ -48,6 +48,11 @@ export type { ManifestResolver, PlayerOptions } from './player.js';
 export { createBatchResolver, PlayerRegistry } from './registry.js';
 export type { BatchResolverOptions, RegistryOptions } from './registry.js';
 
+// --- anclajes de interfaz ---------------------------------------------------
+export type {
+  BarControlDecl, SettingsOptionDecl, SettingsPanelDecl, UiSlots,
+} from './slots.js';
+
 // --- plugins ----------------------------------------------------------------
 export { plugins, PluginRegistry, topoSort } from './plugins.js';
 export type {
