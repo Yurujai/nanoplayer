@@ -18,6 +18,16 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@26.1.2)(happy-dom@20.11.1)
 
+  demo:
+    dependencies:
+      '@nanoplayer/core':
+        specifier: workspace:*
+        version: link:../packages/core
+    devDependencies:
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.3(@types/node@26.1.2)
+
   packages/core:
     devDependencies:
       vite:

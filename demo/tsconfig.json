@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // Igual que el alias de vite.config.ts: apuntar al código fuente del núcleo
+    // en vez de a su dist/, que no hace falta construir para desarrollar.
+    "paths": { "@nanoplayer/core": ["../packages/core/src/index.ts"] }
+  },
+  "include": ["src", "vite.config.ts"]
+}

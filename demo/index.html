@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NanoPlayer · banco de pruebas del núcleo</title>
+<link rel="icon" href="data:,">
+<style>
+  :root{
+    --bg:#0f1115; --card:#171a20; --line:#262b33; --fg:#e8eaed; --dim:#98a1ac;
+    --ok:#5ddc7a; --bad:#ff6b6b; --warn:#ffb648; --accent:#6aa9ff; color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:1.25rem;background:var(--bg);color:var(--fg);
+       font:15px/1.55 system-ui,-apple-system,sans-serif}
+  main{max-width:1100px;margin:0 auto}
+  h1{font-size:1.2rem;margin:0 0 .2rem}
+  p.lead{color:var(--dim);margin:0 0 1.25rem;font-size:.9rem}
+  .aviso{background:#1d1a12;border:1px solid var(--warn);border-left-width:4px;
+         border-radius:8px;padding:.7rem .9rem;margin:0 0 1.25rem;font-size:.88rem}
+  section{background:var(--card);border:1px solid var(--line);border-radius:10px;
+          padding:1rem;margin-bottom:1rem}
+  h2{font-size:.78rem;margin:0 0 .8rem;color:var(--dim);
+     text-transform:uppercase;letter-spacing:.07em}
+  .barra{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+  button,select{font:inherit;padding:.5rem .85rem;border-radius:8px;
+    border:1px solid #39404a;background:#262b32;color:var(--fg);cursor:pointer}
+  button:hover:not(:disabled){background:#303740}
+  button:disabled{opacity:.35;cursor:default}
+  button:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+  .metricas{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+            gap:.9rem;margin-bottom:1rem}
+  .k{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:#8b939c}
+  .val{font-size:1.15rem;font-weight:600;font-variant-numeric:tabular-nums}
+  .bien{color:var(--ok)} .mal{color:var(--bad)}
+  #estado{font-family:ui-monospace,monospace}
+  #estado[data-s="idle"]{color:var(--dim)}
+  #estado[data-s="resolved"]{color:var(--warn)}
+  #estado[data-s="attached"]{color:var(--accent)}
+  #estado[data-s="active"]{color:var(--ok)}
+  #escenario{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+             gap:.75rem;min-height:120px}
+  .stream{position:relative;background:#000;border-radius:8px;overflow:hidden}
+  .stream video{width:100%;display:block}
+  .etiqueta{position:absolute;top:8px;left:8px;z-index:1;background:#000a;
+            padding:.2rem .5rem;border-radius:4px;font-size:.75rem}
+  .vacio{color:var(--dim);font-size:.9rem;margin:0;padding:2rem 0;text-align:center}
+  #eventos{max-height:280px;overflow:auto;font:12px/1.5 ui-monospace,monospace}
+  .ev{padding:.15rem 0;border-bottom:1px solid #1e222a}
+  .ev .t{color:var(--accent)}
+  .ev .p{color:var(--dim)}
+  code{background:#0b0d11;padding:.1rem .3rem;border-radius:3px;font-size:.9em}
+</style>
+</head>
+<body>
+<main>
+  <h1>NanoPlayer · banco de pruebas del núcleo</h1>
+  <p class="lead">
+    Cablea a mano las piezas que ya existen: manifiesto validado, ciclo de vida,
+    bus de eventos y motor nativo.
+  </p>
+
+  <p class="aviso">
+    <strong>Esto no es el reproductor.</strong> No hay barra de controles ni
+    layouts (Fase&nbsp;2) ni sincronizador (Fase&nbsp;3).
+  </p>
+  <p class="aviso">
+    Con dos streams verás un desfase de unos <strong>70&nbsp;ms</strong>: los
+    motores se enganchan y arrancan en secuencia, así que el segundo empieza
+    tarde. Con ficheros locales el desfase se queda quieto —no crece— pero
+    <strong>nada lo corrige</strong>, y un stall o un salto lo empeorarían para
+    siempre. Eso es exactamente lo que resuelve el sincronizador de la
+    Fase&nbsp;3, que en el spike S1 dejó la mediana en 9,8&nbsp;ms. Compara los
+    timecodes incrustados de los dos vídeos.
+  </p>
+
+  <section>
+    <h2>Ciclo de vida</h2>
+    <div class="metricas">
+      <div><div class="k">Estado</div><div class="val" id="estado">idle</div></div>
+      <div><div class="k">Peticiones de red</div><div class="val" id="peticiones">0</div></div>
+      <div><div class="k">Elementos &lt;video&gt;</div><div class="val" id="videos">0</div></div>
+      <div><div class="k">Posición guardada</div><div class="val" id="resumeAt">0.00 s</div></div>
+      <div><div class="k">Deriva</div><div class="val" id="deriva">—</div></div>
+    </div>
+    <div class="barra">
+      <select id="fuente" aria-label="Manifiesto">
+        <option value="mono">Mono-stream</option>
+        <option value="dual">Dual-stream</option>
+        <option value="invalido">Manifiesto inválido (2 audios)</option>
+      </select>
+      <button id="btn-resolver">1 · Resolver manifiesto</button>
+      <button id="btn-enganchar">2 · Enganchar motor</button>
+      <button id="btn-play">3 · Reproducir</button>
+      <button id="btn-pause">Pausar</button>
+      <button id="btn-desalojar">Soltar motor</button>
+      <button id="btn-reiniciar">Reiniciar</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Escenario</h2>
+    <div id="escenario">
+      <p class="vacio">Estado <code>idle</code>: solo el póster. Ni una petición de red.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Bus de eventos · todo lo que ve <code>onAny()</code></h2>
+    <div id="eventos"></div>
+  </section>
+</main>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
