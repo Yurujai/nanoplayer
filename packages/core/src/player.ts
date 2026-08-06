@@ -71,6 +71,10 @@ export class Player {
     this.#engines = options.engines ?? [nativeEngineFactory];
   }
 
+  /** El elemento donde se montan los medios. Lo necesita el registro para
+   *  observar visibilidad sin que el integrador tenga que repetírselo. */
+  get container(): HTMLElement { return this.#opts.container; }
+
   get state(): PlayerState { return this.#lc.state; }
   get manifest(): Manifest | null { return this.#manifest; }
   get resumeAt(): number { return this.#lc.resumeAt; }

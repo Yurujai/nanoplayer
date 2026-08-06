@@ -43,3 +43,17 @@ export type {
 // --- reproductor ------------------------------------------------------------
 export { createPlayer, Player } from './player.js';
 export type { ManifestResolver, PlayerOptions } from './player.js';
+
+// --- multi-instancia --------------------------------------------------------
+export { createBatchResolver, PlayerRegistry } from './registry.js';
+export type { BatchResolverOptions, RegistryOptions } from './registry.js';
+
+// --- plugins ----------------------------------------------------------------
+export { plugins, PluginRegistry, topoSort } from './plugins.js';
+export type {
+  ActivationResult, PluginConfig, PluginContext, PluginImpl, PluginManifest,
+} from './plugins.js';
+
+// --- punto de entrada -------------------------------------------------------
+export { create, NanoPlayer, registry, VERSION } from './nanoplayer.js';
+export type { CreateConfig } from './nanoplayer.js';
