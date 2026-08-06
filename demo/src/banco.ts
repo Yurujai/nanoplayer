@@ -73,6 +73,25 @@ const MANIFIESTOS: Record<string, unknown> = {
   },
 };
 
+/**
+ * Qué tiene de particular cada caso.
+ *
+ * El banco enseña el manifiesto entero, pero sin señalar qué línea hace la
+ * gracia es un muro de JSON: lo interesante es qué campo provoca cada
+ * comportamiento.
+ */
+const CLAVES: Record<string, string> = {
+  mono: 'Un solo stream. <b>audio: true</b> lo convierte en el maestro del reloj.',
+  dual: 'Dos streams. <b>Exactamente uno</b> lleva <b>audio: true</b>: es el maestro, ' +
+        'y los demás lo persiguen. Dos pistas de audio se rechazan porque iOS no las reproduce. ' +
+        'Los <b>textTracks</b> activan el plugin de subtítulos sin configurar nada.',
+  hls: 'Mismo contenido, pero las fuentes son <b>application/vnd.apple.mpegurl</b>. ' +
+       'Eso hace que gane el motor de hls.js donde hay MediaSource, y el nativo donde no. ' +
+       'No cambia nada más del manifiesto.',
+  invalido: 'Los <b>dos</b> streams llevan <b>audio: true</b>. La validación lo rechaza ' +
+            'con el motivo, en vez de dejar un reproductor que falla solo en iPhone.',
+};
+
 let player: Player | null = null;
 let controles: ControlBar | null = null;
 let peticiones = 0;
@@ -196,9 +215,31 @@ $('#btn-reiniciar').addEventListener('click', () => {
   pintar();
 });
 
+function pintarManifiesto(): void {
+  const clave = $<HTMLSelectElement>('#fuente').value;
+  // El objeto de verdad, no una copia escrita a mano: si se separaran, el
+  // ejemplo enseñaría algo que no es lo que se ejecuta.
+  $('#manifiesto').textContent = JSON.stringify(MANIFIESTOS[clave], null, 2);
+  $('#manifiesto-nota').innerHTML = CLAVES[clave] ?? '';
+}
+
+$('#btn-copiar').addEventListener('click', async () => {
+  const btn = $<HTMLButtonElement>('#btn-copiar');
+  try {
+    await navigator.clipboard.writeText($('#manifiesto').textContent ?? '');
+    btn.textContent = 'Copiado';
+  } catch {
+    btn.textContent = 'No se pudo copiar';
+  }
+  setTimeout(() => { btn.textContent = 'Copiar manifiesto'; }, 2000);
+});
+
 $('#fuente').addEventListener('change', () => {
   $<HTMLButtonElement>('#btn-reiniciar').click();
+  pintarManifiesto();
 });
+
+pintarManifiesto();
 
 /**
  * Desincroniza los esclavos a mano para ver cómo se recuperan.

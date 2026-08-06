@@ -52,6 +52,12 @@
   .ev .t{color:var(--accent)}
   .ev .p{color:var(--dim)}
   code{background:#0b0d11;padding:.1rem .3rem;border-radius:3px;font-size:.9em}
+  pre{background:#0b0d11;border:1px solid var(--line);border-radius:8px;
+      padding:.9rem;overflow-x:auto;margin:0;max-height:26rem}
+  pre code{background:none;padding:0;font:12px/1.55 ui-monospace,monospace;
+           color:#cdd3da;white-space:pre}
+  .nota{color:var(--dim);font-size:.86rem;margin:0 0 .8rem}
+  .nota b{color:var(--fg);font-weight:600}
 </style>
 </head>
 <body>
@@ -113,6 +119,15 @@
       <p class="vacio">Estado <code>idle</code>: solo el póster. Ni una petición de red.</p>
       <div id="player"></div>
     </div>
+  </section>
+
+  <section>
+    <h2>Manifiesto · lo que hay que pasarle al reproductor</h2>
+    <p class="nota" id="manifiesto-nota"></p>
+    <div class="barra" style="margin-bottom:.6rem">
+      <button id="btn-copiar">Copiar manifiesto</button>
+    </div>
+    <pre><code id="manifiesto"></code></pre>
   </section>
 
   <section>
