@@ -5,7 +5,8 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "vitest run",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "a11y": "pnpm --filter @nanoplayer/e2e a11y"
   },
   "devDependencies": {
     "happy-dom": "^20.11.1",

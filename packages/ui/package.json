@@ -1,0 +1,13 @@
+{
+  "name": "@nanoplayer/ui",
+  "version": "0.0.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist"],
+  "scripts": { "build": "vite build", "typecheck": "tsc --noEmit" },
+  "dependencies": { "@nanoplayer/core": "workspace:*" },
+  "devDependencies": { "vite": "^6.0.0" }
+}

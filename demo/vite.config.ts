@@ -10,6 +10,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@nanoplayer/core': fileURLToPath(new URL('../packages/core/src/index.ts', import.meta.url)),
+      '@nanoplayer/ui': fileURLToPath(new URL('../packages/ui/src/index.ts', import.meta.url)),
     },
   },
   server: { port: 5180 },

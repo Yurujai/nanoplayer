@@ -12,6 +12,7 @@
 import {
   createPlayer, type Manifest, type Player,
 } from '@nanoplayer/core';
+import { attachControls, type ControlBar } from '@nanoplayer/ui';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 
@@ -50,6 +51,7 @@ const MANIFIESTOS: Record<string, unknown> = {
 };
 
 let player: Player | null = null;
+let controles: ControlBar | null = null;
 let peticiones = 0;
 
 /* ------------------------------------------------------------------- log -- */
@@ -71,7 +73,7 @@ function log(type: string, payload: unknown): void {
 
 function crear(clave: string): Player {
   const p = createPlayer({
-    container: $('#escenario'),
+    container: $('#player'),
     manifest: MANIFIESTOS[clave] as Manifest,
   });
 
@@ -91,7 +93,10 @@ function crear(clave: string): Player {
 }
 
 function limpiarEscenario(mensaje: string): void {
-  $('#escenario').innerHTML = `<p class="vacio">${mensaje}</p>`;
+  controles?.destroy();
+  controles = null;
+  $('#escenario').innerHTML =
+    `<p class="vacio">${mensaje}</p><div id="player"></div>`;
 }
 
 /* ------------------------------------------------------------------- UI --- */
@@ -122,9 +127,10 @@ $('#btn-resolver').addEventListener('click', async () => {
 });
 
 $('#btn-enganchar').addEventListener('click', async () => {
-  const vacio = $('#escenario').querySelector('.vacio');
-  vacio?.remove();
+  $('#escenario').querySelector('.vacio')?.remove();
   await player?.attach().catch(() => {});
+  // La barra se monta después de enganchar, cuando ya hay streams que envolver.
+  if (player && !controles) controles = attachControls(player, { lang: 'es' });
   pintar();
 });
 

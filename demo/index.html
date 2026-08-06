@@ -38,8 +38,8 @@
   #estado[data-s="resolved"]{color:var(--warn)}
   #estado[data-s="attached"]{color:var(--accent)}
   #estado[data-s="active"]{color:var(--ok)}
-  #escenario{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
-             gap:.75rem;min-height:120px}
+  #escenario{min-height:120px}
+  #player:empty{display:none}
   #escenario > [data-stream]{position:relative;background:#000;border-radius:8px;
                              overflow:hidden}
   #escenario > [data-stream] video{width:100%;display:block}
@@ -63,10 +63,11 @@
   </p>
 
   <p class="aviso">
-    <strong>Esto no es el reproductor terminado.</strong> No hay barra de
-    controles ni layouts: eso es la Fase&nbsp;2. Los botones del ciclo de vida
-    están en crudo a propósito, porque lo interesante de enseñar es justamente
-    eso.
+    <strong>Ya hay barra de controles.</strong> Prueba a navegarla solo con el
+    teclado: <kbd>Tab</kbd> para moverte, <kbd>Espacio</kbd> o <kbd>K</kbd> para
+    reproducir, flechas para buscar y ajustar volumen, <kbd>M</kbd> para
+    silenciar, <kbd>F</kbd> para pantalla completa. Los botones del ciclo de
+    vida siguen en crudo a propósito: son lo interesante de enseñar.
   </p>
   <p class="aviso">
     Con dos streams el sincronizador ya está activo. Pulsa
@@ -108,6 +109,7 @@
     <h2>Escenario</h2>
     <div id="escenario">
       <p class="vacio">Estado <code>idle</code>: solo el póster. Ni una petición de red.</p>
+      <div id="player"></div>
     </div>
   </section>
 

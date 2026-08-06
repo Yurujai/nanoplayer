@@ -1,0 +1,63 @@
+# @nanoplayer/ui
+
+Interfaz por defecto de NanoPlayer: barra de controles accesible.
+
+Paquete aparte a propósito. El núcleo se queda *headless* —hay quien querrá su
+propia interfaz— y el bundle "con pilas incluidas" lleva ambos, así que el caso
+`<script>` sigue siendo una etiqueta.
+
+```ts
+import { createPlayer } from '@nanoplayer/core';
+import { attachControls } from '@nanoplayer/ui';
+
+const player = createPlayer({ container, manifest: '/api/video/123' });
+await player.attach();
+attachControls(player, { lang: 'es' });
+```
+
+## Accesibilidad
+
+No es una intención: se comprueba en CI y **bloquea el merge**.
+
+| Decisión | Por qué |
+|---|---|
+| Botones `<button>` nativos | Traen rol, activación por teclado y foco. Un `<div role="button">` obliga a reimplementarlo todo |
+| `<input type="range">` para progreso y volumen | Traen teclado, gestos táctiles y anuncio de valores |
+| `aria-valuetext` con tiempo hablado | Un lector diría "735"; con esto dice "12 minutos y 15 segundos" |
+| La barra no se oculta con el foco dentro | Quien navega con teclado perdería de vista el control en uso |
+| Región `role="status"` | Para lo que solo se percibe mirando: buffering, errores |
+| Sin Shadow DOM | Las relaciones ARIA no cruzan bien esa frontera, y obligaría a exponer un `::part` por elemento para poder darle estilo |
+
+**Lo que la comprobación automática NO cubre:** axe-core detecta alrededor de un
+tercio de los problemas reales. Que pase en verde evita regresiones, pero no
+sustituye una revisión con lector de pantalla.
+
+## Teclado
+
+| Tecla | Acción |
+|---|---|
+| `Espacio` / `K` | Reproducir o pausar |
+| `←` / `→` | ∓5 s |
+| `J` / `L` | ∓10 s |
+| `↑` / `↓` | Volumen |
+| `M` | Silenciar |
+| `F` | Pantalla completa |
+| `0`–`9` | Saltar a ese porcentaje |
+| `Inicio` / `Fin` | Principio o final |
+
+Los atajos ceden las teclas que el control enfocado ya usa: las flechas sobre un
+deslizador son suyas, y el espacio sobre un botón lo activa.
+
+## Theming
+
+Todo lo personalizable son variables CSS. Se puede rediseñar el reproductor
+entero sin forkear:
+
+```css
+.np {
+  --np-color-accent: #c8102e;
+  --np-control-size: 3rem;
+  --np-bar-height: 6px;
+  --np-radius: 0;
+}
+```

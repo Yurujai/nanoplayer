@@ -9,6 +9,11 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": { "@nanoplayer/core": "workspace:*" },
-  "devDependencies": { "vite": "^6.0.0" }
+  "dependencies": {
+    "@nanoplayer/core": "workspace:*",
+    "@nanoplayer/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
 }

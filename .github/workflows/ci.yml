@@ -20,3 +20,47 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
+
+  # Bloquea el merge si la accesibilidad se degrada. La accesibilidad que no se
+  # comprueba automáticamente se pierde sin que nadie se entere: es exactamente
+  # lo que este proyecto existe para evitar.
+  accesibilidad:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+
+      - name: Instalar ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+
+      - run: pnpm install --frozen-lockfile
+
+      # Google Chrome, no el Chromium que empaqueta Playwright: este último no
+      # trae códecs H.264, y sin decodificar el vídeo las pruebas de teclado
+      # —que comprueban que el espacio inicia la reproducción— no valdrían nada.
+      - name: Instalar Chrome
+        run: pnpm exec playwright install --with-deps chrome
+        working-directory: e2e
+
+      - name: Generar medios de la demo
+        run: ./gen-media.sh
+        working-directory: demo
+        env:
+          SIZE: 960x540
+          CRF: '32'
+          DUR: '40'
+
+      - name: Levantar la demo
+        run: |
+          pnpm --filter @nanoplayer/demo dev &
+          npx --yes wait-on http://127.0.0.1:5180 --timeout 90000
+
+      - name: Auditar accesibilidad
+        run: node a11y.mjs http://127.0.0.1:5180/
+        working-directory: e2e
