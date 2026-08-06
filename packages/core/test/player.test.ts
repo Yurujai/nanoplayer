@@ -25,8 +25,10 @@ function factoriaFalsa() {
           container.appendChild(document.createElement('video'));
         },
         detach() { attached = false; },
-        async play() { paused = false; },
-        pause() { paused = true; },
+        // Un motor de verdad avisa por callback, y el Player se apoya en eso
+        // para saber si de verdad está sonando. Sin esto el falso miente.
+        async play() { paused = false; cb.onPlay?.(); },
+        pause() { paused = true; cb.onPause?.(); },
         seek(s: number) { currentTime = s; },
         get currentTime() { return currentTime; },
         get duration() { return 60; },
@@ -210,24 +212,77 @@ describe('Player · desalojo', () => {
 });
 
 describe('Player · stalls', () => {
-  it('si uno se queda sin buffer, se pausan todos', async () => {
-    // S1 midió que pausar a todos deja el pico de deriva en 7 ms; dejar correr
-    // al maestro la dispara por encima del umbral de salto duro.
-    const { p, creados } = nuevo(DUAL);
-    await p.play();
-    expect(creados.every((e) => !e.paused)).toBe(true);
-
-    creados[1]!._cb().onStallStart();
-    expect(creados.every((e) => e.paused)).toBe(true);
-  });
-
-  it('al recuperarse vuelven a arrancar si seguía reproduciendo', async () => {
+  it('al recuperarse vuelven a arrancar', async () => {
     const { p, creados } = nuevo(DUAL);
     await p.play();
     creados[1]!._cb().onStallStart();
     creados[1]!._cb().onStallEnd(250);
     await Promise.resolve();
     expect(creados.every((e) => !e.paused)).toBe(true);
+  });
+});
+
+describe('Player · el arranque no se aborta a sí mismo', () => {
+  it('un stall durante el arranque no pausa nada', async () => {
+    // Fallo real: el `waiting` inicial es normal —el navegador llena el
+    // buffer— y pausar ahí abortaba el play() recién iniciado con un
+    // AbortError. El vídeo no arrancaba y el botón se quedaba en "Reproducir".
+    const { p, creados } = nuevo(DUAL);
+    await p.attach();
+    expect(p.state).toBe('attached');
+
+    creados[1]!._cb().onStallStart();
+    expect(creados.every((e) => e.paused), 'nadie debe pausarse aún').toBe(true);
+
+    await p.play();
+    expect(p.state).toBe('active');
+    expect(creados.every((e) => !e.paused)).toBe(true);
+  });
+
+  it('ya reproduciendo, un stall sí pausa a todos', async () => {
+    // La política de S1 sigue vigente donde tiene sentido: con la reproducción
+    // en marcha, dejar correr al maestro dispara la deriva.
+    const { p, creados } = nuevo(DUAL);
+    await p.play();
+    creados[1]!._cb().onStallStart();
+    expect(creados.every((e) => e.paused)).toBe(true);
+  });
+
+  it('no resucita un vídeo que el usuario había pausado', async () => {
+    const { p, creados } = nuevo(DUAL);
+    await p.play();
+    p.pause();
+    creados[1]!._cb().onStallEnd(300);
+    expect(creados.every((e) => e.paused), 'debe seguir pausado').toBe(true);
+  });
+});
+
+describe('Player · el estado sale del medio, no de la intención', () => {
+  it('si el elemento arranca por su cuenta, el estado lo refleja', async () => {
+    // Sin esto la interfaz muestra lo que el Player creía que iba a pasar: el
+    // botón decía "Reproducir" con el vídeo sonando.
+    const { p, creados } = nuevo(MONO);
+    await p.attach();
+    creados[0]!._cb().onPlay();
+    expect(p.state).toBe('active');
+  });
+
+  it('si el navegador lo pausa por su cuenta, el estado lo refleja', async () => {
+    const { p, creados } = nuevo(MONO);
+    await p.play();
+    expect(p.state).toBe('active');
+    creados[0]!._cb().onPause();
+    expect(p.state).toBe('attached');
+  });
+
+  it('emite play y pause una sola vez', async () => {
+    const { p } = nuevo(MONO);
+    const onPlay = vi.fn(), onPause = vi.fn();
+    p.on('play', onPlay); p.on('pause', onPause);
+    await p.play();
+    p.pause();
+    expect(onPlay).toHaveBeenCalledTimes(1);
+    expect(onPause).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -76,6 +76,7 @@ export class Player {
   #sync: Synchronizer | null = null;
   #cajas: HTMLElement[] = [];
   #ui: UiSlots | null = null;
+  #pausadoPorStall = false;
 
   constructor(options: PlayerOptions) {
     this.#opts = options;
@@ -296,15 +297,14 @@ export class Player {
     this.#sync?.align();
     this.#sync?.start();
 
-    if (this.#lc.can('active')) this.#lc.transition('active');
-    this.bus.emit('play', { at: this.currentTime });
+    // El cambio de estado y el evento los dispara el callback `onPlay` del
+    // motor, que es quien sabe si de verdad ha empezado a sonar.
   }
 
   pause(): void {
     this.#sync?.stop();
+    this.#pausadoPorStall = false;
     for (const e of this.#instancias.values()) e.pause();
-    if (this.#lc.can('attached')) this.#lc.transition('attached');
-    this.bus.emit('pause', { at: this.currentTime });
   }
 
   seek(seconds: number): void {
@@ -354,6 +354,25 @@ export class Player {
       onTime: (current: number, duration: number) => {
         if (esMaestro) this.bus.emit('time', { current, duration });
       },
+      /*
+       * El estado de reproducción lo dicta el elemento multimedia, no lo que
+       * este objeto creía que iba a pasar.
+       *
+       * Sin esto la interfaz refleja la intención y no la realidad: si el
+       * navegador pausa por su cuenta —política de autoplay, un corte, un
+       * fallo— el botón sigue diciendo "Reproducir" con el vídeo en marcha, o
+       * al revés.
+       */
+      onPlay: () => {
+        if (!esMaestro) return;
+        if (this.#lc.can('active')) this.#lc.transition('active');
+        this.bus.emit('play', { at: this.currentTime });
+      },
+      onPause: () => {
+        if (!esMaestro) return;
+        if (this.#lc.state === 'active') this.#lc.transition('attached');
+        this.bus.emit('pause', { at: this.currentTime });
+      },
       onEnded: () => {
         if (esMaestro) this.bus.emit('ended', { at: this.currentTime });
       },
@@ -362,16 +381,28 @@ export class Player {
       },
       onStallStart: () => {
         this.bus.emit('stall:start', { stream: stream.id });
-        // Que uno se quede sin buffer y los demás sigan destroza la
-        // sincronización: S1 midió que pausar a todos deja el pico de deriva
-        // en 7 ms, frente a dejar correr al maestro.
+        /*
+         * Que uno se quede sin buffer y los demás sigan destroza la
+         * sincronización: S1 midió que pausar a todos deja el pico de deriva
+         * en 7 ms, frente a dejar correr al maestro.
+         *
+         * Pero **solo si ya se estaba reproduciendo**. Al arrancar, el
+         * `waiting` inicial es lo normal —el navegador está llenando el
+         * buffer— y pausar ahí aborta el `play()` que acaba de empezar con un
+         * `AbortError`. Ocurría de verdad: el vídeo no llegaba a arrancar y el
+         * botón se quedaba en "Reproducir" porque esa era la verdad.
+         */
+        if (this.#lc.state !== 'active') return;
+        this.#pausadoPorStall = true;
         for (const e of this.#instancias.values()) e.pause();
       },
       onStallEnd: (durationMs: number) => {
         this.bus.emit('stall:end', { stream: stream.id, durationMs });
-        if (this.#lc.state === 'active') {
-          for (const e of this.#instancias.values()) void e.play().catch(() => {});
-        }
+        // Solo se reanuda lo que se pausó aquí. Reanudar por sistema
+        // resucitaría un vídeo que el usuario había pausado a propósito.
+        if (!this.#pausadoPorStall) return;
+        this.#pausadoPorStall = false;
+        for (const e of this.#instancias.values()) void e.play().catch(() => {});
       },
       onError: (error: PlayerError) => this.bus.emit('error', { error }),
     };

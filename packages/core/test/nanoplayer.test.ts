@@ -16,12 +16,18 @@ const motorFalso: EngineFactory = {
   canPlay: () => 'probably',
   create: () => {
     let paused = true;
+    let cb: { onPlay?: () => void; onPause?: () => void } = {};
     return {
       name: 'falso',
       get element() { return { seeking: false } as HTMLVideoElement; },
       get attached() { return true; },
-      async attach(c: HTMLElement) { c.appendChild(document.createElement('video')); },
-      detach() {}, async play() { paused = false; }, pause() { paused = true; },
+      async attach(c: HTMLElement, _s: unknown, o?: { callbacks?: typeof cb }) {
+        cb = o?.callbacks ?? {};
+        c.appendChild(document.createElement('video'));
+      },
+      detach() {},
+      async play() { paused = false; cb.onPlay?.(); },
+      pause() { paused = true; cb.onPause?.(); },
       seek() {},
       get currentTime() { return 0; }, get duration() { return 60; },
       get paused() { return paused; }, get ended() { return false; },

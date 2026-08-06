@@ -10,14 +10,19 @@ const factoriaFalsa = (): EngineFactory => ({
   canPlay: () => 'probably',
   create() {
     let paused = true, t = 0;
+    let cb: { onPlay?: () => void; onPause?: () => void } = {};
     return {
       name: 'falso',
       get element() { return { seeking: false } as HTMLVideoElement; },
       get attached() { return true; },
-      async attach(c: HTMLElement) { c.appendChild(document.createElement('video')); },
+      async attach(c: HTMLElement, _s: unknown, o?: { callbacks?: typeof cb }) {
+        cb = o?.callbacks ?? {};
+        c.appendChild(document.createElement('video'));
+      },
       detach() {},
-      async play() { paused = false; },
-      pause() { paused = true; },
+      // El Player deduce el estado de estos avisos, como con un <video> real.
+      async play() { paused = false; cb.onPlay?.(); },
+      pause() { paused = true; cb.onPause?.(); },
       seek(s: number) { t = s; },
       get currentTime() { return t; },
       get duration() { return 60; },

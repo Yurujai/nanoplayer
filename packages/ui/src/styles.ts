@@ -27,6 +27,14 @@ export const CSS = `
   --np-gradient:linear-gradient(to top,rgba(0,0,0,.78),rgba(0,0,0,0));
   --np-transition:120ms ease;
 
+  /* Escala de apilamiento. Sin ella, cualquier z-index suelto se cuela por
+     encima de los controles: el vídeo pequeño de imagen-en-imagen tapaba el
+     menú de ajustes, y los subtítulos se pintaban por encima de él. */
+  --np-z-pip:1;
+  --np-z-overlay:2;
+  --np-z-bar:3;
+  --np-z-poster:4;
+
   position:relative;
   /* Permite dimensionar los subtítulos con el ancho del reproductor y no con
      el de la ventana: un reproductor embebido pequeño necesita texto menor. */
@@ -44,7 +52,7 @@ export const CSS = `
 
 /* --- póster: el estado inicial, sin un byte de vídeo descargado --- */
 .np__poster{
-  position:absolute;inset:0;z-index:2;
+  position:absolute;inset:0;z-index:var(--np-z-poster);
   display:flex;align-items:center;justify-content:center;
   background:var(--np-color-bg) center/cover no-repeat;
 }
@@ -71,6 +79,7 @@ button.np__poster-play svg{width:45%;height:45%;fill:currentColor;pointer-events
   position:absolute;left:0;right:0;bottom:0;
   display:flex;flex-direction:column;gap:.25rem;
   padding:2.5rem .6rem .5rem;
+  z-index:var(--np-z-bar);
   background:var(--np-gradient);
   transition:opacity var(--np-transition),transform var(--np-transition);
 }
@@ -151,7 +160,7 @@ button.np__btn[disabled]{opacity:.4;cursor:default}
 .np__volume:focus-within .np__range{width:5rem;opacity:1;margin:0 .5rem 0 .25rem}
 
 /* --- capas de contenido sobre el vídeo --- */
-.np__overlay{position:absolute;z-index:1;pointer-events:none}
+.np__overlay{position:absolute;z-index:var(--np-z-overlay);pointer-events:none}
 .np__overlay--fill{inset:0}
 .np__overlay--center{inset:0;display:flex;align-items:center;justify-content:center}
 .np__overlay--captions{
@@ -220,10 +229,15 @@ button.np__btn[disabled]{opacity:.4;cursor:default}
 .np--layout-pip .np__stage{position:relative;display:block}
 .np--layout-pip .np__stage>[data-role="presentation"]{width:100%}
 .np--layout-pip .np__stage>[data-role="presenter"]{
-  position:absolute;right:1rem;bottom:5rem;width:28%;min-width:8rem;
+  /* Por encima de la barra, no encima: con 5rem se solapaba con ella. Al
+     ocultarse la barra por inactividad, el recuadro baja. */
+  position:absolute;right:1rem;bottom:7rem;width:28%;min-width:8rem;
+  transition:bottom var(--np-transition);
   border-radius:var(--np-radius);overflow:hidden;
-  box-shadow:0 4px 16px rgba(0,0,0,.6);z-index:1;
+  box-shadow:0 4px 16px rgba(0,0,0,.6);z-index:var(--np-z-pip);
 }
+
+.np--inactive.np--layout-pip .np__stage>[data-role="presenter"]{bottom:1rem}
 
 /* En pantallas estrechas, lado a lado deja dos vídeos ilegibles. */
 @media (max-width:640px){
