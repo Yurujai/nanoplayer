@@ -19,6 +19,8 @@
 import type { Player } from '@nanoplayer/core';
 import { formatPercent, formatTime, spokenTime } from './format.js';
 import { ICONS } from './icons.js';
+import { applyLayout, layoutsFor, type LayoutId } from './layouts.js';
+import { SettingsMenu, type SettingsPanel } from './settings-menu.js';
 import { injectStyles } from './styles.js';
 
 export interface ControlBarOptions {
@@ -36,6 +38,7 @@ interface Textos {
   region: string; play: string; pause: string; replay: string;
   progress: string; volume: string; mute: string; unmute: string;
   fullscreenEnter: string; fullscreenExit: string;
+  speed: string; normal: string; layout: string;
   playing: string; paused: string; buffering: string; ended: string;
   liveRegion: string;
 }
@@ -46,6 +49,7 @@ const TEXTOS: Record<string, Textos> = {
     replay: 'Volver a reproducir', progress: 'Posición', volume: 'Volumen',
     mute: 'Silenciar', unmute: 'Activar sonido',
     fullscreenEnter: 'Pantalla completa', fullscreenExit: 'Salir de pantalla completa',
+    speed: 'Velocidad', normal: 'Normal', layout: 'Disposición',
     playing: 'Reproduciendo', paused: 'En pausa', buffering: 'Cargando',
     ended: 'Vídeo terminado', liveRegion: 'Estado del reproductor',
   },
@@ -54,6 +58,7 @@ const TEXTOS: Record<string, Textos> = {
     replay: 'Replay', progress: 'Seek', volume: 'Volume',
     mute: 'Mute', unmute: 'Unmute',
     fullscreenEnter: 'Full screen', fullscreenExit: 'Exit full screen',
+    speed: 'Speed', normal: 'Normal', layout: 'Layout',
     playing: 'Playing', paused: 'Paused', buffering: 'Buffering',
     ended: 'Video ended', liveRegion: 'Player status',
   },
@@ -62,6 +67,7 @@ const TEXTOS: Record<string, Textos> = {
 const SALTO_CORTO = 5;
 const SALTO_LARGO = 10;
 const PASO_VOLUMEN = 0.05;
+const VELOCIDADES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
 export class ControlBar {
   readonly #player: Player;
@@ -74,11 +80,14 @@ export class ControlBar {
   #btnPlay!: HTMLButtonElement;
   #btnMute!: HTMLButtonElement;
   #btnFs!: HTMLButtonElement;
+  #menu!: SettingsMenu;
   #progreso!: HTMLInputElement;
   #volumen!: HTMLInputElement;
   #tiempo!: HTMLElement;
   #vivo!: HTMLElement;
 
+  #velocidad = 1;
+  #layout: LayoutId = 'side-by-side';
   #arrastrando = false;
   #volumenPrevio = 1;
   #temporizador: ReturnType<typeof setTimeout> | null = null;
@@ -100,6 +109,11 @@ export class ControlBar {
 
   get element(): HTMLElement {
     return this.#bar;
+  }
+
+  /** El menú de ajustes, para registrar paneles desde fuera. */
+  get settings(): SettingsMenu {
+    return this.#menu;
   }
 
   /* ------------------------------------------------------------ construcción */
@@ -160,9 +174,56 @@ export class ControlBar {
     const espaciador = doc.createElement('span');
     espaciador.className = 'np__spacer';
 
-    filaBotones.append(this.#btnPlay, volumen, this.#tiempo, espaciador, this.#btnFs);
+    filaBotones.append(this.#btnPlay, volumen, this.#tiempo, espaciador);
+    this.#menu = new SettingsMenu(filaBotones, this.#lang);
+    filaBotones.append(this.#btnFs);
+
     this.#bar.append(filaProgreso, filaBotones);
     this.#root.appendChild(this.#bar);
+    this.#registrarPanelesPropios();
+  }
+
+  /**
+   * Paneles que aporta la propia interfaz.
+   *
+   * Se registran por la misma vía que usará un plugin, a propósito: si el caso
+   * propio necesitara un atajo que un plugin no tiene, la API estaría mal.
+   */
+  #registrarPanelesPropios(): void {
+    this.#menu.addPanel({
+      id: 'speed',
+      label: this.#t.speed,
+      priority: 10,
+      options: VELOCIDADES.map((v) => ({
+        value: String(v),
+        label: v === 1 ? this.#t.normal : `${v}×`,
+      })),
+      getValue: () => String(this.#velocidad),
+      onSelect: (v) => {
+        this.#velocidad = Number(v);
+        this.#player.setPlaybackRate(this.#velocidad);
+      },
+    });
+
+    // Solo tiene sentido con más de un stream: ofrecer "lado a lado" en un
+    // mono-stream sería un ajuste que no hace nada.
+    const streams = this.#player.manifest?.streams.length ?? 1;
+    const layouts = layoutsFor(streams, this.#lang);
+    if (layouts.length === 0) return;
+
+    applyLayout(this.#root, this.#layout);
+    this.#menu.addPanel({
+      id: 'layout',
+      label: this.#t.layout,
+      priority: 20,
+      options: layouts.map((l) => ({ value: l.id, label: l.label })),
+      getValue: () => this.#layout,
+      onSelect: (v) => {
+        this.#layout = v as LayoutId;
+        applyLayout(this.#root, this.#layout);
+        this.#player.bus.emit('layout:change', { layout: this.#layout });
+      },
+    });
   }
 
   #boton(etiqueta: string, icono: string): HTMLButtonElement {
@@ -317,6 +378,8 @@ export class ControlBar {
     ]);
     if (esControl && propiasDelControl.has(ev.key)) return;
     if (ev.altKey || ev.ctrlKey || ev.metaKey) return;
+    // Con el menú abierto, las teclas son suyas.
+    if (this.#menu.isOpen) return;
 
     const p = this.#player;
     const d = p.duration || 0;
@@ -421,6 +484,7 @@ export class ControlBar {
     // en el primer caso no hay nada que ver detrás, en el segundo se perdería
     // de vista el control que se está usando.
     if (this.#player.paused) return;
+    if (this.#menu.isOpen) return;
     if (this.#root.contains(this.#root.ownerDocument.activeElement)) return;
     this.#root.classList.add('np--inactive');
   }
@@ -431,6 +495,7 @@ export class ControlBar {
     if (this.#temporizador) clearTimeout(this.#temporizador);
     for (const off of this.#desatar) off();
     this.#desatar = [];
+    this.#menu.destroy();
     this.#bar.remove();
     this.#vivo.remove();
     this.#root.classList.remove('np', 'np--inactive');

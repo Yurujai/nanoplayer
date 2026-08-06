@@ -122,6 +122,59 @@ button.np__btn[disabled]{opacity:.4;cursor:default}
 .np__volume:hover .np__range,
 .np__volume:focus-within .np__range{width:5rem;opacity:1;margin:0 .5rem 0 .25rem}
 
+/* --- menú de ajustes --- */
+.np__menu-anchor{position:relative;display:inline-flex}
+.np__menu{
+  position:absolute;right:0;bottom:calc(100% + .5rem);
+  min-width:12rem;max-width:min(18rem,90vw);
+  /* La altura real la fija el JS al abrir, según el hueco sobre la barra. */
+  max-height:min(20rem,50vh);overflow-y:auto;
+  background:rgba(20,22,26,.96);border-radius:var(--np-radius);
+  box-shadow:0 8px 28px rgba(0,0,0,.5);
+  padding:.3rem;font-size:.875rem;
+}
+.np__menu [role="menu"]{display:flex;flex-direction:column}
+.np__menu button{
+  display:flex;align-items:center;gap:.5rem;
+  width:100%;padding:.6rem .7rem;min-height:2.5rem;
+  border:0;border-radius:calc(var(--np-radius) - 2px);
+  background:transparent;color:var(--np-color-control);
+  font:inherit;text-align:left;cursor:pointer;
+}
+.np__menu button:hover{background:rgba(255,255,255,.12)}
+.np__menu button:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:-3px}
+.np__menu-item--parent{justify-content:space-between}
+.np__menu-value{
+  display:inline-flex;align-items:center;gap:.15rem;
+  color:var(--np-color-control-dim);
+  white-space:nowrap;   /* "Lado a lado" partía en dos líneas */
+}
+.np__menu-item--parent>span:first-child{white-space:nowrap}
+.np__menu-chevron{font-size:1.15em;line-height:1}
+.np__menu-tick{width:1rem;flex:0 0 1rem;color:var(--np-color-accent)}
+.np__menu-back{
+  border-bottom:1px solid rgba(255,255,255,.14)!important;
+  border-radius:0!important;margin-bottom:.2rem;font-weight:600;
+}
+
+/* --- disposición de los streams ---
+   Todo por CSS, apoyándose en el data-role que el Player pone en cada caja. */
+.np--layout-presenter .np__stage>[data-role="presentation"],
+.np--layout-presentation .np__stage>[data-role="presenter"]{display:none}
+
+.np--layout-pip .np__stage{position:relative;display:block}
+.np--layout-pip .np__stage>[data-role="presentation"]{width:100%}
+.np--layout-pip .np__stage>[data-role="presenter"]{
+  position:absolute;right:1rem;bottom:5rem;width:28%;min-width:8rem;
+  border-radius:var(--np-radius);overflow:hidden;
+  box-shadow:0 4px 16px rgba(0,0,0,.6);z-index:1;
+}
+
+/* En pantallas estrechas, lado a lado deja dos vídeos ilegibles. */
+@media (max-width:640px){
+  .np--layout-side-by-side .np__stage{flex-direction:column}
+}
+
 /* --- accesibilidad --- */
 .np__sr{
   position:absolute;width:1px;height:1px;padding:0;margin:-1px;

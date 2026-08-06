@@ -1,5 +1,9 @@
 export { attachControls, ControlBar } from './control-bar.js';
 export type { ControlBarOptions } from './control-bar.js';
+export { SettingsMenu } from './settings-menu.js';
+export type { SettingsOption, SettingsPanel } from './settings-menu.js';
+export { applyLayout, layoutsFor } from './layouts.js';
+export type { LayoutDef, LayoutId } from './layouts.js';
 export { formatPercent, formatTime, spokenTime } from './format.js';
 export { CSS, injectStyles } from './styles.js';
 export { ICONS } from './icons.js';

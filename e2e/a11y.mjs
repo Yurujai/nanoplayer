@@ -73,6 +73,70 @@ await page.waitForTimeout(500);
 
 await auditar('con barra de controles');
 
+/* --- el menú de ajustes, abierto ----------------------------------------- */
+
+// Auditarlo cerrado no vale de nada: las semánticas de menú solo existen
+// mientras está desplegado.
+await page.evaluate(() => document.querySelector('.np__btn--settings')?.focus());
+await page.keyboard.press('Enter');
+await page.waitForTimeout(300);
+await auditar('menú de ajustes abierto');
+
+console.log('\n[menú] patrón WAI-ARIA de botón de menú');
+const rolMenu = await page.evaluate(() =>
+  document.querySelector('.np__menu [role="menu"]') !== null);
+if (rolMenu) bien('el contenedor declara role="menu"');
+else nota('el menú no declara role="menu"');
+
+const expandido = await page.evaluate(() =>
+  document.querySelector('.np__btn--settings')?.getAttribute('aria-expanded'));
+if (expandido === 'true') bien('aria-expanded refleja que está abierto');
+else nota(`aria-expanded es "${expandido}" con el menú abierto`);
+
+const focoDentro = await page.evaluate(() =>
+  !!document.activeElement?.closest('.np__menu'));
+if (focoDentro) bien('el foco entra al menú al abrirlo');
+else nota('el foco no entró al menú');
+
+// Tabindex móvil: dentro de un menú recorren las flechas, no Tab.
+const tabbables = await page.evaluate(() =>
+  [...document.querySelectorAll('.np__menu [role^="menuitem"]')]
+    .filter((el) => el.tabIndex === 0).length);
+if (tabbables === 1) bien('solo un elemento del menú es tabulable (tabindex móvil)');
+else nota(`${tabbables} elementos del menú son tabulables; debería ser 1`);
+
+await page.keyboard.press('ArrowDown');
+const movio = await page.evaluate(() =>
+  document.activeElement?.getAttribute('aria-label'));
+if (movio) bien(`las flechas mueven el foco (ahora en "${movio}")`);
+else nota('las flechas no mueven el foco dentro del menú');
+
+// El submenú marca la opción activa de forma que un lector la anuncie.
+await page.keyboard.press('Enter');
+await page.waitForTimeout(250);
+const marcada = await page.evaluate(() =>
+  document.querySelectorAll('.np__menu [role="menuitemradio"][aria-checked="true"]').length);
+if (marcada === 1) bien('la opción activa está marcada con aria-checked');
+else nota(`${marcada} opciones marcadas con aria-checked; debería ser 1`);
+
+// El menú no puede quedar recortado por el overflow del reproductor.
+const recorte = await page.evaluate(() => {
+  const m = document.querySelector('.np__menu');
+  const np = document.querySelector('.np');
+  const a = m.getBoundingClientRect(), b = np.getBoundingClientRect();
+  return { desborda: a.top < b.top - 1, alto: Math.round(a.height) };
+});
+if (!recorte.desborda) bien(`el menú cabe en el reproductor (${recorte.alto}px)`);
+else nota('el menú se sale del reproductor y queda recortado por overflow:hidden');
+
+await page.keyboard.press('Escape');
+await page.keyboard.press('Escape');
+await page.waitForTimeout(250);
+const focoVuelto = await page.evaluate(() =>
+  document.activeElement?.classList.contains('np__btn--settings'));
+if (focoVuelto) bien('al cerrar, el foco vuelve al engranaje');
+else nota('al cerrar, el foco no vuelve al botón que abrió el menú');
+
 /* --- navegación por teclado --------------------------------------------- */
 
 console.log('\n[teclado] recorrido con Tab');
