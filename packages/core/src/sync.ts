@@ -81,6 +81,17 @@ export function detectProfile(): SyncProfileName {
   return 'blink';
 }
 
+/**
+ * Cuánto se deja de medir tras un salto duro, en milisegundos.
+ *
+ * Tiempo para que el navegador decodifique desde el keyframe y la posición se
+ * estabilice. Sin esto el lazo mide el asentamiento y reacciona a él.
+ */
+const ENFRIAMIENTO_SALTO = 700;
+
+/** Igual tras cuadrar todos a la vez, que mueve más piezas. */
+const ENFRIAMIENTO_ALINEADO = 1200;
+
 export type SyncAction = 'ok' | 'correcting' | 'hard-seek' | 'seeking';
 
 export interface SyncSample {
@@ -112,6 +123,8 @@ export interface SynchronizerOptions {
   bus?: EventBus<CoreEvents>;
   /** Inyectable para las pruebas; por defecto rVFC con recurso a rAF. */
   scheduler?: Scheduler;
+  /** Inyectable para las pruebas; por defecto `performance.now`. */
+  now?: () => number;
 }
 
 /** Cómo se agenda el lazo de control. Abstraído para poder probarlo sin navegador. */
@@ -162,9 +175,11 @@ export class Synchronizer {
   readonly #bus: EventBus<CoreEvents> | undefined;
   readonly #scheduler: Scheduler;
   readonly #live: boolean;
+  readonly #ahora: () => number;
   #corriendo = false;
   #saltosDuros = 0;
   #avisado = false;
+  #enfriarHasta = 0;
 
   constructor(options: SynchronizerOptions) {
     this.#master = options.master;
@@ -172,6 +187,7 @@ export class Synchronizer {
     this.#profile = options.profile ?? SYNC_PROFILES[detectProfile()];
     this.#bus = options.bus;
     this.#live = options.live === true;
+    this.#ahora = options.now ?? (() => performance.now());
     this.#scheduler = options.scheduler
       ?? defaultScheduler(options.master.engine.element);
   }
@@ -249,6 +265,25 @@ export class Synchronizer {
       return [];
     }
 
+    /*
+     * Enfriamiento tras un salto.
+     *
+     * Un salto obliga al navegador a decodificar desde el keyframe anterior, y
+     * las lecturas de ese rato no significan nada. Corregir sobre ellas hace
+     * que el lazo trabaje contra sí mismo: medido tras retroceder en un
+     * directo, se quedaba en 270 ms corrigiendo sin parar y saltando en duro
+     * cada pocos segundos, en vez de converger.
+     *
+     * Es la misma razón por la que ya se ignoran las lecturas mientras
+     * `seeking` está activo; solo que el asentamiento dura más que la bandera.
+     */
+    if (this.#ahora() < this.#enfriarHasta) {
+      return this.#slaves.map((s) => ({
+        stream: s.id, drift: 0, action: 'seeking' as const,
+        rate: s.engine.getPlaybackRate(),
+      }));
+    }
+
     for (const s of this.#slaves) {
       const muestra = this.#corregir(s, maestro.currentTime, base);
       muestras.push(muestra);
@@ -312,6 +347,7 @@ export class Synchronizer {
       s.engine.setPlaybackRate(base);
       s.correcting = false;
       this.#saltosDuros++;
+      this.#enfriarHasta = this.#ahora() + ENFRIAMIENTO_SALTO;
       return { stream: s.id, drift, action: 'hard-seek', rate: base };
     }
 
@@ -341,6 +377,8 @@ export class Synchronizer {
    */
   align(): void {
     if (this.mode === 'imposible') return;
+    // Tras cuadrar, dar tiempo a que ambos asienten antes de volver a medir.
+    this.#enfriarHasta = this.#ahora() + ENFRIAMIENTO_ALINEADO;
     const t = this.#master.engine.currentTime;
     const base = this.#master.engine.getPlaybackRate();
     for (const s of this.#slaves) {

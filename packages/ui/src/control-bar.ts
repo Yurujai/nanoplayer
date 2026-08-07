@@ -48,6 +48,7 @@ interface Textos {
   fullscreenEnter: string; fullscreenExit: string;
   speed: string; normal: string; layout: string; more: string;
   liveWaiting: string; liveInterrupted: string; liveBadge: string;
+  liveGoTo: string; liveBehind: string; liveWindow: string;
   playing: string; paused: string; buffering: string; ended: string;
   liveRegion: string;
 }
@@ -62,6 +63,9 @@ const TEXTOS: Record<string, Textos> = {
     liveWaiting: 'La emisión aún no ha empezado',
     liveInterrupted: 'Se ha interrumpido la emisión',
     liveBadge: 'EN DIRECTO',
+    liveGoTo: 'Ir al directo',
+    liveBehind: 'Retrasado respecto al directo',
+    liveWindow: 'Posición en el directo',
     playing: 'Reproduciendo', paused: 'En pausa', buffering: 'Cargando',
     ended: 'Vídeo terminado', liveRegion: 'Estado del reproductor',
   },
@@ -74,6 +78,9 @@ const TEXTOS: Record<string, Textos> = {
     liveWaiting: 'The broadcast has not started yet',
     liveInterrupted: 'The broadcast was interrupted',
     liveBadge: 'LIVE',
+    liveGoTo: 'Go to live',
+    liveBehind: 'Behind live',
+    liveWindow: 'Position in the live stream',
     playing: 'Playing', paused: 'Paused', buffering: 'Buffering',
     ended: 'Video ended', liveRegion: 'Player status',
   },
@@ -83,6 +90,15 @@ const SALTO_CORTO = 5;
 const SALTO_LARGO = 10;
 const PASO_VOLUMEN = 0.05;
 const VELOCIDADES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+
+/**
+ * Ventana DVR mínima para que la barra de progreso valga de algo, en segundos.
+ *
+ * Por debajo de esto no hay nada que recorrer —una lista de seis segmentos de
+ * dos segundos son doce— y enseñar una barra sería ofrecer un control que no
+ * lleva a ninguna parte.
+ */
+const VENTANA_MINIMA = 30;
 
 export class ControlBar implements UiSlots {
   readonly #player: Player;
@@ -511,7 +527,14 @@ export class ControlBar implements UiSlots {
 
   #confirmarBusqueda(): void {
     this.#arrastrando = false;
-    this.#player.seek(Number(this.#progreso.value) * (this.#player.duration || 0));
+    const p = this.#player;
+    if (p.manifest?.live) {
+      // En directo la barra recorre la ventana DVR: el 100 % es el borde.
+      const atras = (1 - Number(this.#progreso.value)) * p.dvrWindow;
+      p.seek(Math.max(0, p.liveEdge - atras));
+      return;
+    }
+    p.seek(Number(this.#progreso.value) * (p.duration || 0));
   }
 
   /* ------------------------------------------------------------------ teclado */
@@ -582,6 +605,7 @@ export class ControlBar implements UiSlots {
 
   #pintarProgreso(): void {
     if (this.#arrastrando) return;
+    if (this.#player.manifest?.live) return this.#pintarProgresoDirecto();
     const p = this.#player;
     const d = p.duration || 0;
     const t = p.currentTime;
@@ -598,6 +622,41 @@ export class ControlBar implements UiSlots {
       const fin = buffered.end(buffered.length - 1);
       this.#progreso.style.setProperty('--np-buffered', `${Math.min(100, (fin / d) * 100)}%`);
     }
+  }
+
+  /**
+   * Progreso de un directo.
+   *
+   * La barra representa **la ventana DVR** —lo que el servidor todavía
+   * conserva— y no una duración, que en un directo no existe. Antes se pintaba
+   * la ventana como si fuera la duración del contenido y salía un "0:01 / 0:02"
+   * que parecía un vídeo de dos segundos.
+   *
+   * Si la ventana es demasiado corta para recorrerla, la barra **se esconde**:
+   * un control que no lleva a ninguna parte es ruido.
+   */
+  #pintarProgresoDirecto(): void {
+    const p = this.#player;
+    const ventana = p.dvrWindow;
+    const fila = this.#progreso.parentElement;
+    const util = ventana >= VENTANA_MINIMA;
+    if (fila) fila.hidden = !util;
+
+    if (util) {
+      const atras = p.behindLive;
+      const frac = Math.max(0, Math.min(1, 1 - atras / ventana));
+      this.#progreso.value = String(frac);
+      this.#progreso.style.setProperty('--np-progress', `${frac * 100}%`);
+      this.#progreso.setAttribute('aria-label', this.#t.liveWindow);
+      this.#progreso.setAttribute('aria-valuetext', p.atLiveEdge
+        ? this.#t.liveBadge
+        : `${this.#t.liveBehind}: ${spokenTime(atras, this.#lang)}`);
+    }
+
+    // El tiempo deja de ser "posición / duración": en directo lo que importa
+    // es cuánto se va por detrás del borde.
+    this.#tiempo.textContent = p.atLiveEdge ? '' : `−${formatTime(p.behindLive)}`;
+    this.#marcaDirecto(true);
   }
 
   #pintarVolumen(v: number, silenciado: boolean): void {
@@ -688,14 +747,35 @@ export class ControlBar implements UiSlots {
     this.#anunciar(texto);
   }
 
+  /**
+   * Indicador de directo, que además es el botón para volver al borde.
+   *
+   * Es **un botón y no una etiqueta** porque tiene que decir la verdad y poder
+   * arreglarla: encendido significa "estás viendo el borde", apagado significa
+   * "vas por detrás" y al pulsarlo vuelves. Una marca fija que dijera "EN
+   * DIRECTO" mientras el espectador ve algo de hace cinco minutos es de las
+   * cosas que hacen desconfiar de una interfaz.
+   */
   #marcaDirecto(visible: boolean): void {
-    let marca = this.#bar.querySelector<HTMLElement>('.np__directo');
+    let marca = this.#bar.querySelector<HTMLButtonElement>('.np__directo');
     if (!visible) { marca?.remove(); return; }
-    if (marca) return;
-    marca = this.#root.ownerDocument.createElement('span');
-    marca.className = 'np__directo';
-    marca.textContent = this.#t.liveBadge;
-    this.#tiempo.before(marca);
+    if (!marca) {
+      marca = this.#root.ownerDocument.createElement('button');
+      marca.type = 'button';
+      marca.className = 'np__directo';
+      marca.addEventListener('click', () => {
+        this.#player.seekToLive();
+        this.#despertar();
+      });
+      this.#tiempo.before(marca);
+    }
+    const enBorde = this.#player.atLiveEdge;
+    marca.textContent = enBorde ? this.#t.liveBadge : this.#t.liveGoTo;
+    marca.classList.toggle('np__directo--atras', !enBorde);
+    marca.disabled = enBorde;
+    marca.setAttribute('aria-label', enBorde
+      ? this.#t.liveBadge
+      : `${this.#t.liveGoTo}. ${this.#t.liveBehind}: ${spokenTime(this.#player.behindLive, this.#lang)}`);
   }
 
   #anunciar(mensaje: string): void {

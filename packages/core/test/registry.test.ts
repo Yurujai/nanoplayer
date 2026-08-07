@@ -29,6 +29,7 @@ const factoriaFalsa = (): EngineFactory => ({
       get paused() { return paused; },
       get ended() { return false; },
       get buffered() { return null; },
+      get seekable() { return null; },
       getPlaybackRate: () => 1,
       setPlaybackRate() {},
       setVolume() {},

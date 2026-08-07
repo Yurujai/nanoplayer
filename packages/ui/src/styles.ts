@@ -224,15 +224,23 @@ button.np__btn[disabled]{opacity:.4;cursor:default}
    queda en su hueco, no tapa al que sí funciona. */
 .np__stage>[data-stream]{position:relative}
 
-.np__directo{
+button.np__directo{
   display:inline-flex;align-items:center;gap:.4rem;
-  font-size:.7rem;font-weight:700;letter-spacing:.06em;
-  padding:.2rem .5rem;margin-left:.4rem;border-radius:3px;
-  background:#c8102e;color:#fff;
+  width:auto;height:auto;
+  font:inherit;font-size:.7rem;font-weight:700;letter-spacing:.06em;
+  padding:.3rem .55rem;margin-left:.4rem;border:0;border-radius:3px;
+  background:#c8102e;color:#fff;cursor:default;
 }
-.np__directo::before{
+button.np__directo::before{
   content:'';width:.45rem;height:.45rem;border-radius:50%;background:#fff;
 }
+/* Retrasado: deja de ser un indicador y pasa a ser una acción. */
+button.np__directo--atras{
+  background:rgba(255,255,255,.2);cursor:pointer;opacity:1;
+}
+button.np__directo--atras::before{background:var(--np-color-control-dim)}
+button.np__directo--atras:hover{background:rgba(255,255,255,.32)}
+button.np__directo:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:2px}
 
 /* --- menú de ajustes --- */
 .np__menu-anchor{position:relative;display:inline-flex}

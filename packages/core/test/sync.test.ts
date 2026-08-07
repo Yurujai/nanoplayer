@@ -27,6 +27,7 @@ function motorFalso(t = 0) {
     get paused() { return false; },
     get ended() { return false; },
     get buffered() { return null; },
+        get seekable() { return null; },
     getPlaybackRate: () => rate,
     setPlaybackRate(r: number) { rate = r; },
     setVolume: () => {},
@@ -360,5 +361,56 @@ describe('Synchronizer · directo', () => {
     const [m] = s.tick();
     expect(m!.action).toBe('seeking');
     expect(esclavo._seeks).toHaveLength(0);
+  });
+});
+
+describe('Synchronizer · enfriamiento tras un salto', () => {
+  const conReloj = (t: { valor: number }) => new Synchronizer({
+    master: { id: 'cam', engine: maestro },
+    slaves: [{ id: 'slides', engine: esclavo }],
+    profile: P,
+    now: () => t.valor,
+  });
+
+  it('no mide mientras el salto se asienta', () => {
+    /*
+     * Un salto obliga a decodificar desde el keyframe anterior, y las lecturas
+     * de ese rato no significan nada. Medido en directo sin esto: tras
+     * retroceder, el lazo se quedaba en 270 ms corrigiendo sin parar y saltando
+     * en duro cada pocos segundos, en vez de converger. Con enfriamiento: 0 ms.
+     */
+    const t = { valor: 1000 };
+    const s = conReloj(t);
+    s.align();
+
+    esclavo._set(9.5);                       // media segundo de desfase
+    expect(s.tick()[0]!.action, 'no debe reaccionar todavía').toBe('seeking');
+    expect(esclavo._seeks.length, 'ni saltar').toBeLessThanOrEqual(1);
+
+    t.valor += 2000;                          // pasado el enfriamiento
+    expect(s.tick()[0]!.action).not.toBe('seeking');
+  });
+
+  it('un salto duro también enfría, para no encadenarlos', () => {
+    const t = { valor: 1000 };
+    const s = conReloj(t);
+    esclavo._set(10 + P.hardSeek + 0.5);
+    expect(s.tick()[0]!.action).toBe('hard-seek');
+    expect(s.hardSeeks).toBe(1);
+
+    // Inmediatamente después, aunque siga desviado, no encadena otro salto.
+    esclavo._set(10 + P.hardSeek + 0.5);
+    expect(s.tick()[0]!.action).toBe('seeking');
+    expect(s.hardSeeks, 'sigue habiendo uno solo').toBe(1);
+
+    t.valor += 1000;
+    expect(s.tick()[0]!.action).toBe('hard-seek');
+  });
+
+  it('el enfriamiento no altera el régimen estable', () => {
+    const t = { valor: 100000 };
+    const s = conReloj(t);
+    esclavo._set(9.9);
+    expect(s.tick()[0]!.action).toBe('correcting');
   });
 });

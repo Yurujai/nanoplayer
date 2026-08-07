@@ -62,6 +62,23 @@ export interface PlayerOptions {
   liveRetry?: RetryPolicy;
 }
 
+/**
+ * Margen por detrás del borde al saltar al directo, en segundos.
+ *
+ * Ir al final exacto del tramo alcanzable provoca un corte inmediato: ese
+ * instante todavía no está en el búfer.
+ */
+const MARGEN_BORDE = 3;
+
+/**
+ * Hasta cuántos segundos por detrás se sigue considerando "en directo".
+ *
+ * S5 midió unos 6 s de retraso normal con la configuración por defecto de
+ * hls.js. La tolerancia deja margen sobre eso para no llamar "retrasado" a lo
+ * que es simplemente el búfer haciendo su trabajo.
+ */
+const TOLERANCIA_BORDE = 12;
+
 const resolverPorDefecto: ManifestResolver = async (src) => {
   const res = await fetch(src);
   if (!res.ok) {
@@ -173,6 +190,62 @@ export class Player {
       return r.ok ? isAudioOnlyManifest(r.manifest) : false;
     }
     return false;
+  }
+
+  /* ------------------------------------------------------------- directo -- */
+
+  /**
+   * Cuánto se puede retroceder en un directo, en segundos.
+   *
+   * Es lo que el servidor conserva: si la lista mantiene seis segmentos de dos
+   * segundos, son doce. En Wowza lo gobierna nDVR, y guardar más cuesta disco.
+   * `0` si no es un directo o si no hay nada que recorrer.
+   */
+  get dvrWindow(): number {
+    const s = this.master?.seekable;
+    if (!s || s.length === 0) return 0;
+    const w = s.end(s.length - 1) - s.start(0);
+    return Number.isFinite(w) && w > 0 ? w : 0;
+  }
+
+  /** Posición más reciente disponible. */
+  get liveEdge(): number {
+    const s = this.master?.seekable;
+    if (!s || s.length === 0) return 0;
+    const e = s.end(s.length - 1);
+    return Number.isFinite(e) ? e : 0;
+  }
+
+  /** Cuántos segundos por detrás del borde se está reproduciendo. */
+  get behindLive(): number {
+    if (!this.#manifest?.live) return 0;
+    return Math.max(0, this.liveEdge - this.currentTime);
+  }
+
+  /**
+   * Si se está viendo el borde de la emisión.
+   *
+   * La tolerancia es generosa a propósito: reproducir un directo siempre va
+   * unos segundos por detrás —el búfer que evita los cortes, medido en unos 6 s
+   * en S5— y llamar "retrasado" a eso sería mentir al revés.
+   */
+  get atLiveEdge(): boolean {
+    if (!this.#manifest?.live) return false;
+    return this.behindLive <= TOLERANCIA_BORDE;
+  }
+
+  /**
+   * Salta al borde de la emisión.
+   *
+   * Deja un margen de seguridad en vez de ir al final exacto: el último
+   * instante alcanzable casi nunca está en el búfer todavía, y saltar ahí
+   * provoca un corte inmediato.
+   */
+  seekToLive(): void {
+    if (!this.#manifest?.live) return;
+    const destino = this.liveEdge - MARGEN_BORDE;
+    if (destino <= 0) return;
+    this.seek(destino);
   }
 
   get currentTime(): number { return this.master?.currentTime ?? this.#lc.resumeAt; }

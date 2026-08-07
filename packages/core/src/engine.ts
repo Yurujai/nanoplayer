@@ -81,6 +81,14 @@ export interface MediaEngine {
   readonly paused: boolean;
   readonly ended: boolean;
   readonly buffered: TimeRanges | null;
+  /**
+   * Tramo al que se puede saltar.
+   *
+   * En vídeo bajo demanda es el contenido entero. **En directo es la ventana
+   * DVR**: lo que el servidor todavía conserva. Fuera de ahí los segmentos ya
+   * han caducado y no hay nada que reproducir.
+   */
+  readonly seekable: TimeRanges | null;
 
   /**
    * Hora absoluta de la posición actual, en milisegundos desde epoch, o `null`

@@ -218,6 +218,25 @@ primero a quien llevaba veinte minutos viendo el evento sería desconcertante.
 > fingir. En Wowza es la propiedad `cupertinoEnableProgramDateTime`, desactivada
 > por defecto.
 
+#### Ventana DVR y borde de la emisión
+
+En directo el servidor mantiene una **lista deslizante**: solo conserva los
+últimos segmentos y los viejos caducan. Eso es la **ventana DVR**, y es lo que
+se puede retroceder. En Wowza lo gobierna nDVR, con su coste en disco.
+
+| Propiedad | |
+|---|---|
+| `player.dvrWindow` | Segundos que se pueden retroceder |
+| `player.liveEdge` | Posición más reciente disponible |
+| `player.behindLive` | Cuánto se va por detrás del borde |
+| `player.atLiveEdge` | Si se está viendo el borde |
+| `player.seekToLive()` | Volver al borde |
+
+Reproducir un directo siempre va unos segundos por detrás del borde —el búfer
+que evita los cortes—, así que `atLiveEdge` tiene una tolerancia de 12 s. Y
+`seekToLive()` deja un margen en lugar de ir al final exacto: ese instante aún
+no está en el búfer y saltar ahí provoca un corte.
+
 Un recorte sobre un directo se rechaza: no tiene sentido.
 
 ---

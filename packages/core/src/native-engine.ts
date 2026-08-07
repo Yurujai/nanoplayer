@@ -262,6 +262,10 @@ export class NativeEngine implements MediaEngine {
     return this.#el?.buffered ?? null;
   }
 
+  get seekable(): TimeRanges | null {
+    return this.#el?.seekable ?? null;
+  }
+
   /**
    * Hora absoluta de la posición actual.
    *

@@ -290,6 +290,7 @@ export class HlsEngine implements MediaEngine {
   get paused(): boolean { return this.#el?.paused ?? true; }
   get ended(): boolean { return this.#el?.ended ?? false; }
   get buffered(): TimeRanges | null { return this.#el?.buffered ?? null; }
+  get seekable(): TimeRanges | null { return this.#el?.seekable ?? null; }
   /**
    * Hora absoluta de la posición actual, según `EXT-X-PROGRAM-DATE-TIME`.
    *
