@@ -101,6 +101,8 @@ export class Player {
   readonly #vivo = new LiveTracker();
   #reintentos = new Map<string, ReturnType<typeof setTimeout>>();
   #pausadoPorStall = false;
+  /** Flujos sin datos ahora mismo. Atascarse es de cada flujo, no del conjunto. */
+  readonly #atascados = new Set<string>();
   #sonando = false;
 
   constructor(options: PlayerOptions) {
@@ -231,6 +233,10 @@ export class Player {
    */
   get atLiveEdge(): boolean {
     if (!this.#manifest?.live) return false;
+    // Sin borde conocido no se está en él. Antes devolvía `true` porque la
+    // resta de dos ceros entra en la tolerancia, y así un directo que aún no
+    // ha empezado se declaraba "en el borde" de nada.
+    if (this.liveEdge <= 0) return false;
     return this.behindLive <= TOLERANCIA_BORDE;
   }
 
@@ -521,6 +527,10 @@ export class Player {
     this.#sync = null;
     for (const e of this.#instancias.values()) e.destroy();
     this.#instancias.clear();
+    // Sin esto, un flujo que estaba atascado al soltar el motor dejaría el
+    // conjunto marcado como atascado para siempre y nadie volvería a reanudar.
+    this.#atascados.clear();
+    this.#pausadoPorStall = false;
     for (const caja of this.#cajas) caja.remove();
     this.#cajas = [];
   }
@@ -642,33 +652,47 @@ export class Player {
          * sincronización: S1 midió que frenarlos deja el pico de deriva en
          * 7 ms, frente a dejar correr al maestro.
          *
-         * Dos condiciones, ambas aprendidas a base de fallos:
+         * Tres condiciones, todas aprendidas a base de fallos:
          *
          * 1. **Solo si ya sonaba de verdad.** El evento `play` significa que se
          *    ha pedido, no que suene; con HLS enganchar termina al parsear la
          *    lista, antes de tener un solo segmento, así que el `waiting`
          *    inicial es inevitable. Por eso mira `#sonando` y no el estado.
          *
-         * 2. **Al que se atasca no se le pausa.** Ya está parado por falta de
-         *    datos, así que pausarlo no frena nada — y en cambio aborta su
+         * 2. **A quien está atascado no se le pausa.** Ya está parado por falta
+         *    de datos, así que pausarlo no frena nada — y en cambio aborta su
          *    propio `play()` en vuelo con un `AbortError`. Lo que hay que
          *    frenar son los demás, para que no se escapen mientras recupera.
+         *
+         * 3. **Atascarse es de cada flujo, no del reproductor.** Un salto los
+         *    deja a los dos rellenando búfer a la vez, así que hace falta
+         *    llevar la cuenta de quién sigue atascado.
          */
+        this.#atascados.add(stream.id);
         if (!this.#sonando) return;
-        this.#pausadoPorStall = true;
         for (const [id, e] of this.#instancias) {
-          if (id !== stream.id) e.pause();
+          if (!this.#atascados.has(id)) { this.#pausadoPorStall = true; e.pause(); }
         }
       },
       onStallEnd: (durationMs: number) => {
         this.bus.emit('stall:end', { stream: stream.id, durationMs });
+        this.#atascados.delete(stream.id);
+        /*
+         * No se reanuda hasta que **nadie** queda atascado.
+         *
+         * Con un solo indicador para todos, dos flujos atascándose a la vez
+         * dejaban a uno parado para siempre: el primero en recuperarse lo
+         * bajaba, y el segundo se encontraba con que ya no había nada que
+         * reanudar. Medido tras retroceder en un directo dual: el esclavo se
+         * quedaba en pausa y el lazo lo arrastraba a saltos, con la deriva
+         * clavada en 733 ms indefinidamente.
+         */
+        if (this.#atascados.size > 0) return;
         // Solo se reanuda lo que se pausó aquí. Reanudar por sistema
         // resucitaría un vídeo que el usuario había pausado a propósito.
         if (!this.#pausadoPorStall) return;
         this.#pausadoPorStall = false;
-        for (const [id, e] of this.#instancias) {
-          if (id !== stream.id) void e.play().catch(() => {});
-        }
+        for (const e of this.#instancias.values()) void e.play().catch(() => {});
       },
       onError: (error: PlayerError) => {
         this.bus.emit('error', { error });

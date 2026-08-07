@@ -653,10 +653,20 @@ export class ControlBar implements UiSlots {
         : `${this.#t.liveBehind}: ${spokenTime(atras, this.#lang)}`);
     }
 
+    /*
+     * Todo lo que sigue habla de la emisión, así que solo tiene sentido si de
+     * verdad hay emisión. Que el manifiesto diga `live: true` no significa que
+     * alguien esté emitiendo: antes de empezar el evento salía una marca de "EN
+     * DIRECTO" sobre una pantalla vacía y un retraso de "−0:00" respecto a un
+     * borde que no existía.
+     */
+    const emitiendo = p.liveStatus === 'live';
+
     // El tiempo deja de ser "posición / duración": en directo lo que importa
     // es cuánto se va por detrás del borde.
-    this.#tiempo.textContent = p.atLiveEdge ? '' : `−${formatTime(p.behindLive)}`;
-    this.#marcaDirecto(true);
+    this.#tiempo.textContent = !emitiendo || p.atLiveEdge
+      ? '' : `−${formatTime(p.behindLive)}`;
+    this.#marcaDirecto(emitiendo);
   }
 
   #pintarVolumen(v: number, silenciado: boolean): void {

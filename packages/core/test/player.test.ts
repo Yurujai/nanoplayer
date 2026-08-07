@@ -239,6 +239,45 @@ describe('Player · stalls', () => {
     await Promise.resolve();
     expect(creados.every((e) => !e.paused)).toBe(true);
   });
+
+  it('si se atascan los dos, el último en recuperarse también reanuda', async () => {
+    /*
+     * Un salto deja a los dos flujos rellenando búfer a la vez. Con un solo
+     * indicador para todo el reproductor, el primero en recuperarse lo bajaba y
+     * el segundo se encontraba con que ya no había nada que reanudar.
+     *
+     * Medido en un directo dual tras retroceder: el esclavo se quedaba en pausa
+     * y el sincronizador lo arrastraba a saltos de 733 ms, con la deriva clavada
+     * en ese valor indefinidamente.
+     */
+    const { p, creados } = nuevo(DUAL);
+    await p.play();
+
+    creados[0]!._cb().onStallStart();
+    creados[1]!._cb().onStallStart();
+
+    creados[0]!._cb().onStallEnd(200);
+    await Promise.resolve();
+    expect(creados[1]!.paused, 'el que sigue atascado no se reanuda').toBe(true);
+
+    creados[1]!._cb().onStallEnd(300);
+    await Promise.resolve();
+    expect(creados.every((e) => !e.paused), 'nadie se queda en pausa').toBe(true);
+  });
+
+  it('mientras uno siga atascado, los demás no se sueltan', async () => {
+    const { p, creados } = nuevo(DUAL);
+    await p.play();
+
+    creados[1]!._cb().onStallStart();
+    expect(creados[0]!.paused).toBe(true);
+
+    // Otro corte del mismo flujo antes de que se recupere: sigue atascado.
+    creados[1]!._cb().onStallStart();
+    creados[1]!._cb().onStallEnd(120);
+    await Promise.resolve();
+    expect(creados.every((e) => !e.paused)).toBe(true);
+  });
 });
 
 describe('Player · el arranque no se aborta a sí mismo', () => {
@@ -351,6 +390,68 @@ describe('Player · destrucción', () => {
     const { p } = nuevo(MONO);
     await p.attach();
     expect(() => { p.destroy(); p.destroy(); }).not.toThrow();
+  });
+});
+
+describe('Player · borde de la emisión', () => {
+  const DIRECTO = {
+    id: 'v', live: true,
+    streams: [{ id: 'cam', role: 'presenter', audio: true,
+                sources: [{ src: 'v.m3u8', type: 'application/vnd.apple.mpegurl' }] }],
+  };
+
+  /** Le pone al motor una ventana recorrible de `[inicio, fin]`. */
+  const conVentana = (e: object, inicio: number, fin: number) => {
+    Object.defineProperty(e, 'seekable', {
+      configurable: true,
+      get: () => ({ length: 1, start: () => inicio, end: () => fin }) as TimeRanges,
+    });
+  };
+
+  it('la ventana DVR y el borde salen de seekable', async () => {
+    const { p, creados } = nuevo(DIRECTO);
+    await p.attach();
+    conVentana(creados[0]!, 40, 160);
+    expect(p.dvrWindow).toBe(120);
+    expect(p.liveEdge).toBe(160);
+  });
+
+  it('sin borde conocido no se está en el borde', async () => {
+    const { p } = nuevo(DIRECTO);
+    await p.attach();
+    // El motor no publica ventana: `liveEdge` y `currentTime` valen ambos 0.
+    // Restarlos da 0, que entra en la tolerancia, y antes eso bastaba para
+    // declarar "EN DIRECTO" un evento que todavía no había empezado.
+    expect(p.liveEdge).toBe(0);
+    expect(p.atLiveEdge).toBe(false);
+  });
+
+  it('retrasarse lo suficiente saca del borde, y volver reengancha', async () => {
+    const { p, creados } = nuevo(DIRECTO);
+    await p.attach();
+    const motor = creados[0]! as Record<string, any>;
+    conVentana(motor, 40, 160);
+
+    motor._set(158);
+    expect(p.atLiveEdge).toBe(true);
+
+    motor._set(100);
+    expect(p.behindLive).toBe(60);
+    expect(p.atLiveEdge).toBe(false);
+
+    // Deja margen en vez de ir al final exacto: el último instante casi nunca
+    // está en el búfer todavía.
+    p.seekToLive();
+    expect(p.currentTime).toBeLessThan(160);
+    expect(p.atLiveEdge).toBe(true);
+  });
+
+  it('bajo demanda nada de esto aplica', async () => {
+    const { p, creados } = nuevo(MONO);
+    await p.attach();
+    conVentana(creados[0]!, 0, 60);
+    expect(p.atLiveEdge).toBe(false);
+    expect(p.behindLive).toBe(0);
   });
 });
 
