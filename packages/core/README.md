@@ -186,8 +186,37 @@ núcleo.
 ### Directo
 
 ```json
-{ "live": true, "streams": [...] }
+{
+  "id": "clausura",
+  "live": true,
+  "liveWaitingImage": "https://ejemplo/empieza-a-las-10.jpg",
+  "streams": [
+    { "id": "camara", "role": "presenter", "audio": true,
+      "sources": [{ "src": "camara.m3u8", "type": "application/vnd.apple.mpegurl" }] },
+    { "id": "slides", "role": "presentation", "audio": false,
+      "sources": [{ "src": "slides.m3u8", "type": "application/vnd.apple.mpegurl" }] }
+  ]
+}
 ```
+
+`liveWaitingImage` es aparte de `poster` a propósito: el póster es lo que se ve
+**antes** de pulsar play; esto es lo que se ve **después**, esperando. Suelen
+querer decir cosas distintas. Si falta, se usa el póster.
+
+**Un flujo que no emite no impide reproducir el resto.** El aviso aparece en el
+hueco del que falta, y se reintenta con espera creciente hasta que empieza. El
+estado se consulta con `player.liveStatus` y `player.liveStatusOf(id)`, y llega
+por el evento `live:status`.
+
+Se distingue **"aún no ha empezado"** de **"se ha interrumpido"**: decirle lo
+primero a quien llevaba veinte minutos viendo el evento sería desconcertante.
+
+> **Requisito para dual-stream en vivo:** ambas listas deben traer
+> `EXT-X-PROGRAM-DATE-TIME`. Sin esa etiqueta el reproductor **no puede medir**
+> si los flujos están sincronizados —`currentTime` en directo tiene su origen en
+> el momento en que cada uno empezó a cargar— y por eso no corrige, en lugar de
+> fingir. En Wowza es la propiedad `cupertinoEnableProgramDateTime`, desactivada
+> por defecto.
 
 Un recorte sobre un directo se rechaza: no tiene sentido.
 

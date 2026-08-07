@@ -47,6 +47,7 @@ interface Textos {
   progress: string; volume: string; mute: string; unmute: string;
   fullscreenEnter: string; fullscreenExit: string;
   speed: string; normal: string; layout: string; more: string;
+  liveWaiting: string; liveInterrupted: string; liveBadge: string;
   playing: string; paused: string; buffering: string; ended: string;
   liveRegion: string;
 }
@@ -58,6 +59,9 @@ const TEXTOS: Record<string, Textos> = {
     mute: 'Silenciar', unmute: 'Activar sonido',
     fullscreenEnter: 'Pantalla completa', fullscreenExit: 'Salir de pantalla completa',
     speed: 'Velocidad', normal: 'Normal', layout: 'Disposición', more: 'Más opciones',
+    liveWaiting: 'La emisión aún no ha empezado',
+    liveInterrupted: 'Se ha interrumpido la emisión',
+    liveBadge: 'EN DIRECTO',
     playing: 'Reproduciendo', paused: 'En pausa', buffering: 'Cargando',
     ended: 'Vídeo terminado', liveRegion: 'Estado del reproductor',
   },
@@ -67,6 +71,9 @@ const TEXTOS: Record<string, Textos> = {
     mute: 'Mute', unmute: 'Unmute',
     fullscreenEnter: 'Full screen', fullscreenExit: 'Exit full screen',
     speed: 'Speed', normal: 'Normal', layout: 'Layout', more: 'More options',
+    liveWaiting: 'The broadcast has not started yet',
+    liveInterrupted: 'The broadcast was interrupted',
+    liveBadge: 'LIVE',
     playing: 'Playing', paused: 'Paused', buffering: 'Buffering',
     ended: 'Video ended', liveRegion: 'Player status',
   },
@@ -421,6 +428,7 @@ export class ControlBar implements UiSlots {
       this.#recogerStreams();
       this.#pintar();
     }));
+    this.#desatar.push(p.on('live:status', (d) => this.#pintarDirecto(d)));
     this.#desatar.push(p.on('state:change', () => this.#pintar()));
     this.#desatar.push(p.on('time', () => this.#pintarProgreso()));
     this.#desatar.push(p.on('play', () => { this.#anunciar(this.#t.playing); this.#pintar(); }));
@@ -627,6 +635,67 @@ export class ControlBar implements UiSlots {
     this.#btnFs.innerHTML = dentro ? ICONS.fullscreenExit : ICONS.fullscreenEnter;
     this.#btnFs.setAttribute('aria-label',
       dentro ? this.#t.fullscreenExit : this.#t.fullscreenEnter);
+  }
+
+  /**
+   * Estado de emisión de un flujo.
+   *
+   * La capa se pone **sobre el hueco de ese flujo**, no sobre el reproductor
+   * entero: si la cámara emite y las diapositivas no, hay que enseñar la cámara
+   * y avisar solo en el hueco que falta.
+   */
+  #pintarDirecto(d: { stream: string; status: string }): void {
+    const doc = this.#root.ownerDocument;
+    /*
+     * Recoger primero. El aviso de un flujo que no emite llega **antes** de
+     * `engine:attach:ok` —ese evento espera a que se hayan intentado todos— así
+     * que su caja todavía cuelga del contenedor y no del escenario. Sin esto,
+     * el aviso acababa suelto en el escenario, encima del flujo que sí emite.
+     */
+    this.#recogerStreams();
+    const caja = this.#root.querySelector<HTMLElement>(
+      `[data-stream="${CSS.escape(d.stream)}"]`);
+
+    if (d.status === 'live') {
+      this.#root.querySelector(`[data-espera="${CSS.escape(d.stream)}"]`)?.remove();
+      this.#marcaDirecto(true);
+      return;
+    }
+
+    // "Aún no ha empezado" y "se ha interrumpido" no son lo mismo: quien
+    // llevaba veinte minutos viendo algo no debe leer que no ha empezado.
+    const texto = d.status === 'interrupted' ? this.#t.liveInterrupted : this.#t.liveWaiting;
+    const previa = this.#root.querySelector<HTMLElement>(
+      `[data-espera="${CSS.escape(d.stream)}"]`);
+    if (previa) {
+      previa.querySelector('.np__espera-texto')!.textContent = texto;
+      return;
+    }
+
+    const capa = doc.createElement('div');
+    capa.className = 'np__espera';
+    capa.dataset['espera'] = d.stream;
+    capa.setAttribute('role', 'status');
+    const img = this.#player.liveWaitingImage;
+    if (img) capa.style.backgroundImage = `url("${img.replace(/"/g, '%22')}")`;
+    const t = doc.createElement('p');
+    t.className = 'np__espera-texto';
+    t.textContent = texto;
+    capa.appendChild(t);
+
+    // Sobre la caja del flujo si existe; si no, sobre el escenario entero.
+    (caja ?? this.#escenario).appendChild(capa);
+    this.#anunciar(texto);
+  }
+
+  #marcaDirecto(visible: boolean): void {
+    let marca = this.#bar.querySelector<HTMLElement>('.np__directo');
+    if (!visible) { marca?.remove(); return; }
+    if (marca) return;
+    marca = this.#root.ownerDocument.createElement('span');
+    marca.className = 'np__directo';
+    marca.textContent = this.#t.liveBadge;
+    this.#tiempo.before(marca);
   }
 
   #anunciar(mensaje: string): void {

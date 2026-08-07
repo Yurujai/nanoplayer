@@ -15,6 +15,7 @@ import {
 import { playerError, type PlayerError } from './errors.js';
 import { EventBus, type Unsubscribe } from './events.js';
 import { Lifecycle } from './lifecycle.js';
+import { LiveTracker, type LiveStatus, type RetryPolicy } from './live.js';
 import type { Manifest, Stream } from './manifest.js';
 import { nativeEngineFactory } from './native-engine.js';
 import type { UiSlots } from './slots.js';
@@ -57,6 +58,8 @@ export interface PlayerOptions {
   volume?: number;
   /** Perfil de sincronización. Por defecto se detecta el del motor. */
   syncProfile?: SyncProfile;
+  /** Espera entre reintentos cuando un directo aún no emite. */
+  liveRetry?: RetryPolicy;
 }
 
 const resolverPorDefecto: ManifestResolver = async (src) => {
@@ -78,6 +81,8 @@ export class Player {
   #sync: Synchronizer | null = null;
   #cajas: HTMLElement[] = [];
   #ui: UiSlots | null = null;
+  readonly #vivo = new LiveTracker();
+  #reintentos = new Map<string, ReturnType<typeof setTimeout>>();
   #pausadoPorStall = false;
   #sonando = false;
 
@@ -128,6 +133,28 @@ export class Player {
   get master(): MediaEngine | null {
     if (!this.#manifest) return null;
     return this.#instancias.get(masterStream(this.#manifest).id) ?? null;
+  }
+
+  /** Estado de emisión del conjunto. `unknown` si no es un directo. */
+  get liveStatus(): LiveStatus {
+    return this.#vivo.overall;
+  }
+
+  /** Estado de emisión de un flujo concreto. */
+  liveStatusOf(streamId: string): LiveStatus {
+    return this.#vivo.status(streamId);
+  }
+
+  /** Imagen para la espera de un directo. Cae al póster si no hay una propia. */
+  get liveWaitingImage(): string | undefined {
+    const m = this.#manifest;
+    const propia = m?.liveWaitingImage;
+    if (propia) return propia;
+    const src = this.#opts.manifest;
+    if (typeof src === 'object' && typeof src['liveWaitingImage'] === 'string') {
+      return src['liveWaitingImage'] as string;
+    }
+    return this.poster;
   }
 
   /**
@@ -209,33 +236,37 @@ export class Player {
 
     try {
       let nombreMotor = 'native';
+      const fallidos: string[] = [];
+
       for (const stream of m.streams) {
-        const factory = selectEngine(this.#engines, stream);
-        if (!factory) {
-          throw playerError('engine/unsupported',
-            `Ningún motor puede reproducir el stream "${stream.id}"`);
+        try {
+          nombreMotor = await this.#engancharStream(stream);
+          if (m.live) this.#anunciarVivo(stream.id, 'live');
+        } catch (error) {
+          /*
+           * En directo, que un flujo no esté emitiendo **no impide reproducir
+           * los demás**. Es el caso de la cámara que arranca antes que las
+           * diapositivas, o de una de las dos que se cae: bloquear ambas
+           * porque falta una sería peor experiencia que enseñar la que hay.
+           *
+           * Bajo demanda no aplica: si una fuente falta, el contenido está
+           * incompleto y hay que decirlo.
+           */
+          if (!m.live) throw error;
+          fallidos.push(stream.id);
+          this.#anunciarVivo(stream.id, 'no-disponible');
+          this.#programarReintento(stream);
         }
-        nombreMotor = factory.name;
+      }
 
-        const caja = document.createElement('div');
-        caja.dataset['stream'] = stream.id;
-        caja.dataset['role'] = stream.role;
-        this.#opts.container.appendChild(caja);
-        this.#cajas.push(caja);
-
-        const engine = factory.create();
-        this.#instancias.set(stream.id, engine);
-        await engine.attach(caja, stream, {
-          startAt: this.#lc.resumeAt,
-          // Solo el maestro suena: S2 midió que iOS no reproduce dos pistas a
-          // la vez, y S1 que el audio fija quién es el maestro del reloj.
-          muted: this.#opts.muted === true || !stream.audio,
-          playsInline: true,
-          callbacks: this.#callbacks(stream),
+      if (m.live && fallidos.length === m.streams.length) {
+        // Ninguno emite todavía: se vuelve a `resolved` y se sigue esperando.
+        this.#lc.transition('resolved');
+        this.bus.emit('engine:attach:fail', {
+          error: playerError('media/network',
+            'El directo aún no está emitiendo', undefined),
         });
-        if (stream.audio && this.#opts.volume !== undefined) {
-          engine.setVolume(this.#opts.volume);
-        }
+        return;
       }
 
       this.#montarSync(m);
@@ -250,6 +281,112 @@ export class Player {
       this.bus.emit('engine:attach:fail', { error: pe });
       this.bus.emit('error', { error: pe });
       throw pe;
+    }
+  }
+
+  /**
+   * Engancha un solo flujo. Devuelve el nombre del motor elegido.
+   *
+   * En directo, **la caja del flujo se conserva aunque falle**: es el hueco
+   * donde la interfaz pone el aviso de que ese flujo no emite. Sin ella el
+   * mensaje acabaría encima del flujo que sí funciona, que es justo al revés
+   * de lo que hay que enseñar.
+   */
+  async #engancharStream(stream: Stream): Promise<string> {
+    const factory = selectEngine(this.#engines, stream);
+    if (!factory) {
+      throw playerError('engine/unsupported',
+        `Ningún motor puede reproducir el stream "${stream.id}"`);
+    }
+    // Reutilizar la caja si ya existe: un reintento no debe duplicarla.
+    let caja = this.#cajas.find((c) => c.dataset['stream'] === stream.id);
+    if (!caja) {
+      caja = document.createElement('div');
+      caja.dataset['stream'] = stream.id;
+      caja.dataset['role'] = stream.role;
+      this.#opts.container.appendChild(caja);
+      this.#cajas.push(caja);
+    }
+
+    const engine = factory.create();
+    this.#instancias.set(stream.id, engine);
+    try {
+      await engine.attach(caja, stream, {
+        startAt: this.#lc.resumeAt,
+        muted: this.#opts.muted === true || !stream.audio,
+        playsInline: true,
+        callbacks: this.#callbacks(stream),
+      });
+    } catch (error) {
+      engine.destroy();
+      this.#instancias.delete(stream.id);
+      // Bajo demanda no hay nada que esperar, así que la caja sobra. En directo
+      // se queda: es el hueco donde va el aviso mientras el flujo no emite.
+      if (!this.#manifest?.live) {
+        caja.remove();
+        this.#cajas = this.#cajas.filter((c) => c !== caja);
+      }
+      throw error;
+    }
+    if (stream.audio && this.#opts.volume !== undefined) {
+      engine.setVolume(this.#opts.volume);
+    }
+    return factory.name;
+  }
+
+  #anunciarVivo(streamId: string, que: 'live' | 'no-disponible'): void {
+    const cambio = que === 'live'
+      ? this.#vivo.markLive(streamId)
+      : this.#vivo.markUnavailable(streamId);
+    if (!cambio) return;
+    const status = this.#vivo.status(streamId);
+    if (status === 'unknown') return;
+    this.bus.emit('live:status', {
+      stream: streamId,
+      status,
+      ...(status === 'live' ? {} :
+        { retryInMs: this.#vivo.nextDelay(streamId, this.#opts.liveRetry) }),
+    });
+  }
+
+  /**
+   * Vuelve a intentar un flujo que no emitía.
+   *
+   * La espera crece entre intentos: un evento que empieza dos horas tarde
+   * serían miles de peticiones inútiles por espectador. Con tope, porque una
+   * espera sin límite tardaría minutos en enterarse de que ya ha empezado.
+   */
+  #programarReintento(stream: Stream): void {
+    if (this.#lc.isDestroyed) return;
+    clearTimeout(this.#reintentos.get(stream.id));
+    const espera = this.#vivo.nextDelay(stream.id, this.#opts.liveRetry);
+    this.#reintentos.set(stream.id, setTimeout(() => {
+      void this.#reintentar(stream);
+    }, espera));
+  }
+
+  async #reintentar(stream: Stream): Promise<void> {
+    this.#reintentos.delete(stream.id);
+    if (this.#lc.isDestroyed || !this.#manifest?.live) return;
+    // Si ya no hay motores montados, el reproductor está desalojado: no tiene
+    // sentido seguir insistiendo hasta que alguien vuelva a engancharlo.
+    if (!this.#lc.hasEngine && this.#lc.state !== 'resolved') return;
+
+    try {
+      await this.#engancharStream(stream);
+      this.#anunciarVivo(stream.id, 'live');
+      // Si el reproductor estaba esperando a que empezara algo, ya hay señal.
+      if (this.#lc.state === 'resolved') {
+        this.#lc.transition('attaching');
+        this.#lc.transition('attached');
+      }
+      this.#montarSync(this.#manifest);
+      if (this.#lc.state === 'active' || this.#sonando) {
+        await this.#instancias.get(stream.id)?.play().catch(() => {});
+      }
+    } catch {
+      this.#anunciarVivo(stream.id, 'no-disponible');
+      this.#programarReintento(stream);
     }
   }
 
@@ -305,6 +442,8 @@ export class Player {
   }
 
   #soltarMotores(): void {
+    for (const t of this.#reintentos.values()) clearTimeout(t);
+    this.#reintentos.clear();
     this.#sync?.stop();
     this.#sync = null;
     for (const e of this.#instancias.values()) e.destroy();
@@ -377,6 +516,7 @@ export class Player {
 
   destroy(): void {
     if (this.#lc.isDestroyed) return;
+    this.#vivo.reset();
     this.#soltarMotores();
     this.#lc.destroy();
     this.bus.clear();
@@ -457,7 +597,14 @@ export class Player {
           if (id !== stream.id) void e.play().catch(() => {});
         }
       },
-      onError: (error: PlayerError) => this.bus.emit('error', { error }),
+      onError: (error: PlayerError) => {
+        this.bus.emit('error', { error });
+        // En un directo, un fallo de red en un flujo ya enganchado es una
+        // interrupción, no un "aún no ha empezado": ese flujo llegó a emitir.
+        if (this.#manifest?.live && error.retryable) {
+          this.#anunciarVivo(stream.id, 'no-disponible');
+        }
+      },
     };
   }
 

@@ -57,6 +57,9 @@ export const CSS = `
 .np:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:2px}
 .np__stage{display:flex;width:100%}
 .np__stage>[data-stream]{position:relative;flex:1;min-width:0}
+/* Un flujo que aún no emite no tiene vídeo dentro, así que no tendría altura:
+   se le da la del hueco que le toca para que el aviso caiga en su sitio. */
+.np__stage>[data-stream]:not(:has(video)){aspect-ratio:16/9;background:#000}
 .np__stage video{display:block;width:100%;height:auto}
 
 /* --- póster: el estado inicial, sin un byte de vídeo descargado --- */
@@ -204,6 +207,32 @@ button.np__btn[disabled]{opacity:.4;cursor:default}
 }
 .np__cue b,.np__cue strong{font-weight:700}
 .np__cue i,.np__cue em{font-style:italic}
+
+/* --- espera de un directo --- */
+.np__espera{
+  position:absolute;inset:0;z-index:var(--np-z-overlay);
+  display:flex;align-items:center;justify-content:center;
+  background:#000 center/cover no-repeat;
+  padding:1rem;text-align:center;
+}
+.np__espera-texto{
+  margin:0;padding:.5em .9em;border-radius:var(--np-radius);
+  background:rgba(0,0,0,.72);font-size:clamp(.85rem,2.4cqw,1.1rem);
+  max-width:90%;
+}
+/* Un flujo esperando dentro de un escenario con otro emitiendo: la capa se
+   queda en su hueco, no tapa al que sí funciona. */
+.np__stage>[data-stream]{position:relative}
+
+.np__directo{
+  display:inline-flex;align-items:center;gap:.4rem;
+  font-size:.7rem;font-weight:700;letter-spacing:.06em;
+  padding:.2rem .5rem;margin-left:.4rem;border-radius:3px;
+  background:#c8102e;color:#fff;
+}
+.np__directo::before{
+  content:'';width:.45rem;height:.45rem;border-radius:50%;background:#fff;
+}
 
 /* --- menú de ajustes --- */
 .np__menu-anchor{position:relative;display:inline-flex}

@@ -49,6 +49,10 @@ export type { ManifestResolver, PlayerOptions } from './player.js';
 export { createBatchResolver, PlayerRegistry } from './registry.js';
 export type { BatchResolverOptions, RegistryOptions } from './registry.js';
 
+// --- directo ----------------------------------------------------------------
+export { backoff, LiveTracker } from './live.js';
+export type { LiveStatus, RetryPolicy } from './live.js';
+
 // --- anclajes de interfaz ---------------------------------------------------
 export type {
   BarControlDecl, OverlayDecl, OverlayHandle,

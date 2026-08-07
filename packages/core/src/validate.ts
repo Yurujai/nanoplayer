@@ -48,6 +48,12 @@ export function validateManifest(input: unknown): ValidationResult {
   }
 
   if (!isStr(input['id'])) err('id', 'Requerido, cadena no vacía');
+  if (input['liveWaitingImage'] !== undefined && !isStr(input['liveWaitingImage'])) {
+    err('liveWaitingImage', 'Debe ser una cadena no vacía si se indica');
+  }
+  if (input['liveWaitingImage'] !== undefined && input['live'] !== true) {
+    warn('liveWaitingImage', 'Solo se usa en directos: falta `live: true`');
+  }
   if (input['duration'] !== undefined && (!isNum(input['duration']) || input['duration'] <= 0)) {
     err('duration', 'Debe ser un número positivo si se indica');
   }

@@ -23,6 +23,7 @@ const MANIFEST: Record<keyof Manifest, Estado> = {
   annotations: 'validado',
   textTracks: 'validado',
   live: 'validado',
+  liveWaitingImage: 'validado',
   title: 'libre',   // texto opcional: cualquier cadena sirve
   poster: 'libre',  // URL opcional; si falla, se degrada a fondo negro
 };

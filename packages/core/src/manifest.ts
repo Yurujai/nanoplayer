@@ -112,4 +112,13 @@ export interface Manifest {
   textTracks?: TextTrackDef[];
   /** Directo. Cambia los estados de la UI y desactiva lo que no aplica. */
   live?: boolean;
+  /**
+   * Imagen que se enseña mientras el directo no emite.
+   *
+   * Aparte de `poster` a propósito: el póster es lo que se ve **antes** de
+   * pulsar play, y esto es lo que se ve **después**, esperando. Suelen querer
+   * decir cosas distintas —una carátula del evento frente a un "empieza a las
+   * 10:00"—. Si falta, se usa el póster.
+   */
+  liveWaitingImage?: string;
 }

@@ -59,6 +59,14 @@ export interface CoreEvents {
    */
   'sync:unavailable': { reason: string };
 
+  // --- directo ------------------------------------------------------------
+  /** Cambió el estado de emisión de un flujo. `retryInMs` si se va a reintentar. */
+  'live:status': {
+    stream: string;
+    status: 'waiting' | 'live' | 'interrupted';
+    retryInMs?: number;
+  };
+
   // --- red y buffering ----------------------------------------------------
   'stall:start': { stream: string };
   'stall:end': { stream: string; durationMs: number };
