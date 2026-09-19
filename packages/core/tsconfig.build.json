@@ -1,0 +1,15 @@
+{
+  // Solo para emitir los .d.ts. El bundle lo hace Vite, que no genera tipos:
+  // los cuatro package.json declaran `types` desde el principio y no había
+  // nada que los produjera.
+  //
+  // Aparte del tsconfig normal porque aquel incluye `test` y usa `rootDir: "."`,
+  // y con eso los tipos saldrían en `dist/src/` en vez de en `dist/`.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}

@@ -7,6 +7,6 @@
   "types": "./dist/index.d.ts",
   "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
   "files": ["dist"],
-  "scripts": { "build": "vite build", "typecheck": "tsc --noEmit" },
+  "scripts": { "build": "vite build && tsc -p tsconfig.build.json", "typecheck": "tsc --noEmit" },
   "devDependencies": { "vite": "^6.0.0" }
 }
