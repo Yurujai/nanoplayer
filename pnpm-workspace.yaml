@@ -3,3 +3,14 @@ packages:
   - 'demo'
   - 'e2e'
   - 'spikes/s5-live-dual'
+
+# pnpm 10 avisaba de los scripts de instalación ignorados; pnpm 12 se planta y
+# exige decidir. Se declara aquí para que el arranque en limpio no dependa de
+# contestar a un aviso interactivo.
+#
+# esbuild a `false`: su script de instalación solo verifica el binario, que
+# llega por `optionalDependencies` según la plataforma. Comprobado que sin
+# ejecutarlo los tests, el typecheck y los builds de los cuatro paquetes pasan
+# igual, así que no hay nada que ganar dándole permiso.
+allowBuilds:
+  esbuild: false
