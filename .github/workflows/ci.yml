@@ -21,6 +21,14 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
 
+      # Los tests unitarios corren contra el código fuente, y la demo usa alias
+      # a fuente: ninguno de los dos mira jamás lo que se publica. Así pasó que
+      # los plugins se llevaran dentro su propia copia del núcleo y dejaran de
+      # registrarse, sin un solo error visible. Esto audita los `dist`.
+      - run: pnpm build
+      - run: node dist.mjs
+        working-directory: e2e
+
   # Bloquea el merge si la accesibilidad se degrada. La accesibilidad que no se
   # comprueba automáticamente se pierde sin que nadie se entere: es exactamente
   # lo que este proyecto existe para evitar.

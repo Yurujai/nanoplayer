@@ -41,6 +41,19 @@ importers:
         version: 6.4.3(@types/node@26.1.2)
 
   e2e:
+    dependencies:
+      '@nanoplayer/core':
+        specifier: workspace:*
+        version: link:../packages/core
+      '@nanoplayer/engine-hls':
+        specifier: workspace:*
+        version: link:../packages/engine-hls
+      '@nanoplayer/plugin-captions':
+        specifier: workspace:*
+        version: link:../packages/plugin-captions
+      '@nanoplayer/ui':
+        specifier: workspace:*
+        version: link:../packages/ui
     devDependencies:
       axe-core:
         specifier: ^4.10.0
