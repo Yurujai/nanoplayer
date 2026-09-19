@@ -25,6 +25,9 @@
   .estado{display:inline-block;font-size:.8rem;padding:.25rem .6rem;border-radius:999px;
           background:color-mix(in srgb,var(--warn) 18%,transparent);
           border:1px solid var(--warn);color:var(--warn)}
+  .aviso{margin:.9rem 0 0;padding:.75rem .9rem;border-radius:10px;font-size:.9rem;
+         background:color-mix(in srgb,var(--warn) 10%,transparent);
+         border:1px solid color-mix(in srgb,var(--warn) 45%,transparent)}
   h2{font-size:.8rem;margin:2.5rem 0 .9rem;color:var(--dim);
      text-transform:uppercase;letter-spacing:.08em}
   .tarjeta{display:block;background:var(--card);border:1px solid var(--line);
@@ -63,7 +66,13 @@
       Reproductor web multi-stream, accesible y extensible, para plataformas de
       vídeo docente. Un reproductor que no te obliga a forkearlo.
     </p>
-    <span class="estado">En diseño y validación · todavía no hay reproductor</span>
+    <span class="estado">En desarrollo · nada publicado todavía</span>
+    <p class="aviso">
+      El reproductor ya funciona y se puede probar aquí abajo, pero
+      <strong>no está publicado</strong>: no hay paquete en npm, ni CDN, ni
+      versión etiquetada. La API puede cambiar sin aviso. Esto es un escaparate
+      del desarrollo, no una release.
+    </p>
   </header>
 
   <h2>Demo</h2>
@@ -75,14 +84,17 @@
     </div>
     <p>
       Lo que vería quien lo integre: dual-stream sincronizado, barra de
-      controles accesible, menú de ajustes y subtítulos en dos idiomas. Se irán
-      añadiendo aquí los plugins según se construyan.
+      controles accesible, menú de ajustes con velocidad y disposición, y
+      subtítulos en dos idiomas. Se irán añadiendo aquí los plugins según se
+      construyan.
     </p>
     <ul class="hallazgos">
       <li>Mientras se ve el póster no hay ningún <code>&lt;video&gt;</code> en
           el DOM ni un byte de vídeo descargado</li>
       <li>Navegable entero con el teclado; verificado en CI con axe-core</li>
       <li>Los subtítulos se activan solos porque el manifiesto trae pistas</li>
+      <li>Cuatro disposiciones en el menú de ajustes: lado a lado, imagen en
+          imagen, solo ponente y solo presentación</li>
     </ul>
   </a>
 
@@ -93,10 +105,14 @@
     </div>
     <p>
       El mismo núcleo con el ciclo de vida en crudo: botones para resolver,
-      enganchar, soltar el motor y desincronizar a propósito.
+      enganchar, soltar el motor y desincronizar a propósito. Seis escenarios:
+      mono, dual, HLS, solo audio, audio con diapositivas y un manifiesto
+      inválido.
     </p>
     <ul class="hallazgos">
       <li>Contadores de peticiones de red y de elementos <code>&lt;video&gt;</code></li>
+      <li>Desincronizar 400 ms a propósito y ver al lazo corregirlo por debajo
+          de los 33 ms de un frame</li>
       <li>Soltar el motor libera los decodificadores y conserva la posición</li>
       <li>El registro de eventos es literalmente lo que ve <code>onAny()</code></li>
     </ul>
@@ -149,6 +165,27 @@
           pantalla completa es imposible, y es limitación de iOS y no de WebKit</li>
       <li>El límite de vídeos simultáneos lo pone el motor, no el hardware</li>
       <li>La calibración de la sincronización no es portable entre motores</li>
+    </ul>
+  </a>
+
+  <a class="tarjeta" href="https://github.com/Yurujai/nanoplayer/tree/main/spikes/s5-live-dual">
+    <div class="cab">
+      <h3>S5 · Directo dual-stream</h3>
+      <span class="marca hecho">Resuelto</span>
+    </div>
+    <p>
+      ¿Se pueden sincronizar dos directos HLS independientes? Sí, pero solo con
+      <code>EXT-X-PROGRAM-DATE-TIME</code> en ambas listas. Este banco necesita
+      emisiones en vivo, así que no se publica aquí: las conclusiones y las
+      medidas están en el repositorio.
+    </p>
+    <ul class="hallazgos">
+      <li>Sin la etiqueta de hora no es que la corrección salga peor: es que no
+          hay forma de medir si están sincronizados</li>
+      <li>En directo <code>currentTime</code> tiene su origen en cuándo empezó a
+          cargar cada flujo, no en un instante común</li>
+      <li>Tras un corte conviene un salto duro por hora absoluta: absorber 3 s
+          al 25 % de velocidad extra tardaría doce</li>
     </ul>
   </a>
 
