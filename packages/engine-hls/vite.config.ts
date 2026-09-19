@@ -15,7 +15,11 @@ export default defineConfig({
     },
     // hls.js queda fuera del bundle: es dependencia de pares y se carga en
     // diferido, así que quien no reproduzca HLS no la descarga.
-    rollupOptions: { external: ['hls.js'] },
+    //
+    // El núcleo, por lo mismo que en los demás paquetes: sin externalizarlo, el
+    // alias al código fuente hace que se copie dentro y el motor acabaría
+    // registrándose en un registro distinto del que usa el reproductor.
+    rollupOptions: { external: ['hls.js', '@nanoplayer/core'] },
     sourcemap: true,
     target: 'es2022',
   },
