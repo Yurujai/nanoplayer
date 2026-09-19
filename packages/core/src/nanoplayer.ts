@@ -19,6 +19,7 @@
  * JavaScript propio.
  */
 import type { EngineFactory } from './engine.js';
+import type { Catalogues } from './i18n.js';
 import type { Manifest } from './manifest.js';
 import { Player, type ManifestResolver, type PlayerOptions } from './player.js';
 import { PluginRegistry, plugins, type PluginConfig } from './plugins.js';
@@ -53,6 +54,25 @@ export interface CreateConfig {
   registry?: PlayerRegistry | false;
   /** Empezar a reproducir en cuanto se pueda. Sujeto a la política del navegador. */
   autoplay?: boolean;
+  /**
+   * Idioma de la interfaz. Por defecto, el que declare el documento.
+   *
+   * Lo heredan la barra de controles y todos los plugins: se dice una vez.
+   */
+  lang?: string;
+  /**
+   * Cadenas propias, por idioma, que mandan sobre las de serie.
+   *
+   * Es lo que hace que añadir un idioma —o cambiar una palabra— sea
+   * configuración y no un fork:
+   *
+   * ```js
+   * create('#p', { manifest, lang: 'eu', strings: {
+   *   eu: { 'ui.play': 'Erreproduzitu', 'ui.pause': 'Pausatu' },
+   * } });
+   * ```
+   */
+  strings?: Catalogues;
 }
 
 /**
@@ -94,6 +114,8 @@ export function create(
     ...(config.muted !== undefined ? { muted: config.muted } : {}),
     ...(config.volume !== undefined ? { volume: config.volume } : {}),
     ...(config.syncProfile ? { syncProfile: config.syncProfile } : {}),
+    ...(config.lang ? { lang: config.lang } : {}),
+    ...(config.strings ? { strings: config.strings } : {}),
   };
 
   const player = new Player(opciones);

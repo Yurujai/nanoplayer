@@ -27,7 +27,7 @@
  * pueden leer no sirven de nada.
  */
 import {
-  plugins,
+  plugins, strings,
   type Manifest, type PluginContext, type PluginImpl, type TextTrackDef,
 } from '@nanoplayer/core';
 
@@ -64,10 +64,27 @@ const ICONO_ON = svg(CAJA + TEXTO);
 /** Inactivo: solo el contorno, con el texto dentro. */
 const ICONO_OFF = svg(CAJA + HUECO + TEXTO);
 
-const TEXTOS: Record<string, { captions: string; off: string; on: string }> = {
-  es: { captions: 'Subtítulos', off: 'Desactivados', on: 'Activar subtítulos' },
-  en: { captions: 'Subtitles', off: 'Off', on: 'Turn on subtitles' },
-};
+/*
+ * Las cadenas del plugin, en el catálogo compartido.
+ *
+ * Antes eran una tabla privada y el plugin deducía el idioma por su cuenta
+ * mirando `document.documentElement.lang`, que es una segunda forma de
+ * resolverlo conviviendo con la del reproductor: en cuanto discrepen, el botón
+ * de subtítulos habla un idioma y el resto de la barra otro.
+ *
+ * Registrándolas aquí, quien integra puede cambiarlas con `strings` sin tocar
+ * el plugin, igual que las de la interfaz.
+ */
+strings.register('es', {
+  'captions.label': 'Subtítulos',
+  'captions.off': 'Desactivados',
+  'captions.on': 'Activar subtítulos',
+});
+strings.register('en', {
+  'captions.label': 'Subtitles',
+  'captions.off': 'Off',
+  'captions.on': 'Turn on subtitles',
+});
 
 const APAGADO = '__off__';
 
@@ -97,9 +114,8 @@ class Captions implements PluginImpl {
     this.#tracks = [...(m?.textTracks ?? [])];
     if (this.#tracks.length === 0) return;
 
-    const lang = (ctx.config['lang'] as string | undefined)
-      ?? (document.documentElement.lang || 'es');
-    const t = TEXTOS[lang.slice(0, 2)] ?? TEXTOS['es']!;
+    // El traductor del reproductor: ni se deduce el idioma ni se trae tabla.
+    const t = ctx.t;
 
     // Los `<track>` se añaden al vídeo del maestro cuando exista. Si aún no hay
     // motor, se espera a que enganche: el ciclo perezoso puede tenerlo suelto.
@@ -127,7 +143,7 @@ class Captions implements PluginImpl {
         id: 'captions',
         priority: 30,
         icon: () => (this.#activa === APAGADO ? ICONO_OFF : ICONO_ON),
-        label: () => (this.#activa === APAGADO ? t.on : t.captions),
+        label: () => t(this.#activa === APAGADO ? 'captions.on' : 'captions.label'),
         pressed: () => this.#activa !== APAGADO,
         onActivate: () => {
           const siguiente = this.#activa === APAGADO
@@ -141,10 +157,10 @@ class Captions implements PluginImpl {
       // --- anclaje `settings`: elección entre varias, uso ocasional ---
       this.#quitar.push(ui.addSettingsPanel({
         id: 'captions',
-        label: t.captions,
+        label: t('captions.label'),
         priority: 5,
         options: [
-          { value: APAGADO, label: t.off },
+          { value: APAGADO, label: t('captions.off') },
           ...this.#tracks.map((x) => ({ value: x.lang, label: etiqueta(x) })),
         ],
         getValue: () => this.#activa,

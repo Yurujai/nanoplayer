@@ -16,8 +16,10 @@
  *   - **Región en vivo** para lo que solo se percibe visualmente: buffering,
  *     errores, cambios de estado.
  */
+import { strings } from '@nanoplayer/core';
 import type {
-  BarControlDecl, OverlayDecl, OverlayHandle, Player, SettingsPanelDecl, UiSlots,
+  BarControlDecl, Catalogues, OverlayDecl, OverlayHandle, Player,
+  SettingsPanelDecl, Translate, UiSlots,
 } from '@nanoplayer/core';
 import { formatPercent, formatTime, spokenTime } from './format.js';
 import { ICONS } from './icons.js';
@@ -27,8 +29,15 @@ import { SettingsMenu, type SettingsPanel } from './settings-menu.js';
 import { injectStyles } from './styles.js';
 
 export interface ControlBarOptions {
-  /** Idioma de las etiquetas. De momento `es` y `en`. */
+  /**
+   * Idioma de las etiquetas. Por defecto, el que resolvió el reproductor.
+   *
+   * Solo hace falta para que la barra hable en un idioma distinto del resto;
+   * lo normal es decirlo una vez en `create()` y no repetirlo aquí.
+   */
   lang?: string;
+  /** Cadenas propias, que mandan sobre las de serie. */
+  strings?: Catalogues;
   /** Milisegundos de inactividad antes de ocultar la barra. `0` la deja fija. */
   hideAfterMs?: number;
   /** Inyectar los estilos por defecto. Desactívalo si importas el CSS aparte. */
@@ -41,50 +50,6 @@ export interface ControlBarOptions {
    */
   poster?: boolean;
 }
-
-interface Textos {
-  region: string; play: string; pause: string; replay: string;
-  progress: string; volume: string; mute: string; unmute: string;
-  fullscreenEnter: string; fullscreenExit: string;
-  speed: string; normal: string; layout: string; more: string;
-  liveWaiting: string; liveInterrupted: string; liveBadge: string;
-  liveGoTo: string; liveBehind: string; liveWindow: string;
-  playing: string; paused: string; buffering: string; ended: string;
-  liveRegion: string;
-}
-
-const TEXTOS: Record<string, Textos> = {
-  es: {
-    region: 'Reproductor de vídeo', play: 'Reproducir', pause: 'Pausar',
-    replay: 'Volver a reproducir', progress: 'Posición', volume: 'Volumen',
-    mute: 'Silenciar', unmute: 'Activar sonido',
-    fullscreenEnter: 'Pantalla completa', fullscreenExit: 'Salir de pantalla completa',
-    speed: 'Velocidad', normal: 'Normal', layout: 'Disposición', more: 'Más opciones',
-    liveWaiting: 'La emisión aún no ha empezado',
-    liveInterrupted: 'Se ha interrumpido la emisión',
-    liveBadge: 'EN DIRECTO',
-    liveGoTo: 'Ir al directo',
-    liveBehind: 'Retrasado respecto al directo',
-    liveWindow: 'Posición en el directo',
-    playing: 'Reproduciendo', paused: 'En pausa', buffering: 'Cargando',
-    ended: 'Vídeo terminado', liveRegion: 'Estado del reproductor',
-  },
-  en: {
-    region: 'Video player', play: 'Play', pause: 'Pause',
-    replay: 'Replay', progress: 'Seek', volume: 'Volume',
-    mute: 'Mute', unmute: 'Unmute',
-    fullscreenEnter: 'Full screen', fullscreenExit: 'Exit full screen',
-    speed: 'Speed', normal: 'Normal', layout: 'Layout', more: 'More options',
-    liveWaiting: 'The broadcast has not started yet',
-    liveInterrupted: 'The broadcast was interrupted',
-    liveBadge: 'LIVE',
-    liveGoTo: 'Go to live',
-    liveBehind: 'Behind live',
-    liveWindow: 'Position in the live stream',
-    playing: 'Playing', paused: 'Paused', buffering: 'Buffering',
-    ended: 'Video ended', liveRegion: 'Player status',
-  },
-};
 
 const SALTO_CORTO = 5;
 const SALTO_LARGO = 10;
@@ -103,7 +68,7 @@ const VENTANA_MINIMA = 30;
 export class ControlBar implements UiSlots {
   readonly #player: Player;
   readonly #root: HTMLElement;
-  readonly #t: Textos;
+  readonly #t: Translate;
   readonly #lang: string;
   readonly #hideAfterMs: number;
 
@@ -135,15 +100,22 @@ export class ControlBar implements UiSlots {
   constructor(player: Player, options: ControlBarOptions = {}) {
     this.#player = player;
     this.#root = player.container;
-    this.#lang = options.lang ?? (document.documentElement.lang || 'es');
-    this.#t = TEXTOS[this.#lang.slice(0, 2)] ?? TEXTOS['es']!;
+    /*
+     * Por defecto se hereda el traductor del reproductor: el idioma se decide
+     * una vez, en `create()`, y la barra, el póster y los plugins dicen todos
+     * lo mismo. Solo se construye uno propio si aquí se pide otra cosa.
+     */
+    this.#t = (options.lang || options.strings)
+      ? strings.translator(options.lang ?? player.lang, options.strings)
+      : player.t;
+    this.#lang = this.#t.lang;
     this.#hideAfterMs = options.hideAfterMs ?? 2500;
 
     if (options.injectStyles !== false) injectStyles(this.#root.ownerDocument);
     this.#construir(options.label);
     this.#conectar();
     this.#pintar();
-    if (options.poster !== false) this.#poster = new Poster(player, this.#lang);
+    if (options.poster !== false) this.#poster = new Poster(player);
 
     // Anunciarse al final: un plugin puede añadir controles en cuanto lo sepa,
     // y para entonces la barra tiene que estar completa.
@@ -168,7 +140,7 @@ export class ControlBar implements UiSlots {
     // Región con nombre: quien navega por landmarks encuentra el reproductor,
     // y `tabindex` permite que los atajos de teclado lleguen al contenedor.
     this.#root.setAttribute('role', 'region');
-    this.#root.setAttribute('aria-label', label ?? this.#t.region);
+    this.#root.setAttribute('aria-label', label ?? this.#t('ui.region'));
     if (!this.#root.hasAttribute('tabindex')) this.#root.tabIndex = 0;
 
     // El Player monta los streams directamente en el contenedor; se recogen en
@@ -182,7 +154,7 @@ export class ControlBar implements UiSlots {
     this.#vivo.className = 'np__sr';
     this.#vivo.setAttribute('role', 'status');
     this.#vivo.setAttribute('aria-live', 'polite');
-    this.#vivo.setAttribute('aria-label', this.#t.liveRegion);
+    this.#vivo.setAttribute('aria-label', this.#t('ui.status.region'));
     this.#root.appendChild(this.#vivo);
 
     this.#bar = doc.createElement('div');
@@ -190,19 +162,19 @@ export class ControlBar implements UiSlots {
 
     const filaProgreso = doc.createElement('div');
     filaProgreso.className = 'np__row';
-    this.#progreso = this.#rango(this.#t.progress, 0, 1, 0.001);
+    this.#progreso = this.#rango(this.#t('ui.progress'), 0, 1, 0.001);
     filaProgreso.appendChild(this.#progreso);
 
     const filaBotones = doc.createElement('div');
     filaBotones.className = 'np__row';
 
-    this.#btnPlay = this.#boton(this.#t.play, ICONS.play);
-    this.#btnMute = this.#boton(this.#t.mute, ICONS.volumeHigh);
-    this.#btnFs = this.#boton(this.#t.fullscreenEnter, ICONS.fullscreenEnter);
+    this.#btnPlay = this.#boton(this.#t('ui.play'), ICONS.play);
+    this.#btnMute = this.#boton(this.#t('ui.mute'), ICONS.volumeHigh);
+    this.#btnFs = this.#boton(this.#t('ui.fullscreenEnter'), ICONS.fullscreenEnter);
 
     const volumen = doc.createElement('div');
     volumen.className = 'np__volume';
-    this.#volumen = this.#rango(this.#t.volume, 0, 1, 0.01);
+    this.#volumen = this.#rango(this.#t('ui.volume'), 0, 1, 0.01);
     this.#volumen.value = '1';
     volumen.append(this.#btnMute, this.#volumen);
 
@@ -221,7 +193,7 @@ export class ControlBar implements UiSlots {
     this.#zonaControles.className = 'np__plugins';
 
     filaBotones.append(this.#btnPlay, volumen, this.#tiempo, espaciador, this.#zonaControles);
-    this.#menu = new SettingsMenu(filaBotones, this.#lang);
+    this.#menu = new SettingsMenu(filaBotones, this.#t);
     filaBotones.append(this.#btnFs);
 
     this.#bar.append(filaProgreso, filaBotones);
@@ -309,7 +281,7 @@ export class ControlBar implements UiSlots {
     if (desbordados.length > 0) {
       this.#quitarDesborde = this.#menu.addPanel({
         id: '__overflow',
-        label: this.#t.more,
+        label: this.#t('ui.more'),
         priority: 900,
         options: desbordados.map((c) => ({ value: c.id, label: this.#texto(c.label) })),
         getValue: () => '',
@@ -334,11 +306,11 @@ export class ControlBar implements UiSlots {
   #registrarPanelesPropios(): void {
     this.#menu.addPanel({
       id: 'speed',
-      label: this.#t.speed,
+      label: this.#t('ui.speed'),
       priority: 10,
       options: VELOCIDADES.map((v) => ({
         value: String(v),
-        label: v === 1 ? this.#t.normal : `${v}×`,
+        label: v === 1 ? this.#t('ui.normal') : `${v}×`,
       })),
       getValue: () => String(this.#velocidad),
       onSelect: (v) => {
@@ -352,7 +324,7 @@ export class ControlBar implements UiSlots {
     // estar todavía, porque la barra puede montarse antes de resolverlo.
     const registrarLayouts = () => {
       const streams = this.#player.manifest?.streams.length ?? 1;
-      const layouts = layoutsFor(streams, this.#lang);
+      const layouts = layoutsFor(streams, this.#t);
       if (layouts.length === 0) return;
       this.#registrarLayouts(layouts);
     };
@@ -365,7 +337,7 @@ export class ControlBar implements UiSlots {
     applyLayout(this.#root, this.#layout);
     this.#menu.addPanel({
       id: 'layout',
-      label: this.#t.layout,
+      label: this.#t('ui.layout.label'),
       priority: 20,
       options: layouts.map((l) => ({ value: l.id, label: l.label })),
       getValue: () => this.#layout,
@@ -447,10 +419,10 @@ export class ControlBar implements UiSlots {
     this.#desatar.push(p.on('live:status', (d) => this.#pintarDirecto(d)));
     this.#desatar.push(p.on('state:change', () => this.#pintar()));
     this.#desatar.push(p.on('time', () => this.#pintarProgreso()));
-    this.#desatar.push(p.on('play', () => { this.#anunciar(this.#t.playing); this.#pintar(); }));
-    this.#desatar.push(p.on('pause', () => { this.#anunciar(this.#t.paused); this.#pintar(); }));
-    this.#desatar.push(p.on('ended', () => { this.#anunciar(this.#t.ended); this.#pintar(); }));
-    this.#desatar.push(p.on('stall:start', () => this.#anunciar(this.#t.buffering)));
+    this.#desatar.push(p.on('play', () => { this.#anunciar(this.#t('ui.status.playing')); this.#pintar(); }));
+    this.#desatar.push(p.on('pause', () => { this.#anunciar(this.#t('ui.status.paused')); this.#pintar(); }));
+    this.#desatar.push(p.on('ended', () => { this.#anunciar(this.#t('ui.status.ended')); this.#pintar(); }));
+    this.#desatar.push(p.on('stall:start', () => this.#anunciar(this.#t('ui.status.buffering'))));
     this.#desatar.push(p.on('error', ({ error }) => this.#anunciar(error.message)));
 
     this.#on(this.#root, 'keydown', (ev: KeyboardEvent) => this.#atajos(ev));
@@ -596,7 +568,7 @@ export class ControlBar implements UiSlots {
     const p = this.#player;
     const reproduciendo = !p.paused && p.state === 'active';
     this.#btnPlay.innerHTML = reproduciendo ? ICONS.pause : ICONS.play;
-    this.#btnPlay.setAttribute('aria-label', reproduciendo ? this.#t.pause : this.#t.play);
+    this.#btnPlay.setAttribute('aria-label', reproduciendo ? this.#t('ui.pause') : this.#t('ui.play'));
     this.#pintarProgreso();
     this.#pintarPantallaCompleta();
     if (reproduciendo) this.#programarOcultado();
@@ -647,10 +619,10 @@ export class ControlBar implements UiSlots {
       const frac = Math.max(0, Math.min(1, 1 - atras / ventana));
       this.#progreso.value = String(frac);
       this.#progreso.style.setProperty('--np-progress', `${frac * 100}%`);
-      this.#progreso.setAttribute('aria-label', this.#t.liveWindow);
+      this.#progreso.setAttribute('aria-label', this.#t('ui.live.window'));
       this.#progreso.setAttribute('aria-valuetext', p.atLiveEdge
-        ? this.#t.liveBadge
-        : `${this.#t.liveBehind}: ${spokenTime(atras, this.#lang)}`);
+        ? this.#t('ui.live.badge')
+        : this.#t('ui.live.behindBy', { tiempo: spokenTime(atras, this.#lang) }));
     }
 
     /*
@@ -673,8 +645,8 @@ export class ControlBar implements UiSlots {
     const icono = silenciado || v === 0 ? ICONS.volumeMuted
       : v < 0.5 ? ICONS.volumeLow : ICONS.volumeHigh;
     this.#btnMute.innerHTML = icono;
-    this.#btnMute.setAttribute('aria-label', silenciado ? this.#t.unmute : this.#t.mute);
-    this.#volumen.setAttribute('aria-valuetext', formatPercent(v));
+    this.#btnMute.setAttribute('aria-label', silenciado ? this.#t('ui.unmute') : this.#t('ui.mute'));
+    this.#volumen.setAttribute('aria-valuetext', formatPercent(v, this.#lang));
     this.#volumen.style.setProperty('--np-progress', `${v * 100}%`);
   }
 
@@ -703,7 +675,7 @@ export class ControlBar implements UiSlots {
     const dentro = !!(doc.fullscreenElement ?? doc.webkitFullscreenElement);
     this.#btnFs.innerHTML = dentro ? ICONS.fullscreenExit : ICONS.fullscreenEnter;
     this.#btnFs.setAttribute('aria-label',
-      dentro ? this.#t.fullscreenExit : this.#t.fullscreenEnter);
+      dentro ? this.#t('ui.fullscreenExit') : this.#t('ui.fullscreenEnter'));
   }
 
   /**
@@ -733,7 +705,7 @@ export class ControlBar implements UiSlots {
 
     // "Aún no ha empezado" y "se ha interrumpido" no son lo mismo: quien
     // llevaba veinte minutos viendo algo no debe leer que no ha empezado.
-    const texto = d.status === 'interrupted' ? this.#t.liveInterrupted : this.#t.liveWaiting;
+    const texto = d.status === 'interrupted' ? this.#t('ui.live.interrupted') : this.#t('ui.live.waiting');
     const previa = this.#root.querySelector<HTMLElement>(
       `[data-espera="${CSS.escape(d.stream)}"]`);
     if (previa) {
@@ -780,12 +752,13 @@ export class ControlBar implements UiSlots {
       this.#tiempo.before(marca);
     }
     const enBorde = this.#player.atLiveEdge;
-    marca.textContent = enBorde ? this.#t.liveBadge : this.#t.liveGoTo;
+    marca.textContent = enBorde ? this.#t('ui.live.badge') : this.#t('ui.live.goTo');
     marca.classList.toggle('np__directo--atras', !enBorde);
     marca.disabled = enBorde;
     marca.setAttribute('aria-label', enBorde
-      ? this.#t.liveBadge
-      : `${this.#t.liveGoTo}. ${this.#t.liveBehind}: ${spokenTime(this.#player.behindLive, this.#lang)}`);
+      ? this.#t('ui.live.badge')
+      : this.#t('ui.live.goToBehindBy',
+          { tiempo: spokenTime(this.#player.behindLive, this.#lang) }));
   }
 
   #anunciar(mensaje: string): void {

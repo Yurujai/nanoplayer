@@ -48,6 +48,7 @@ La tesis, en una frase: **un reproductor que no te obliga a forkearlo.**
 | **Multi-instancia** | Registro compartido con reproducción exclusiva y resolución de manifiestos en lote — 32 reproductores, una petición |
 | **Plugins** | Registro con orden topológico y anclajes de interfaz. Los plugins declaran su condición y se activan solos según el manifiesto |
 | **Theming** | Variables CSS documentadas, sin Shadow DOM |
+| **Idiomas** | Español e inglés de serie, y catálogo abierto: añadir otro —o cambiar una palabra— es configuración, no un fork. Tiempos y porcentajes los formatea `Intl`, así que salen bien en cualquier idioma |
 
 El núcleo **no tiene dependencias en tiempo de ejecución**, y hls.js solo se
 descarga la primera vez que hay que reproducir HLS: quien reproduzca MP4 no lo

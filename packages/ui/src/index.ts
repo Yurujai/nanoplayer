@@ -1,3 +1,6 @@
+// Importado por su efecto: registra el catálogo de la interfaz al cargarse.
+import './strings.js';
+
 export { attachControls, ControlBar } from './control-bar.js';
 export type { ControlBarOptions } from './control-bar.js';
 export { Poster } from './poster.js';

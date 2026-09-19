@@ -21,6 +21,7 @@
  */
 import type { CoreEvents } from './core-events.js';
 import type { EventBus } from './events.js';
+import type { Translate } from './i18n.js';
 import type { Manifest } from './manifest.js';
 import type { Player } from './player.js';
 import type { UiSlots } from './slots.js';
@@ -31,6 +32,20 @@ export interface PluginContext {
   bus: EventBus<CoreEvents>;
   /** Configuración que el integrador pasó para este plugin. */
   config: Record<string, unknown>;
+  /**
+   * Traduce una clave del catálogo compartido.
+   *
+   * Está aquí para que un plugin **no tenga que deducir el idioma por su
+   * cuenta** ni traerse su propia tabla. Antes lo hacía el de subtítulos, y con
+   * cinco plugins serían cinco formas distintas de mirar `documentElement.lang`
+   * y cinco oportunidades de discrepar con la barra.
+   *
+   * El plugin registra sus cadenas con `strings.register()` al cargarse; quien
+   * integra puede sobrescribirlas sin tocar el plugin.
+   */
+  t: Translate;
+  /** Idioma resuelto, para pasárselo a `Intl`. */
+  lang: string;
   /**
    * Ejecuta el callback cuando haya interfaz, ahora o más tarde.
    *
@@ -198,6 +213,8 @@ export class PluginRegistry {
           player,
           bus: player.bus,
           config: (typeof cfg === 'object' && cfg !== null) ? cfg : {},
+          t: player.t,
+          lang: player.lang,
           whenUi: (fn) => {
             if (player.ui) fn(player.ui);
             else player.bus.once('ui:ready', () => { if (player.ui) fn(player.ui); });

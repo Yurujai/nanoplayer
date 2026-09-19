@@ -12,31 +12,24 @@
  * sonido. El botón grande no es una concesión estética, es el gesto que hace
  * falta de todas formas.
  */
-import type { Player } from '@nanoplayer/core';
+import type { Player, Translate } from '@nanoplayer/core';
 import { ICONS } from './icons.js';
-
-interface Textos {
-  play: string; loading: string;
-}
-
-const TEXTOS: Record<string, Textos> = {
-  es: { play: 'Reproducir vídeo', loading: 'Cargando…' },
-  en: { play: 'Play video', loading: 'Loading…' },
-};
 
 export class Poster {
   readonly #player: Player;
   readonly #raiz: HTMLElement;
   readonly #capa: HTMLElement;
   readonly #boton: HTMLButtonElement;
-  readonly #t: Textos;
+  readonly #t: Translate;
   #desatar: Array<() => void> = [];
   #ocupado = false;
 
-  constructor(player: Player, lang = 'es') {
+  constructor(player: Player) {
     this.#player = player;
     this.#raiz = player.container;
-    this.#t = TEXTOS[lang.slice(0, 2)] ?? TEXTOS['es']!;
+    // El traductor del reproductor, no uno propio: el idioma se resuelve una
+    // sola vez y todo el mundo dice lo mismo.
+    this.#t = player.t;
     const doc = this.#raiz.ownerDocument;
 
     this.#capa = doc.createElement('div');
@@ -46,7 +39,7 @@ export class Poster {
     this.#boton.type = 'button';
     this.#boton.className = 'np__poster-play';
     this.#boton.innerHTML = ICONS.play;
-    this.#boton.setAttribute('aria-label', this.#t.play);
+    this.#boton.setAttribute('aria-label', this.#t('ui.poster.play'));
     this.#boton.addEventListener('click', () => this.#arrancar());
 
     this.#capa.appendChild(this.#boton);
@@ -62,7 +55,7 @@ export class Poster {
     if (this.#ocupado) return;
     this.#ocupado = true;
     this.#boton.disabled = true;
-    this.#boton.setAttribute('aria-label', this.#t.loading);
+    this.#boton.setAttribute('aria-label', this.#t('ui.poster.loading'));
     this.#capa.classList.add('np__poster--cargando');
     try {
       // `play()` resuelve y engancha por su cuenta si hace falta: el ciclo
@@ -72,7 +65,7 @@ export class Poster {
       // El error viaja por el bus; aquí solo se restituye el botón para poder
       // reintentar en vez de dejar un póster muerto.
       this.#boton.disabled = false;
-      this.#boton.setAttribute('aria-label', this.#t.play);
+      this.#boton.setAttribute('aria-label', this.#t('ui.poster.play'));
       this.#capa.classList.remove('np__poster--cargando');
     } finally {
       this.#ocupado = false;
@@ -105,7 +98,7 @@ export class Poster {
     this.#raiz.classList.toggle('np--con-poster', !conMedios);
     if (!conMedios) {
       this.#boton.disabled = false;
-      this.#boton.setAttribute('aria-label', this.#t.play);
+      this.#boton.setAttribute('aria-label', this.#t('ui.poster.play'));
       this.#capa.classList.remove('np__poster--cargando');
     }
   }

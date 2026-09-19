@@ -13,6 +13,8 @@
  * usará estos mismos layouts, forzando `presenter` o `presentation`.
  */
 
+import type { Translate } from '@nanoplayer/core';
+
 export type LayoutId = 'side-by-side' | 'presenter' | 'presentation' | 'pip';
 
 export interface LayoutDef {
@@ -22,29 +24,15 @@ export interface LayoutDef {
   minStreams: number;
 }
 
-const ETIQUETAS: Record<string, Record<LayoutId, string>> = {
-  es: {
-    'side-by-side': 'Lado a lado',
-    presenter: 'Solo ponente',
-    presentation: 'Solo presentación',
-    pip: 'Imagen en imagen',
-  },
-  en: {
-    'side-by-side': 'Side by side',
-    presenter: 'Presenter only',
-    presentation: 'Presentation only',
-    pip: 'Picture in picture',
-  },
-};
-
-export function layoutsFor(streamCount: number, lang = 'es'): LayoutDef[] {
-  const t = ETIQUETAS[lang.slice(0, 2)] ?? ETIQUETAS['es']!;
-  const todos: LayoutDef[] = [
-    { id: 'side-by-side', label: t['side-by-side'], minStreams: 2 },
-    { id: 'pip', label: t.pip, minStreams: 2 },
-    { id: 'presenter', label: t.presenter, minStreams: 2 },
-    { id: 'presentation', label: t.presentation, minStreams: 2 },
-  ];
+/**
+ * Los layouts que tienen sentido con ese número de flujos, ya etiquetados.
+ *
+ * Recibe el traductor en vez del idioma: así no hay una segunda forma de
+ * resolver el catálogo conviviendo con la del reproductor.
+ */
+export function layoutsFor(streamCount: number, t: Translate): LayoutDef[] {
+  const todos: LayoutDef[] = (['side-by-side', 'pip', 'presenter', 'presentation'] as const)
+    .map((id) => ({ id, label: t(`ui.layout.${id}`), minStreams: 2 }));
   return todos.filter((l) => streamCount >= l.minStreams);
 }
 

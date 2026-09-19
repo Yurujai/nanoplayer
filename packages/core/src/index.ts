@@ -9,6 +9,10 @@ export {
 } from './validate.js';
 export type { ValidationIssue, ValidationResult } from './validate.js';
 
+// --- textos -----------------------------------------------------------------
+export { IDIOMA_BASE, StringRegistry, strings } from './i18n.js';
+export type { Catalogue, Catalogues, Translate } from './i18n.js';
+
 // --- errores ----------------------------------------------------------------
 export { playerError } from './errors.js';
 export type { ErrorCode, PlayerError } from './errors.js';

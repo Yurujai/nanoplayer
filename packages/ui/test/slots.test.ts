@@ -1,8 +1,14 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { strings } from '@nanoplayer/core';
 import type { BarControlDecl } from '@nanoplayer/core';
 import { SettingsMenu } from '../src/settings-menu.js';
 import { injectStyles } from '../src/styles.js';
+import '../src/strings.js';
+
+// El traductor real, con el catálogo de la interfaz ya registrado: así el test
+// falla si alguien renombra una clave o se deja de registrarla.
+const t = strings.translator('es');
 
 let host: HTMLElement;
 
@@ -19,7 +25,7 @@ describe('SettingsMenu · contrato con los plugins', () => {
   });
 
   it('el engranaje no aparece si nadie ha aportado ajustes', () => {
-    const m = new SettingsMenu(host);
+    const m = new SettingsMenu(host, t);
     expect(m.button.hidden).toBe(true);
     m.addPanel(panel('speed'));
     expect(m.button.hidden).toBe(false);
@@ -31,14 +37,14 @@ describe('SettingsMenu · contrato con los plugins', () => {
     // El botón quedaba con el atributo puesto y a la vista.
     injectStyles(document);
     host.classList.add('np');
-    const m = new SettingsMenu(host);
+    const m = new SettingsMenu(host, t);
     expect(getComputedStyle(m.button).display).toBe('none');
     m.addPanel(panel('speed'));
     expect(getComputedStyle(m.button).display).not.toBe('none');
   });
 
   it('retirar el último panel vuelve a esconder el engranaje', () => {
-    const m = new SettingsMenu(host);
+    const m = new SettingsMenu(host, t);
     const quitar = m.addPanel(panel('speed'));
     quitar();
     expect(m.button.hidden).toBe(true);
@@ -46,7 +52,7 @@ describe('SettingsMenu · contrato con los plugins', () => {
   });
 
   it('ordena por prioridad, no por orden de registro', () => {
-    const m = new SettingsMenu(host);
+    const m = new SettingsMenu(host, t);
     m.addPanel(panel('tarde', { priority: 90 }));
     m.addPanel(panel('pronto', { priority: 10 }));
     m.open();
@@ -57,7 +63,7 @@ describe('SettingsMenu · contrato con los plugins', () => {
 
   it('el valor actual entra en el nombre accesible', () => {
     // Sin esto habría que abrir el panel solo para saber a qué velocidad va.
-    const m = new SettingsMenu(host);
+    const m = new SettingsMenu(host, t);
     m.addPanel(panel('speed', { getValue: () => 'b' }));
     m.open();
     const item = host.querySelector('[role="menuitem"]');
@@ -65,7 +71,7 @@ describe('SettingsMenu · contrato con los plugins', () => {
   });
 
   it('marca la opción activa con aria-checked', () => {
-    const m = new SettingsMenu(host);
+    const m = new SettingsMenu(host, t);
     m.addPanel(panel('speed'));
     m.open();
     host.querySelector<HTMLElement>('.np__menu-item--parent')?.click();
@@ -76,7 +82,7 @@ describe('SettingsMenu · contrato con los plugins', () => {
 
   it('elegir una opción llama a onSelect y vuelve al panel principal', () => {
     const onSelect = vi.fn();
-    const m = new SettingsMenu(host);
+    const m = new SettingsMenu(host, t);
     m.addPanel(panel('speed', { onSelect }));
     m.open();
     host.querySelector<HTMLElement>('.np__menu-item--parent')?.click();
@@ -87,7 +93,7 @@ describe('SettingsMenu · contrato con los plugins', () => {
   });
 
   it('no abre si no hay nada que ofrecer', () => {
-    const m = new SettingsMenu(host);
+    const m = new SettingsMenu(host, t);
     m.open();
     expect(m.isOpen).toBe(false);
   });

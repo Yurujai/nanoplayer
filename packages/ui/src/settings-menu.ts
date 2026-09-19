@@ -19,6 +19,7 @@
  *     recorrerlo entero para volver.
  *   - `Escape` retrocede un panel, o cierra si ya está en el principal.
  */
+import type { Translate } from '@nanoplayer/core';
 import { ICONS } from './icons.js';
 
 export interface SettingsOption {
@@ -38,34 +39,25 @@ export interface SettingsPanel {
   priority?: number;
 }
 
-interface Textos {
-  settings: string; back: string; close: string;
-}
-
-const TEXTOS: Record<string, Textos> = {
-  es: { settings: 'Ajustes', back: 'Volver', close: 'Cerrar ajustes' },
-  en: { settings: 'Settings', back: 'Back', close: 'Close settings' },
-};
-
 export class SettingsMenu {
   readonly #boton: HTMLButtonElement;
   readonly #popup: HTMLElement;
-  readonly #t: Textos;
+  readonly #t: Translate;
   readonly #paneles = new Map<string, SettingsPanel>();
 
   #abierto = false;
   #panelActivo: string | null = null;   // null = panel principal
   #desatar: Array<() => void> = [];
 
-  constructor(host: HTMLElement, lang = 'es') {
+  constructor(host: HTMLElement, t: Translate) {
     const doc = host.ownerDocument;
-    this.#t = TEXTOS[lang.slice(0, 2)] ?? TEXTOS['es']!;
+    this.#t = t;
 
     this.#boton = doc.createElement('button');
     this.#boton.type = 'button';
     this.#boton.className = 'np__btn np__btn--settings';
     this.#boton.innerHTML = ICONS.settings;
-    this.#boton.setAttribute('aria-label', this.#t.settings);
+    this.#boton.setAttribute('aria-label', this.#t('ui.settings.label'));
     this.#boton.setAttribute('aria-haspopup', 'true');
     this.#boton.setAttribute('aria-expanded', 'false');
     // Oculto hasta que alguien aporte ajustes: un engranaje que abre un menú
@@ -178,7 +170,7 @@ export class SettingsMenu {
 
     const menu = doc.createElement('div');
     menu.setAttribute('role', 'menu');
-    menu.setAttribute('aria-label', this.#t.settings);
+    menu.setAttribute('aria-label', this.#t('ui.settings.label'));
 
     if (this.#panelActivo === null) {
       const ordenados = [...this.#paneles.values()]
@@ -194,7 +186,7 @@ export class SettingsMenu {
       cabecera.setAttribute('role', 'menuitem');
       cabecera.innerHTML = `<span class="np__menu-chevron" aria-hidden="true">‹</span>` +
         `<span>${panel.label}</span>`;
-      cabecera.setAttribute('aria-label', `${this.#t.back}: ${panel.label}`);
+      cabecera.setAttribute('aria-label', `${this.#t('ui.settings.back')}: ${panel.label}`);
       cabecera.addEventListener('click', () => { this.#panelActivo = null; this.#pintar(); this.#enfocarPrimero(); });
       menu.appendChild(cabecera);
 

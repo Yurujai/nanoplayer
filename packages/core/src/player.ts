@@ -13,6 +13,7 @@ import {
   selectEngine, type EngineFactory, type MediaEngine,
 } from './engine.js';
 import { playerError, type PlayerError } from './errors.js';
+import { strings, type Catalogues, type Translate } from './i18n.js';
 import { EventBus, type Unsubscribe } from './events.js';
 import { Lifecycle } from './lifecycle.js';
 import { LiveTracker, type LiveStatus, type RetryPolicy } from './live.js';
@@ -60,6 +61,17 @@ export interface PlayerOptions {
   syncProfile?: SyncProfile;
   /** Espera entre reintentos cuando un directo aún no emite. */
   liveRetry?: RetryPolicy;
+  /**
+   * Idioma de la interfaz. Por defecto, el del documento que contiene al
+   * reproductor; `es` si tampoco lo declara.
+   *
+   * Vive aquí y no en la barra de controles porque los plugins también lo
+   * necesitan, y antes cada uno lo deducía por su cuenta: dos formas distintas
+   * de mirar `document.documentElement.lang` acaban discrepando.
+   */
+  lang?: string;
+  /** Cadenas propias, que mandan sobre las registradas por cada paquete. */
+  strings?: Catalogues;
 }
 
 /**
@@ -101,6 +113,7 @@ export class Player {
   readonly #vivo = new LiveTracker();
   #reintentos = new Map<string, ReturnType<typeof setTimeout>>();
   #pausadoPorStall = false;
+  readonly #t: Translate;
   /** Flujos sin datos ahora mismo. Atascarse es de cada flujo, no del conjunto. */
   readonly #atascados = new Set<string>();
   #sonando = false;
@@ -108,7 +121,23 @@ export class Player {
   constructor(options: PlayerOptions) {
     this.#opts = options;
     this.#engines = options.engines ?? [nativeEngineFactory];
+    // Del documento del contenedor y no del global `document`: dentro de un
+    // iframe el idioma que manda es el del iframe.
+    const idioma = options.lang
+      ?? options.container.ownerDocument.documentElement.lang;
+    this.#t = strings.translator(idioma || '', options.strings);
   }
+
+  /**
+   * Traduce una clave del catálogo compartido.
+   *
+   * Lo usan la interfaz y los plugins, para que todos digan lo mismo en el
+   * mismo idioma sin tener que ponerse de acuerdo entre ellos.
+   */
+  get t(): Translate { return this.#t; }
+
+  /** Idioma resuelto. Es el que hay que pasarle a `Intl`. */
+  get lang(): string { return this.#t.lang; }
 
   /** El elemento donde se montan los medios. Lo necesita el registro para
    *  observar visibilidad sin que el integrador tenga que repetírselo. */
