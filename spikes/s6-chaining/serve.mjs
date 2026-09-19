@@ -35,12 +35,18 @@ const TYPES = {
 createServer((req, res) => {
   const urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   const rel = normalize(urlPath).replace(/^(\.\.[/\\])+/, '');
-  const path = join(ROOT, rel === '/' ? 'index.html' : rel);
+  let path = join(ROOT, rel === '/' ? 'index.html' : rel);
 
   let st;
   try {
     st = statSync(path);
-    if (st.isDirectory()) throw new Error('dir');
+    // Un directorio se sirve por su index.html, que es lo que hace GitHub
+    // Pages. Sin esto, la ruta publicada —que termina en barra— daría 404 aquí
+    // y funcionaría en producción: el peor orden posible para enterarse.
+    if (st.isDirectory()) {
+      path = join(path, 'index.html');
+      st = statSync(path);
+    }
   } catch {
     res.writeHead(404, { 'content-type': 'text/plain' });
     return res.end('404');

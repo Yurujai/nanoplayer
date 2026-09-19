@@ -5,6 +5,7 @@ name: Publicar spikes y demo
 #   /                        índice
 #   /demo/                   banco de pruebas del núcleo
 #   /spikes/s1-dual-sync/    spike de sincronización dual-stream
+#   /spikes/s6-chaining/     spike de encadenado de cabecera y cola
 #   /probe/                  sonda de diagnóstico de dispositivo (S2)
 #
 # Los medios NO se versionan: se generan aquí con ffmpeg. Con la calidad de
@@ -92,6 +93,22 @@ jobs:
           dest="$GITHUB_WORKSPACE/_site/spikes/s1-dual-sync"
           mkdir -p "$dest"
           cp index.html sync.js "$dest/"
+          cp -r media "$dest/"
+
+      # --- S6: encadenado de cabecera y cola --------------------------------
+      # Se publica sobre todo para poder abrirlo en un móvil: la pregunta que
+      # le queda abierta —si iOS deja arrancar el segundo elemento— solo se
+      # contesta en un iPhone, y pedir que levanten un servidor en su red local
+      # es pedir demasiado.
+      - name: Preparar el spike de encadenado
+        working-directory: spikes/s6-chaining
+        env:
+          DUR_MAIN: '20'
+        run: |
+          ./gen-media.sh
+          dest="$GITHUB_WORKSPACE/_site/spikes/s6-chaining"
+          mkdir -p "$dest"
+          cp index.html chain.js "$dest/"
           cp -r media "$dest/"
 
       # --- demo -----------------------------------------------------------

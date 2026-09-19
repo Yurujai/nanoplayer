@@ -168,6 +168,28 @@
     </ul>
   </a>
 
+  <a class="tarjeta" href="spikes/s6-chaining/">
+    <div class="cab">
+      <h3>S6 · Encadenado de cabecera y cola</h3>
+      <span class="marca curso">Falta el dato de iPhone</span>
+    </div>
+    <p>
+      ¿Se puede pasar de la cabecera al contenido sin que se vea el salto?
+      Sí, pero solo arrancando la pieza siguiente <strong>antes</strong> de que
+      termine la anterior. Tres piezas de color plano: si aparece negro, hubo
+      hueco.
+    </p>
+    <ul class="hallazgos">
+      <li>Sin anticipación el hueco es de 340–445 ms; con 600 ms de
+          anticipación baja a cero en Chromium y en WebKit</li>
+      <li>Un <code>play()</code> sobre un elemento ya cargado tarda 250 ms en
+          dar el primer fotograma, y hasta 430 ms en WebKit</li>
+      <li>Falta lo que decide: en iOS el permiso de reproducción es de cada
+          elemento, no de la página. <strong>Se agradece abrirlo en un
+          iPhone</strong></li>
+    </ul>
+  </a>
+
   <a class="tarjeta" href="https://github.com/Yurujai/nanoplayer/tree/main/spikes/s5-live-dual">
     <div class="cab">
       <h3>S5 · Directo dual-stream</h3>
