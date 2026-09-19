@@ -5,7 +5,7 @@
  *
  * ```html
  * <div id="player"></div>
- * <script src="nanoplayer.js"></script>
+ * <script src="nanoplayer.min.js"></script>
  * <script>
  *   NanoPlayer.create('#player', { manifest: '/api/video/123' });
  * </script>

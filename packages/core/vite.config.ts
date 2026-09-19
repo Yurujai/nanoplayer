@@ -8,10 +8,16 @@ import { fileURLToPath } from 'node:url';
 export default defineConfig({
   build: {
     lib: {
-      entry: fileURLToPath(new URL('src/nanoplayer.ts', import.meta.url)),
+      // El barril, no `nanoplayer.ts`. Este era el entry y publicaba ocho
+      // exports: `create` y poco más. Todo lo que el README documenta
+      // —`validateManifest`, `EventBus`, `Synchronizer`— quedaba fuera del
+      // paquete construido aunque estuviera en el código.
+      entry: fileURLToPath(new URL('src/index.ts', import.meta.url)),
       name: 'NanoPlayer',
       formats: ['es', 'iife'],
-      fileName: (format) => (format === 'iife' ? 'nanoplayer.min.js' : 'nanoplayer.js'),
+      // `index.js` para que case con `main`/`exports` del package.json, que
+      // apuntaban a un fichero que no se llegaba a emitir.
+      fileName: (format) => (format === 'iife' ? 'nanoplayer.min.js' : 'index.js'),
     },
     sourcemap: true,
     target: 'es2022',
