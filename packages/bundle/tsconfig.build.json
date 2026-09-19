@@ -1,0 +1,12 @@
+{
+  // Solo para emitir los .d.ts; el bundle lo hace Vite. Extiende la base y no
+  // el tsconfig del paquete, que mapea los hermanos a su código fuente: aquí
+  // se resuelven contra los paquetes ya construidos, como hará el consumidor.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}

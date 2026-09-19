@@ -74,3 +74,16 @@ jobs:
       - name: Auditar accesibilidad
         run: node a11y.mjs --serve ../demo/dist
         working-directory: e2e
+
+      # Va en este job y no en el de tests porque aquí ya hay un navegador
+      # instalado, y montarlo otra vez cuesta más que la comprobación.
+      #
+      # Se audita el fichero construido cargado como lo cargaría cualquiera.
+      # Que la etiqueta `<script>` dé un reproductor CON controles es el
+      # objetivo O5 entero, y es lo único que no pueden verificar ni los tipos
+      # ni los tests de unidad.
+      - name: Comprobar la etiqueta script
+        run: |
+          pnpm --filter @nanoplayer/bundle build
+          node script-tag.mjs
+        working-directory: e2e

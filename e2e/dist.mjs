@@ -18,7 +18,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createContext, runInContext } from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
-const PAQUETES = ['core', 'ui', 'engine-hls', 'plugin-captions'];
+const PAQUETES = ['core', 'ui', 'engine-hls', 'plugin-captions', 'bundle'];
 const raiz = new URL('../packages/', import.meta.url);
 
 let fallos = 0;
@@ -59,8 +59,20 @@ comprobar(core.plugins.has('captions'),
 const hls = await import('@nanoplayer/engine-hls');
 comprobar(typeof hls.enginesWithHls === 'function', '@nanoplayer/engine-hls exporta enginesWithHls');
 
+console.log('\nEl bundle con pilas incluidas');
+const conPilas = await import('@nanoplayer/bundle');
+comprobar(typeof conPilas.create === 'function', '@nanoplayer/bundle exporta create');
+// La distinción que da sentido al paquete: su `create` monta los controles, y
+// el del núcleo no. Son funciones distintas y aquí se comprueba que no se haya
+// colado la del núcleo por un `export *`.
+comprobar(conPilas.create !== core.create,
+  'su create no es el headless del núcleo');
+comprobar(typeof conPilas.attachControls === 'function', 'reexporta attachControls');
+comprobar(typeof conPilas.validateManifest === 'function', 'reexporta el resto del núcleo');
+
 console.log('\nBundle IIFE para la etiqueta <script>');
-const iife = readFileSync(new URL('core/dist/nanoplayer.min.js', raiz), 'utf8');
+// El del bundle, no el del núcleo: es el que alguien pegaría en una etiqueta.
+const iife = readFileSync(new URL('bundle/dist/nanoplayer.min.js', raiz), 'utf8');
 // Contexto mínimo: solo interesa la forma de la global, no ejecutar el DOM.
 const ctx = createContext({ self: {}, window: {}, document: { documentElement: {} } });
 try {
@@ -69,7 +81,7 @@ try {
   comprobar(false, 'el IIFE se evalúa', error.message);
 }
 comprobar(typeof ctx.NanoPlayer === 'object', 'define la global NanoPlayer');
-for (const n of ['create', 'plugins', 'registry', 'validateManifest']) {
+for (const n of ['create', 'attachControls', 'plugins', 'registry', 'validateManifest']) {
   comprobar(ctx.NanoPlayer?.[n] !== undefined, `NanoPlayer.${n} en el primer nivel`);
 }
 

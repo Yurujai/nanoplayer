@@ -48,6 +48,7 @@ La tesis, en una frase: **un reproductor que no te obliga a forkearlo.**
 | **Multi-instancia** | Registro compartido con reproducción exclusiva y resolución de manifiestos en lote — 32 reproductores, una petición |
 | **Plugins** | Registro con orden topológico y anclajes de interfaz. Los plugins declaran su condición y se activan solos según el manifiesto |
 | **Theming** | Variables CSS documentadas, sin Shadow DOM |
+| **Instalación** | Los paquetes sueltos por npm, o una etiqueta `<script>` y tres líneas con el bundle de 22 KB gzip |
 | **Idiomas** | Español e inglés de serie, y catálogo abierto: añadir otro —o cambiar una palabra— es configuración, no un fork. Tiempos y porcentajes los formatea `Intl`, así que salen bien en cualquier idioma |
 
 El núcleo **no tiene dependencias en tiempo de ejecución**, y hls.js solo se
@@ -62,6 +63,7 @@ paga.
 | [`@nanoplayer/ui`](packages/ui/) | Barra de controles accesible, menú de ajustes y layouts |
 | [`@nanoplayer/engine-hls`](packages/engine-hls/) | Motor HLS sobre hls.js |
 | [`@nanoplayer/plugin-captions`](packages/plugin-captions/) | Subtítulos |
+| [`@nanoplayer/bundle`](packages/bundle/) | Todo lo anterior en un fichero, para la etiqueta `<script>`. 22 KB gzip |
 
 ## Qué falta
 
@@ -69,10 +71,9 @@ Por orden de lo que bloquea a más gente:
 
 - **Publicación.** Nada está en npm y no hay workflow de release. Los cuatro
   paquetes siguen en `0.0.0`.
-- **El bundle de una etiqueta.** El núcleo ya construye un IIFE con la global
-  `NanoPlayer`, pero `@nanoplayer/ui` solo construye ESM: falta el paquete que
-  los junte para que una etiqueta `<script>` dé un reproductor **con
-  controles**.
+- **HLS en una etiqueta `<script>`.** El bundle lleva el motor nativo, que
+  cubre MP4 en todas partes y HLS en Safari e iOS. Para HLS en Chrome hace
+  falta hls.js, que hoy solo se puede cargar por la vía npm.
 - **Recorte (`trim`).** El manifiesto lo valida y lo expone, pero todavía nada
   lo aplica durante la reproducción.
 - **Plugins previstos:** multi-audio, Chromecast, listas de reproducción y H5P.
