@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Spike S6 — encadenado de cabecera y cola</title>
+<link rel="icon" href="data:,"><!-- evita el 404 de favicon que ensucia el log -->
+
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 1.25rem;
+    font: 15px/1.5 system-ui, -apple-system, sans-serif;
+    background: #14161a; color: #e6e8ea;
+  }
+  main { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 1.1rem; margin: 0 0 .25rem; }
+  p.sub { margin: 0 0 1.25rem; color: #9aa3ad; font-size: .875rem; }
+
+  /* Las piezas van apiladas en el mismo hueco: el cambio es solo opacidad.
+     El fondo es negro a propósito — si aparece, es que hubo hueco. */
+  .escenario {
+    position: relative; width: 100%; aspect-ratio: 16 / 9;
+    background: #000; border-radius: 8px; overflow: hidden;
+  }
+  .escenario video {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: contain; display: block;
+  }
+  .vacio {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    color: #6b727a; font-size: .875rem; text-align: center; padding: 1rem;
+  }
+
+  .panel {
+    margin-top: 1.25rem; padding: 1rem;
+    background: #1c1f24; border: 1px solid #2a2f36; border-radius: 8px;
+  }
+  .stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: .75rem;
+  }
+  .stat .k { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: #8b939c; }
+  .stat .val { font-size: 1.2rem; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .good { color: #88ff00; } .warn { color: #ffb020; } .bad { color: #ff6b6b; }
+
+  .controls { margin-top: 1rem; display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+  button, select {
+    font: inherit; padding: .55rem .9rem; border-radius: 6px;
+    border: 1px solid #39404a; background: #262b32; color: #e6e8ea; cursor: pointer;
+  }
+  button:hover:not(:disabled), select:hover { background: #303740; }
+  button:disabled { opacity: .45; cursor: default; }
+  button:focus-visible, select:focus-visible { outline: 3px solid #6aa9ff; outline-offset: 2px; }
+  button.primario { background: #2f6fd0; border-color: #3f7fe0; }
+  button.saltar { background: #3a3f47; }
+  label { font-size: .8rem; color: #9aa3ad; display: inline-flex; gap: .35rem; align-items: center; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .84rem; margin-top: .6rem; }
+  th, td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid #2a2f36; }
+  th { color: #8b939c; font-weight: 600; font-size: .74rem; text-transform: uppercase; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .tabla-scroll { overflow-x: auto; }
+
+  pre {
+    background: #101216; border: 1px solid #2a2f36; border-radius: 6px;
+    padding: .75rem; overflow-x: auto; font-size: .76rem; line-height: 1.45;
+    margin: .6rem 0 0; white-space: pre-wrap; word-break: break-word;
+  }
+  .nota { font-size: .8rem; color: #8b939c; margin: .6rem 0 0; }
+  .aviso {
+    margin-top: 1rem; padding: .7rem .85rem; border-radius: 6px; font-size: .84rem;
+    background: rgba(255,176,32,.1); border: 1px solid rgba(255,176,32,.45); color: #ffc65c;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Spike S6 — encadenado de cabecera y cola</h1>
+<p class="sub">
+  Tres piezas de colores planos y distintos. Si entre una y otra aparece
+  <strong>negro</strong>, hubo hueco: el fondo del escenario es lo único negro
+  que hay en toda la página.
+</p>
+
+<div class="escenario" id="escenario">
+  <div class="vacio" id="vacio">
+    Nada descargado todavía.<br>Los elementos se crean al pulsar reproducir.
+  </div>
+</div>
+
+<div class="controls">
+  <button id="btn-play" class="primario">Reproducir</button>
+  <button id="btn-saltar" class="saltar" hidden>Saltar cabecera</button>
+  <button id="btn-pausa" disabled>Pausar</button>
+  <button id="btn-reiniciar" disabled>Reiniciar</button>
+</div>
+
+<div class="controls">
+  <label>
+    Variante
+    <select id="sel-variante">
+      <option value="A">A · dos elementos, desbloqueados en el gesto</option>
+      <option value="B">B · dos elementos, sin desbloquear</option>
+      <option value="C">C · un elemento, cambiando src</option>
+    </select>
+  </label>
+  <label>
+    Anticipación
+    <select id="sel-lead">
+      <option value="0">0 ms · arrancar al terminar</option>
+      <option value="150">150 ms antes</option>
+      <option value="300">300 ms antes</option>
+      <option value="600">600 ms antes</option>
+    </select>
+  </label>
+</div>
+
+<div class="panel">
+  <div class="stats">
+    <div class="stat"><div class="k">Pieza</div><div class="val" id="d-pieza">—</div></div>
+    <div class="stat"><div class="k">Hueco cabecera→principal</div><div class="val" id="d-costura1">—</div></div>
+    <div class="stat"><div class="k">Hueco principal→cola</div><div class="val" id="d-costura2">—</div></div>
+    <div class="stat"><div class="k">Play bloqueado</div><div class="val" id="d-bloqueo">—</div></div>
+  </div>
+
+  <div class="tabla-scroll">
+    <table>
+      <thead>
+        <tr><th>Elemento</th><th>readyState</th><th class="num">Buffer</th>
+            <th class="num">Fotogramas</th><th>Desbloqueo</th></tr>
+      </thead>
+      <tbody id="tabla-elementos">
+        <tr><td colspan="5" style="color:#6b727a">Sin elementos: nada se ha creado todavía.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="nota" id="nota-rvfc"></p>
+</div>
+
+<div class="panel">
+  <div class="controls" style="margin-top:0">
+    <strong style="font-size:.85rem">Informe</strong>
+    <button id="btn-copiar">Copiar informe</button>
+  </div>
+  <pre id="informe">Todavía no hay nada que informar.</pre>
+  <p class="nota">
+    Para que el informe sirva hay que dejar terminar las dos costuras, o saltar
+    la cabecera y dejar terminar la segunda.
+  </p>
+</div>
+
+<div class="aviso">
+  <strong>En iPhone, usar Safari.</strong> Chrome y Firefox en iOS son WebKit
+  por dentro, pero la política de autoplay no se comporta igual a través de su
+  capa. Y hay que probar <strong>sin</strong> el modo de bajo consumo: cambia
+  el comportamiento de reproducción y contamina la medida.
+</div>
+
+</main>
+
+<script src="chain.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  const $ = (sel) => document.querySelector(sel);
+  const escenario = $('#escenario');
+  const vacio = $('#vacio');
+
+  let cadena = null;
+
+  const ms = (v) => (v === null || v === undefined ? '—' : Math.round(v) + ' ms');
+
+  function clasePara(hueco) {
+    if (hueco === null || hueco === undefined) return '';
+    // Un frame a 30 fps son 33 ms: por debajo de eso el hueco no llega a
+    // pintarse. Hasta 100 ms se percibe como un parpadeo; por encima, como un
+    // corte.
+    if (hueco <= 33) return 'good';
+    if (hueco <= 100) return 'warn';
+    return 'bad';
+  }
+
+  function pintar() {
+    if (!cadena) return;
+    const inf = cadena.informe;
+
+    $('#d-pieza').textContent = cadena.terminada
+      ? 'terminada'
+      : (cadena.piezaActual ? cadena.piezaActual.etiqueta : '—');
+
+    const c1 = inf.costuras[0];
+    const c2 = inf.costuras[1];
+    for (const [sel, c] of [['#d-costura1', c1], ['#d-costura2', c2]]) {
+      const el = $(sel);
+      el.textContent = c ? ms(c.hueco) : '—';
+      el.className = 'val ' + (c ? clasePara(c.hueco) : '');
+    }
+
+    const bloqueos = []
+      .concat(inf.arranque && inf.arranque.bloqueado ? ['arranque'] : [])
+      .concat(inf.costuras.filter((c) => c.bloqueado).map((c) => c.a));
+    const elBloqueo = $('#d-bloqueo');
+    elBloqueo.textContent = bloqueos.length ? bloqueos.join(', ') : 'no';
+    elBloqueo.className = 'val ' + (bloqueos.length ? 'bad' : 'good');
+
+    const filas = cadena.elementos.map((el, i) => {
+      const marca = cadena.marcas.get(el);
+      const pieza = cadena.variante.unElemento ? cadena.piezaActual : window.PIEZAS[i];
+      const desbloqueo = inf.desbloqueos.find((d) => pieza && d.id === pieza.id);
+      const buf = el.buffered.length ? el.buffered.end(el.buffered.length - 1) : 0;
+      return '<tr>'
+        + '<td>' + (pieza ? pieza.etiqueta : '—') + '</td>'
+        + '<td>' + el.readyState + '</td>'
+        + '<td class="num">' + buf.toFixed(1) + ' s</td>'
+        + '<td class="num">' + (marca ? marca.frames : 0) + '</td>'
+        + '<td>' + (desbloqueo ? (desbloqueo.ok ? 'sí' : 'NO — ' + desbloqueo.error) : '—') + '</td>'
+        + '</tr>';
+    });
+    $('#tabla-elementos').innerHTML = filas.length
+      ? filas.join('')
+      : '<tr><td colspan="5" style="color:#6b727a">Sin elementos.</td></tr>';
+
+    $('#btn-saltar').hidden = !cadena.saltable;
+    $('#btn-pausa').disabled = !cadena.elementoActual;
+    $('#btn-reiniciar').disabled = false;
+    $('#informe').textContent = JSON.stringify(construirInforme(inf), null, 2);
+  }
+
+  function construirInforme(inf) {
+    return {
+      fecha: new Date().toISOString(),
+      navegador: navigator.userAgent,
+      plataforma: navigator.platform,
+      pantalla: screen.width + 'x' + screen.height + ' @' + (devicePixelRatio || 1),
+      requestVideoFrameCallback: inf.rvfc,
+      variante: inf.etiqueta,
+      anticipacionMs: inf.leadMs,
+      arranque: inf.arranque,
+      desbloqueos: inf.desbloqueos,
+      costuras: inf.costuras.map((c) => ({
+        de: c.de, a: c.a, motivo: c.motivo,
+        huecoMs: c.hueco === null ? null : Math.round(c.hueco),
+        // Cuánto tardó el play() en dar el primer fotograma. Es lo que explica
+        // el hueco: separa "tardó en arrancar" de "se cambió demasiado pronto".
+        latenciaMs: (c.tPeticion && c.tPrimerFrameEntrante)
+          ? Math.round(c.tPrimerFrameEntrante - c.tPeticion) : null,
+        bloqueado: c.bloqueado,
+        error: c.error,
+        // Si la petición fue silenciada, la medida de política no vale: se
+        // publica para que quien lea el informe pueda descartarla.
+        conSonido: c.conSonido,
+        pausadaTrasSonido: c.pausadaTrasSonido,
+        anticipada: c.anticipada,
+        readyStateEntrante: c.readyStateEntrante,
+      })),
+      completa: inf.terminada,
+    };
+  }
+
+  function arrancarCadena() {
+    if (cadena) cadena.destruir();
+    vacio.hidden = true;
+    for (const v of escenario.querySelectorAll('video')) v.remove();
+
+    cadena = new window.Cadena(escenario, {
+      variante: $('#sel-variante').value,
+      leadMs: Number($('#sel-lead').value),
+      onCambio: pintar,
+    });
+    // Síncrono dentro del gesto: es la condición que hace válido el
+    // desbloqueo. Cualquier `await` antes de esta línea lo invalidaría.
+    cadena.arrancar();
+
+    $('#btn-play').disabled = true;
+    pintar();
+  }
+
+  $('#btn-play').addEventListener('click', arrancarCadena);
+  $('#btn-saltar').addEventListener('click', () => cadena && cadena.saltar());
+  $('#btn-pausa').addEventListener('click', () => {
+    if (!cadena) return;
+    const el = cadena.elementoActual;
+    // Se decide con el estado de ANTES: `play()` es asíncrono, así que releer
+    // `paused` después deja la etiqueta al revés de lo que acaba de pasar.
+    const estabaPausado = el ? el.paused : true;
+    if (estabaPausado) cadena.reanudar(); else cadena.pausar();
+    $('#btn-pausa').textContent = estabaPausado ? 'Pausar' : 'Reanudar';
+  });
+  $('#btn-reiniciar').addEventListener('click', () => {
+    if (cadena) cadena.destruir();
+    cadena = null;
+    vacio.hidden = false;
+    $('#btn-play').disabled = false;
+    $('#btn-saltar').hidden = true;
+    $('#btn-pausa').disabled = true;
+    $('#informe').textContent = 'Todavía no hay nada que informar.';
+    $('#tabla-elementos').innerHTML =
+      '<tr><td colspan="5" style="color:#6b727a">Sin elementos.</td></tr>';
+    for (const sel of ['#d-pieza', '#d-costura1', '#d-costura2', '#d-bloqueo']) {
+      $(sel).textContent = '—'; $(sel).className = 'val';
+    }
+  });
+
+  $('#btn-copiar').addEventListener('click', async () => {
+    const texto = $('#informe').textContent;
+    try {
+      await navigator.clipboard.writeText(texto);
+      $('#btn-copiar').textContent = 'Copiado';
+    } catch {
+      // Sin permiso de portapapeles: se selecciona para copiar a mano, que en
+      // iOS es lo habitual si la página no es https.
+      const r = document.createRange();
+      r.selectNodeContents($('#informe'));
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+      $('#btn-copiar').textContent = 'Selecciona y copia';
+    }
+    setTimeout(() => { $('#btn-copiar').textContent = 'Copiar informe'; }, 2500);
+  });
+
+  // La variante C no puede anticipar: no se puede cargar la pieza siguiente
+  // sin destruir la que suena. Se deshabilita el selector para que quede claro
+  // que es una imposibilidad, no un ajuste que se olvidó.
+  function ajustarLead() {
+    const esC = $('#sel-variante').value === 'C';
+    $('#sel-lead').disabled = esC;
+    $('#sel-lead').title = esC
+      ? 'La variante C no admite anticipación: solo hay un elemento.'
+      : '';
+  }
+  $('#sel-variante').addEventListener('change', ajustarLead);
+  ajustarLead();
+
+  $('#nota-rvfc').textContent = window.HAY_RVFC
+    ? 'requestVideoFrameCallback disponible: los huecos se miden sobre fotogramas presentados.'
+    : 'Sin requestVideoFrameCallback: se estima con requestAnimationFrame. Los números salen más gruesos y NO son comparables con los de un navegador que sí la tiene.';
+
+  setInterval(() => { if (cadena) pintar(); }, 400);
+})();
+</script>
+</body>
+</html>

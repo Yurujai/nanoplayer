@@ -97,6 +97,12 @@ importers:
         specifier: ^1.49.0
         version: 1.62.1
 
+  spikes/s6-chaining:
+    devDependencies:
+      playwright:
+        specifier: ^1.49.0
+        version: 1.62.1
+
 packages:
 
   '@esbuild/aix-ppc64@0.21.5':

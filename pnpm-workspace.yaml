@@ -3,6 +3,7 @@ packages:
   - 'demo'
   - 'e2e'
   - 'spikes/s5-live-dual'
+  - 'spikes/s6-chaining'
 
 # pnpm 10 avisaba de los scripts de instalación ignorados; pnpm 12 se planta y
 # exige decidir. Se declara aquí para que el arranque en limpio no dependa de
