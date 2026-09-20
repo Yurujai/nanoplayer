@@ -50,6 +50,51 @@ import { attachControls } from '@nanoplayer/ui';
 import '@nanoplayer/plugin-captions';
 ```
 
+## Qué se publica
+
+| Fichero | Para qué |
+|---|---|
+| `nanoplayer.min.js` | IIFE. Deja la global `NanoPlayer`. **Es el de la etiqueta `<script>`** |
+| `nanoplayer.umd.js` | UMD. Para cargadores AMD —RequireJS, Moodle— y para CommonJS |
+| `index.js` | ESM, para quien tenga build propio |
+| `nanoplayer.css` | La hoja de estilos como fichero, para CSP estricta |
+
+**El UMD no sustituye al IIFE**, aunque lo parezca. UMD mira primero si hay
+`define.amd`: en una página que ya carga RequireJS, un `<script src>` de UMD se
+registra como módulo anónimo y **no crea la global**. Es decir, dejaría de
+funcionar justo en la plataforma donde más falta hace. Por eso van los dos, y
+CI comprueba que cada uno hace lo suyo con un cargador AMD presente.
+
+## Con una CSP estricta
+
+`injectStyles()` crea un `<style>` en línea, y una política `style-src 'self'`
+sin `'unsafe-inline'` lo bloquea **sin decir nada**: el reproductor se queda sin
+estilos y no hay error que mirar. Es el caso normal en una instalación
+institucional.
+
+La salida es servir la hoja como un recurso más:
+
+```html
+<link rel="stylesheet" href="/ruta/nanoplayer.css">
+<div id="player"></div>
+<script src="/ruta/nanoplayer.min.js"></script>
+<script>
+  NanoPlayer.create('#player', {
+    manifest: '/api/video/123',
+    controls: { injectStyles: false },
+  });
+</script>
+```
+
+Por npm, la hoja se importa así:
+
+```js
+import '@nanoplayer/bundle/nanoplayer.css';
+```
+
+Comprobado en CI con la CSP puesta de verdad por cabecera, no simulada: cero
+violaciones y los estilos aplicados.
+
 ## Qué NO lleva
 
 **El motor de HLS.** `@nanoplayer/engine-hls` carga hls.js con un `import()`

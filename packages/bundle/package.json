@@ -5,9 +5,12 @@
   "license": "Apache-2.0",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./nanoplayer.css": "./dist/nanoplayer.css"
+  },
   "files": ["dist"],
-  "scripts": { "build": "vite build && tsc -p tsconfig.build.json", "typecheck": "tsc --noEmit" },
+  "scripts": { "build": "vite build && tsc -p tsconfig.build.json && node ../ui/emit-css.mjs dist/nanoplayer.css", "typecheck": "tsc --noEmit" },
   "dependencies": {
     "@nanoplayer/core": "workspace:*",
     "@nanoplayer/ui": "workspace:*",

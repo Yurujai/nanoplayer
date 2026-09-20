@@ -49,7 +49,7 @@ La tesis, en una frase: **un reproductor que no te obliga a forkearlo.**
 | **Multi-instancia** | Registro compartido con reproducción exclusiva y resolución de manifiestos en lote — 32 reproductores, una petición |
 | **Plugins** | Registro con orden topológico y anclajes de interfaz. Los plugins declaran su condición y se activan solos según el manifiesto |
 | **Theming** | Variables CSS documentadas, sin Shadow DOM |
-| **Instalación** | Los paquetes sueltos por npm, o una etiqueta `<script>` y tres líneas con el bundle de 22 KB gzip |
+| **Instalación** | Los paquetes sueltos por npm, o una etiqueta `<script>` y tres líneas con el bundle de 22 KB gzip. También UMD para cargadores AMD, y la hoja de estilos como fichero para entornos con CSP estricta |
 | **Errores** | `code` para decidir qué se le dice al usuario —traducible—, y `message` en inglés como diagnóstico para quien integra |
 | **Idiomas** | Español e inglés de serie, y catálogo abierto: añadir otro —o cambiar una palabra— es configuración, no un fork. Tiempos y porcentajes los formatea `Intl`, así que salen bien en cualquier idioma |
 

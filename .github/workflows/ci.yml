@@ -106,3 +106,10 @@ jobs:
       - name: Comprobar la etiqueta script
         run: node script-tag.mjs
         working-directory: e2e
+
+      # Los dos caminos por los que entra el reproductor en un LMS: una CSP
+      # estricta que prohíbe los estilos en línea, y una página que ya carga
+      # RequireJS. Ninguno de los dos se puede comprobar sin navegador.
+      - name: Comprobar la integración en un LMS
+        run: node integracion.mjs
+        working-directory: e2e

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "scripts": { "a11y": "node a11y.mjs", "dist": "node dist.mjs", "script-tag": "node script-tag.mjs", "teclado": "node teclado.mjs" },
+  "scripts": { "a11y": "node a11y.mjs", "dist": "node dist.mjs", "script-tag": "node script-tag.mjs", "teclado": "node teclado.mjs", "integracion": "node integracion.mjs" },
   "dependencies": {
     "@nanoplayer/bundle": "workspace:*",
     "@nanoplayer/core": "workspace:*",

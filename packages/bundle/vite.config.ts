@@ -18,8 +18,23 @@ export default defineConfig({
     lib: {
       entry: src('src/index.ts'),
       name: 'NanoPlayer',
-      formats: ['es', 'iife'],
-      fileName: (format) => (format === 'iife' ? 'nanoplayer.min.js' : 'index.js'),
+      /*
+       * Tres formatos, y el UMD **no sustituye al IIFE** aunque lo parezca.
+       *
+       * UMD mira primero si hay `define.amd`. En una página que ya carga
+       * RequireJS —Moodle es el caso— un `<script src>` de UMD se registra
+       * como módulo anónimo y **no crea la global**: la etiqueta dejaría de
+       * funcionar justo donde más falta hace. Por eso conviven:
+       *
+       *   nanoplayer.min.js   IIFE, siempre deja la global. Para `<script>`.
+       *   nanoplayer.umd.js   UMD, para cargadores AMD y para CommonJS.
+       */
+      formats: ['es', 'iife', 'umd'],
+      fileName: (format) => {
+        if (format === 'iife') return 'nanoplayer.min.js';
+        if (format === 'umd') return 'nanoplayer.umd.js';
+        return 'index.js';
+      },
     },
     sourcemap: true,
     target: 'es2022',

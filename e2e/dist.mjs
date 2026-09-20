@@ -59,6 +59,21 @@ comprobar(core.plugins.has('captions'),
 const hls = await import('@nanoplayer/engine-hls');
 comprobar(typeof hls.enginesWithHls === 'function', '@nanoplayer/engine-hls exporta enginesWithHls');
 
+console.log('\nFicheros para integrar sin build');
+for (const [paquete, fichero] of [['ui', 'nanoplayer.css'], ['bundle', 'nanoplayer.css'],
+                                  ['bundle', 'nanoplayer.min.js'], ['bundle', 'nanoplayer.umd.js']]) {
+  const ruta = new URL(`${paquete}/dist/${fichero}`, raiz);
+  const hay = existsSync(fileURLToPath(ruta));
+  const tam = hay ? readFileSync(ruta, 'utf8').length : 0;
+  comprobar(hay && tam > 1000, `${paquete}/dist/${fichero}`, hay ? `${(tam / 1024).toFixed(1)} KB` : 'no existe');
+}
+// La hoja tiene que servir para una CSP estricta, así que no puede venir vacía
+// ni ser un resto de otra cosa.
+{
+  const css = readFileSync(new URL('bundle/dist/nanoplayer.css', raiz), 'utf8');
+  comprobar(css.includes('.np__bar'), 'el CSS trae las reglas de la barra');
+}
+
 console.log('\nEl bundle con pilas incluidas');
 const conPilas = await import('@nanoplayer/bundle');
 comprobar(typeof conPilas.create === 'function', '@nanoplayer/bundle exporta create');
