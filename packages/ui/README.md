@@ -142,6 +142,22 @@ minutos y 15 segundos` para `aria-valuetext`, `35 %` para el volumen, y ambos
 salen bien en cualquier idioma sin que nadie escriba una cadena: en euskera el
 signo va delante —`% 35`— y en inglés va pegado.
 
+### Añadir un idioma al proyecto
+
+Un objeto más en `packages/ui/src/strings.ts`, con las mismas claves que el
+español. No hay que tocar nada más.
+
+**CI comprueba que la traducción está completa**, y lo hace contra el idioma
+base, así que un idioma nuevo queda cubierto sin tocar el test. Falla si:
+
+- falta alguna clave del base — y dice cuáles, por nombre;
+- sobra alguna que el base no tenga, que casi siempre es una errata;
+- alguna cadena está vacía;
+- **se pierde una variable.** Si `ui.live.behindBy` es `'Retrasado: {tiempo}'`
+  y la traducción pone solo `'Behind live'`, no falta la clave ni está vacía:
+  simplemente el tiempo deja de aparecer. Es el fallo que no se ve leyendo el
+  diff.
+
 ### Desde un plugin
 
 `ctx.t` llega en el contexto, así que un plugin **no deduce el idioma ni trae su

@@ -93,6 +93,19 @@ export class StringRegistry {
   }
 
   /**
+   * Las claves registradas para un idioma. Vacío si no hay catálogo.
+   *
+   * Existe para poder comprobar que una traducción está completa: comparar
+   * contra el idioma base es lo que evita que entre un idioma a medias y nadie
+   * se entere hasta que un botón aparece sin nombre. Le sirve igual a quien
+   * añada un idioma por `strings` sin tocar el proyecto.
+   */
+  keys(lang: string): string[] {
+    const c = this.#catalogos.get(lang.toLowerCase());
+    return c ? Object.keys(c) : [];
+  }
+
+  /**
    * Una función de traducción atada a un idioma.
    *
    * `overrides` manda sobre todo lo registrado, y por eso añadir un idioma o
