@@ -183,6 +183,34 @@ uno nuevo no toca el núcleo.
 Un `kind` desconocido **pasa la validación**: lo resolverá su plugin, no el
 núcleo.
 
+#### Recorte
+
+`trim` **no modifica el medio: remapea el timeline que se enseña.** Con
+`{ "kind": "trim", "start": 100, "end": 160 }` sobre un vídeo de 600 s:
+
+| | |
+|---|---|
+| `player.duration` | `60`, no 600 |
+| `player.currentTime` | Cuenta desde el recorte: en el segundo 130 del fichero vale `30` |
+| `player.seek(20)` | Va al segundo 120 del medio |
+| `player.trim` | `{ start: 100, end: 160 }`, para quien pinte sobre el timeline |
+
+Saltar fuera se acota: no hay forma de llegar al material que queda a los
+lados, aunque siga en el fichero.
+
+**El final lo hace cumplir el reproductor, no el medio.** Al fichero le quedan
+440 segundos y el motor no sabe que sobran, así que al alcanzar `end` se pausa
+y se emite `ended`. Dar al play después vuelve al principio del recorte, como
+haría un `<video>` al final del vídeo.
+
+La duración **se sabe sin tocar la red**: sale del manifiesto, no del motor. Si
+el manifiesto viene ya cargado, la barra puede pintar `0:15` antes de descargar
+un solo byte.
+
+Solo puede haber **un** recorte, necesita `end`, y **sobre un directo se
+rechaza**: no tiene sentido recortar algo que aún no ha terminado.
+
+
 ### Directo
 
 ```json

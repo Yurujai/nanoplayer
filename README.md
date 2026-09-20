@@ -41,6 +41,7 @@ La tesis, en una frase: **un reproductor que no te obliga a forkearlo.**
 |---|---|
 | **Reproducción** | Mono-stream, dual-stream sincronizado, solo audio con carátula, y audio con diapositivas |
 | **Formatos** | MP4 por el motor nativo; HLS con [hls.js](packages/engine-hls/) en carga diferida, que solo se descarga si hace falta |
+| **Recorte** | La anotación `trim` remapea el timeline visible sin tocar el medio: duración, posición y saltos van en tiempo recortado |
 | **Directo** | Ventana DVR, salto al borde, espera por flujo con reintentos, y distinción entre «aún no ha empezado» y «se ha interrumpido» |
 | **Sincronización** | Control proporcional con histéresis y perfiles por motor. En directo mide por hora absoluta (`EXT-X-PROGRAM-DATE-TIME`), no por `currentTime` |
 | **Interfaz** | Barra de controles accesible, navegable entera con teclado, y menú de ajustes por paneles apilados con la ergonomía del de YouTube |
@@ -74,8 +75,6 @@ Por orden de lo que bloquea a más gente:
 - **HLS en una etiqueta `<script>`.** El bundle lleva el motor nativo, que
   cubre MP4 en todas partes y HLS en Safari e iOS. Para HLS en Chrome hace
   falta hls.js, que hoy solo se puede cargar por la vía npm.
-- **Recorte (`trim`).** El manifiesto lo valida y lo expone, pero todavía nada
-  lo aplica durante la reproducción.
 - **Plugins previstos:** multi-audio, Chromecast, listas de reproducción y H5P.
   Las anotaciones del manifiesto ya son el mecanismo por el que entrarán.
 - **Demo.** El directo y el caso multi-instancia funcionan pero no tienen

@@ -85,6 +85,18 @@ const MANIFIESTOS: Record<string, unknown> = {
         sources: [{ src: 'media/slides.mp4', type: 'video/mp4' }] },
     ],
   },
+  // El medio dura 40 s y solo se enseñan del 10 al 25. El fichero no se toca:
+  // lo que cambia es el timeline que ve quien mira.
+  recorte: {
+    id: 'demo-recorte',
+    title: 'Con recorte',
+    duration: 40,
+    streams: [
+      { id: 'cam', role: 'presenter', label: 'Ponente', audio: true,
+        sources: [{ src: 'media/presenter.mp4', type: 'video/mp4' }] },
+    ],
+    annotations: [{ kind: 'trim', start: 10, end: 25 }],
+  },
   // Para ver que la validación no es decorativa: dos pistas de audio es
   // exactamente lo que S2 midió que rompe en iPhone.
   invalido: {
@@ -117,6 +129,10 @@ const CLAVES: Record<string, string> = {
          'La carátula se queda puesta durante la reproducción en vez de dejar un rectángulo negro.',
   'audio-slides': 'Una clase sin cámara pero con la presentación. El <b>audio es el maestro</b> ' +
                   'y el vídeo mudo lo persigue: el modelo de sincronización no cambia nada.',
+  recorte: 'El vídeo dura 40 s y la anotación <b>trim</b> deja ver del 10 al 25. ' +
+           'La barra marca <b>0:15</b>, no 0:40, y el timecode incrustado empieza en 10: ' +
+           'el fichero no se toca, lo que se remapea es el tiempo que se enseña. ' +
+           'Al llegar al final para solo, aunque al medio le queden 15 s.',
   invalido: 'Los <b>dos</b> streams llevan <b>audio: true</b>. La validación lo rechaza ' +
             'con el motivo, en vez de dejar un reproductor que falla solo en iPhone.',
 };

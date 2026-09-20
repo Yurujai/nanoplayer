@@ -23,7 +23,7 @@ import type { UiSlots } from './slots.js';
 import type { PlayerState } from './state.js';
 import { Synchronizer, type SyncProfile } from './sync.js';
 import {
-  isAudioOnlyManifest, masterStream, slaveStreams, validateManifest,
+  isAudioOnlyManifest, masterStream, slaveStreams, trimOf, validateManifest,
 } from './validate.js';
 
 /** Resuelve el origen del manifiesto. Reemplazable para agrupar peticiones. */
@@ -117,6 +117,12 @@ export class Player {
   /** Flujos sin datos ahora mismo. Atascarse es de cada flujo, no del conjunto. */
   readonly #atascados = new Set<string>();
   #sonando = false;
+  /** Recorte activo, en tiempo del medio. `null` si el manifiesto no trae uno. */
+  #recorte: { start: number; end: number } | null = null;
+  /** Si ya se buscó el recorte en el manifiesto que vino sin resolver. */
+  #recorteMirado = false;
+  /** Ya se avisó del final del recorte. Evita repetir `ended` en cada `time`. */
+  #finRecorteAvisado = false;
 
   constructor(options: PlayerOptions) {
     this.#opts = options;
@@ -283,8 +289,75 @@ export class Player {
     this.seek(destino);
   }
 
-  get currentTime(): number { return this.master?.currentTime ?? this.#lc.resumeAt; }
-  get duration(): number { return this.master?.duration ?? this.#manifest?.duration ?? 0; }
+  /* ------------------------------------------------------------- recorte -- */
+
+  /*
+   * El recorte no toca el medio: **remapea el tiempo que se enseña**. Para el
+   * motor y para el sincronizador nada cambia —siguen en tiempo del medio—, y
+   * la traducción ocurre solo en esta frontera, que es la que ve todo el mundo
+   * de fuera.
+   *
+   * Tenerlo en un único sitio importa: con la conversión repartida por la
+   * interfaz y los plugins, cada consumidor tendría que acordarse de restar, y
+   * el primero que se olvidara dejaría una barra de progreso mintiendo.
+   */
+
+  /**
+   * El recorte, buscándolo en el manifiesto sin resolver si hace falta.
+   *
+   * Igual que con el póster: cuando el manifiesto viene ya cargado no hay por
+   * qué esperar a `resolve()` para saber cuánto dura el recorte. Con recorte la
+   * duración sale del manifiesto y no del motor, así que la barra puede pintar
+   * `0:15` antes de que se descargue un solo byte. Sin esto marcaría `0:00`
+   * hasta el primer play.
+   */
+  #recorteActual(): { start: number; end: number } | null {
+    if (this.#recorteMirado) return this.#recorte;
+    this.#recorteMirado = true;
+    const src = this.#opts.manifest;
+    if (typeof src === 'object') {
+      const r = validateManifest(src);
+      if (r.ok) this.#recorte = trimOf(r.manifest);
+    }
+    return this.#recorte;
+  }
+
+  /** De tiempo del medio al que se enseña. */
+  #aVisible(medio: number): number {
+    const r = this.#recorteActual();
+    if (!r) return medio;
+    return Math.max(0, medio - r.start);
+  }
+
+  /** Del tiempo que se enseña al del medio, acotado al recorte. */
+  #aMedio(visible: number): number {
+    const r = this.#recorteActual();
+    if (!r) return visible;
+    return Math.min(r.end, Math.max(r.start, r.start + visible));
+  }
+
+  /**
+   * El recorte en vigor, o `null`.
+   *
+   * Se publica porque la interfaz necesita saber que lo hay: sin esto, una
+   * miniatura o un capítulo colocados en tiempo del medio quedarían corridos.
+   */
+  get trim(): { start: number; end: number } | null {
+    const r = this.#recorteActual();
+    return r ? { ...r } : null;
+  }
+
+  get currentTime(): number {
+    const m = this.master;
+    return m ? this.#aVisible(m.currentTime) : this.#lc.resumeAt;
+  }
+
+  get duration(): number {
+    const r = this.#recorteActual();
+    if (r) return Math.max(0, r.end - r.start);
+    return this.master?.duration ?? this.#manifest?.duration ?? 0;
+  }
+
   get paused(): boolean { return this.master?.paused ?? true; }
 
   on<K extends keyof CoreEvents & string>(
@@ -313,6 +386,8 @@ export class Player {
         throw playerError('manifest/invalid', `Manifiesto inválido — ${detalle}`);
       }
       this.#manifest = r.manifest;
+      this.#recorte = trimOf(r.manifest);
+      this.#recorteMirado = true;
       this.#lc.transition('resolved');
       this.bus.emit('manifest:resolve:ok', { manifest: r.manifest });
       return r.manifest;
@@ -420,7 +495,10 @@ export class Player {
     this.#instancias.set(stream.id, engine);
     try {
       await engine.attach(caja, stream, {
-        startAt: this.#lc.resumeAt,
+        // `resumeAt` está en tiempo visible; el motor quiere el del medio. Sin
+        // recorte son lo mismo, y con él esto es lo que hace que un enganche
+        // en frío empiece en `start` y no en el segundo cero del fichero.
+        startAt: this.#aMedio(this.#lc.resumeAt),
         muted: this.#opts.muted === true || !stream.audio,
         playsInline: true,
         callbacks: this.#callbacks(stream),
@@ -560,6 +638,7 @@ export class Player {
     // conjunto marcado como atascado para siempre y nadie volvería a reanudar.
     this.#atascados.clear();
     this.#pausadoPorStall = false;
+    this.#finRecorteAvisado = false;
     for (const caja of this.#cajas) caja.remove();
     this.#cajas = [];
   }
@@ -570,6 +649,13 @@ export class Player {
     if (!this.#lc.hasEngine) await this.attach();
     const m = this.#manifest;
     if (!m) return;
+
+    // Dar al play con el recorte terminado vuelve al principio, que es lo que
+    // hace un <video> al final del medio. Sin esto se quedaría clavado.
+    if (this.#finRecorteAvisado) {
+      this.#finRecorteAvisado = false;
+      this.seek(0);
+    }
 
     // El maestro primero: es quien fija el reloj que los demás persiguen.
     const maestro = this.master;
@@ -594,19 +680,24 @@ export class Player {
     for (const e of this.#instancias.values()) e.pause();
   }
 
+  /** Salta. `seconds` va en tiempo visible, y se acota al recorte si lo hay. */
   seek(seconds: number): void {
     const maestro = this.master;
     if (!maestro) {
-      this.#lc.rememberPosition(seconds);
+      this.#lc.rememberPosition(Math.max(0, Math.min(this.duration || seconds, seconds)));
       return;
     }
-    const from = maestro.currentTime;
-    this.bus.emit('seek:start', { from, to: seconds });
-    maestro.seek(seconds);
+    const destino = Math.max(0, seconds);
+    // Saltar hacia atrás vuelve a meter la reproducción dentro del recorte, así
+    // que el final tiene que poder volver a anunciarse.
+    if (this.#recorteActual() && destino < this.duration) this.#finRecorteAvisado = false;
+    const from = this.#aVisible(maestro.currentTime);
+    this.bus.emit('seek:start', { from, to: destino });
+    maestro.seek(this.#aMedio(destino));
     // Los esclavos van de golpe: perseguir un salto con corrección suave
     // tardaría segundos y se vería.
     this.#sync?.align();
-    this.bus.emit('seek:end', { at: seconds });
+    this.bus.emit('seek:end', { at: destino });
   }
 
   setVolume(volume: number): void {
@@ -640,7 +731,28 @@ export class Player {
     const esMaestro = stream.audio;
     return {
       onTime: (current: number, duration: number) => {
-        if (esMaestro) this.bus.emit('time', { current, duration });
+        if (!esMaestro) return;
+        /*
+         * El final del recorte lo hace cumplir el reproductor, no el medio: el
+         * fichero sigue teniendo material por detrás y el motor no sabe que
+         * sobra. Se comprueba aquí y no con un temporizador porque el usuario
+         * puede saltar, cambiar de velocidad o quedarse sin búfer, y la única
+         * señal fiable de dónde está la reproducción es esta.
+         */
+        const recorte = this.#recorteActual();
+        if (recorte && current >= recorte.end) {
+          if (!this.#finRecorteAvisado) {
+            this.#finRecorteAvisado = true;
+            this.pause();
+            this.bus.emit('time', { current: this.duration, duration: this.duration });
+            this.bus.emit('ended', { at: this.duration });
+          }
+          return;
+        }
+        this.bus.emit('time', {
+          current: this.#aVisible(current),
+          duration: this.duration || duration,
+        });
       },
       /*
        * El estado de reproducción lo dicta el elemento multimedia, no lo que
@@ -672,7 +784,7 @@ export class Player {
         if (esMaestro) this.bus.emit('ended', { at: this.currentTime });
       },
       onSeeked: (at: number) => {
-        if (esMaestro) this.bus.emit('seek:end', { at });
+        if (esMaestro) this.bus.emit('seek:end', { at: this.#aVisible(at) });
       },
       onStallStart: () => {
         this.bus.emit('stall:start', { stream: stream.id });
