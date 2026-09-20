@@ -65,7 +65,7 @@ describe('validateManifest', () => {
     (m.streams[0] as { audio: boolean }).audio = false;
     const r = validateManifest(m);
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.errors.some((e) => /maestro/.test(e.message))).toBe(true);
+    if (!r.ok) expect(r.errors.some((e) => /master/.test(e.message))).toBe(true);
   });
 
   it('rechaza ids de stream duplicados', () => {

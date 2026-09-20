@@ -75,9 +75,9 @@ export function canTransition(from: PlayerState, to: PlayerState): boolean {
 export function assertTransition(from: PlayerState, to: PlayerState): void {
   if (!canTransition(from, to)) {
     const permitidas = TRANSITIONS[from];
-    const detalle = permitidas.length ? permitidas.join(', ') : '(ninguna: estado terminal)';
+    const detalle = permitidas.length ? permitidas.join(', ') : '(none: terminal state)';
     throw new Error(
-      `Transición inválida: "${from}" → "${to}". Desde "${from}" solo se permite: ${detalle}`,
+      `Invalid transition: "${from}" → "${to}". From "${from}" only these are allowed: ${detalle}`,
     );
   }
 }

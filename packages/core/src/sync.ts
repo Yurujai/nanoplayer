@@ -258,8 +258,8 @@ export class Synchronizer {
       if (!this.#avisado) {
         this.#avisado = true;
         this.#bus?.emit('sync:unavailable', {
-          reason: 'El directo no trae EXT-X-PROGRAM-DATE-TIME: la sincronización '
-            + 'entre flujos no se puede medir, así que no se corrige',
+          reason: 'The live stream has no EXT-X-PROGRAM-DATE-TIME: drift between '
+            + 'streams cannot be measured, so it is not corrected',
         });
       }
       return [];

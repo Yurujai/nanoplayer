@@ -43,6 +43,18 @@ strings.register('es', {
   'ui.live.behindBy': 'Retrasado respecto al directo: {tiempo}',
   'ui.live.goToBehindBy': 'Ir al directo. Retrasado respecto al directo: {tiempo}',
 
+  // Una por código de `PlayerError`. El texto del error es diagnóstico para
+  // quien integra y va siempre en inglés; esto es lo que oye quien mira.
+  'ui.error.generic': 'No se ha podido reproducir el vídeo',
+  'ui.error.manifest/fetch': 'No se ha podido cargar el vídeo',
+  'ui.error.manifest/invalid': 'Este vídeo está mal configurado',
+  'ui.error.engine/unsupported': 'Este navegador no puede reproducir este vídeo',
+  'ui.error.engine/failed': 'No se ha podido iniciar la reproducción',
+  'ui.error.media/decode': 'No se ha podido reproducir el vídeo',
+  'ui.error.media/network': 'Se ha perdido la conexión con el vídeo',
+  'ui.error.media/blocked': 'Pulsa reproducir para empezar',
+  'ui.error.internal': 'No se ha podido reproducir el vídeo',
+
   'ui.poster.play': 'Reproducir vídeo',
   'ui.poster.loading': 'Cargando…',
 
@@ -86,6 +98,16 @@ strings.register('en', {
   'ui.live.window': 'Position in the live stream',
   'ui.live.behindBy': 'Behind live: {tiempo}',
   'ui.live.goToBehindBy': 'Go to live. Behind live: {tiempo}',
+
+  'ui.error.generic': 'The video could not be played',
+  'ui.error.manifest/fetch': 'The video could not be loaded',
+  'ui.error.manifest/invalid': 'This video is misconfigured',
+  'ui.error.engine/unsupported': 'This browser cannot play this video',
+  'ui.error.engine/failed': 'Playback could not be started',
+  'ui.error.media/decode': 'The video could not be played',
+  'ui.error.media/network': 'The connection to the video was lost',
+  'ui.error.media/blocked': 'Press play to start',
+  'ui.error.internal': 'The video could not be played',
 
   'ui.poster.play': 'Play video',
   'ui.poster.loading': 'Loading…',

@@ -81,7 +81,7 @@ export class HlsEngine implements MediaEngine {
     options: AttachOptions = {},
   ): Promise<void> {
     if (this.#destruido) throw new Error('El motor fue destruido');
-    if (this.#el) throw new Error('El motor ya está enganchado: llama a detach() antes');
+    if (this.#el) throw new Error('The engine is already attached: call detach() first');
 
     const fuente = stream.sources.find((s) => esHls(s.type));
     if (!fuente) {
@@ -105,7 +105,7 @@ export class HlsEngine implements MediaEngine {
     const Hls = await cargarHls();
     if (!Hls.isSupported()) {
       throw playerError('engine/unsupported',
-        'hls.js no puede funcionar en este navegador: no hay Media Source Extensions');
+        'hls.js cannot run in this browser: no Media Source Extensions');
     }
 
     this.#hls = new Hls({
@@ -149,7 +149,7 @@ export class HlsEngine implements MediaEngine {
       };
       const t = setTimeout(() => {
         limpiar();
-        reject(playerError('media/network', 'Tiempo agotado al cargar la lista HLS'));
+        reject(playerError('media/network', 'Timed out loading the HLS playlist'));
       }, 20000);
       hls.on(Hls.Events.MANIFEST_PARSED, ok);
       hls.on(Hls.Events.ERROR, fallo as never);
@@ -187,12 +187,12 @@ export class HlsEngine implements MediaEngine {
   #traducir(data: { type?: string; details?: string }): PlayerError {
     const detalle = data.details ?? 'error desconocido';
     if (data.type === 'networkError') {
-      return playerError('media/network', `Error de red en HLS: ${detalle}`);
+      return playerError('media/network', `HLS network error: ${detalle}`);
     }
     if (data.type === 'mediaError') {
-      return playerError('media/decode', `Error de decodificación en HLS: ${detalle}`);
+      return playerError('media/decode', `HLS decoding error: ${detalle}`);
     }
-    return playerError('engine/failed', `Fallo de hls.js: ${detalle}`);
+    return playerError('engine/failed', `hls.js failure: ${detalle}`);
   }
 
   #escuchar(el: HTMLVideoElement): void {
@@ -265,8 +265,8 @@ export class HlsEngine implements MediaEngine {
       const err = error as { name?: string; message?: string };
       const pe = err.name === 'NotAllowedError'
         ? playerError('media/blocked',
-            'El navegador bloqueó la reproducción: hace falta una interacción del usuario', error)
-        : playerError('media/decode', err.message ?? 'No se pudo iniciar la reproducción', error);
+            'The browser blocked playback: a user interaction is required', error)
+        : playerError('media/decode', err.message ?? 'Playback could not be started', error);
       this.#cb.onError?.(pe);
       throw pe;
     }
@@ -327,7 +327,7 @@ export class HlsEngine implements MediaEngine {
   }
 
   #requerir(): HTMLVideoElement {
-    if (!this.#el) throw new Error('El motor no está enganchado');
+    if (!this.#el) throw new Error('The engine is not attached');
     return this.#el;
   }
 }

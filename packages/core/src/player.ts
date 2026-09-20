@@ -94,7 +94,7 @@ const TOLERANCIA_BORDE = 12;
 const resolverPorDefecto: ManifestResolver = async (src) => {
   const res = await fetch(src);
   if (!res.ok) {
-    throw playerError('manifest/fetch', `${res.status} ${res.statusText} al pedir ${src}`);
+    throw playerError('manifest/fetch', `${res.status} ${res.statusText} requesting ${src}`);
   }
   return res.json();
 };
@@ -382,8 +382,8 @@ export class Player {
 
       const r = validateManifest(crudo);
       if (!r.ok) {
-        const detalle = r.errors.map((e) => `${e.path || '(raíz)'}: ${e.message}`).join('; ');
-        throw playerError('manifest/invalid', `Manifiesto inválido — ${detalle}`);
+        const detalle = r.errors.map((e) => `${e.path || '(root)'}: ${e.message}`).join('; ');
+        throw playerError('manifest/invalid', `Invalid manifest — ${detalle}`);
       }
       this.#manifest = r.manifest;
       this.#recorte = trimOf(r.manifest);
@@ -447,7 +447,7 @@ export class Player {
         this.#lc.transition('resolved');
         this.bus.emit('engine:attach:fail', {
           error: playerError('media/network',
-            'El directo aún no está emitiendo', undefined),
+            'The live stream is not broadcasting yet', undefined),
         });
         return;
       }
@@ -479,7 +479,7 @@ export class Player {
     const factory = selectEngine(this.#engines, stream);
     if (!factory) {
       throw playerError('engine/unsupported',
-        `Ningún motor puede reproducir el stream "${stream.id}"`);
+        `No engine can play stream "${stream.id}"`);
     }
     // Reutilizar la caja si ya existe: un reintento no debe duplicarla.
     let caja = this.#cajas.find((c) => c.dataset['stream'] === stream.id);

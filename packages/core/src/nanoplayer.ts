@@ -88,7 +88,7 @@ export const registry = new PlayerRegistry({ exclusive: true });
 function resolverElemento(target: string | HTMLElement): HTMLElement {
   if (typeof target !== 'string') return target;
   const el = document.querySelector<HTMLElement>(target);
-  if (!el) throw new Error(`No se encontró ningún elemento para "${target}"`);
+  if (!el) throw new Error(`No element found for "${target}"`);
   return el;
 }
 

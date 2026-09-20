@@ -104,7 +104,7 @@ export function topoSort(manifests: readonly PluginManifest[]): PluginManifest[]
     if (st === 'hecho') return;
     if (st === 'visitando') {
       throw new Error(
-        `Ciclo de dependencias entre plugins: ${[...camino, m.id].join(' → ')}`,
+        `Plugin dependency cycle: ${[...camino, m.id].join(' → ')}`,
       );
     }
     estado.set(m.id, 'visitando');
@@ -112,7 +112,7 @@ export function topoSort(manifests: readonly PluginManifest[]): PluginManifest[]
       const d = porId.get(dep);
       if (!d) {
         throw new Error(
-          `El plugin "${m.id}" depende de "${dep}", que no está registrado`,
+          `Plugin "${m.id}" depends on "${dep}", which is not registered`,
         );
       }
       visitar(d, [...camino, m.id]);
@@ -132,7 +132,7 @@ export class PluginRegistry {
   /** Auto-registro: lo llama el propio plugin, no el núcleo. */
   register(manifest: PluginManifest): void {
     if (this.#manifests.has(manifest.id)) {
-      throw new Error(`Ya hay un plugin registrado con id "${manifest.id}"`);
+      throw new Error(`A plugin with id "${manifest.id}" is already registered`);
     }
     this.#manifests.set(manifest.id, manifest);
   }

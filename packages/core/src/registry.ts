@@ -257,7 +257,7 @@ export function createBatchResolver(
           const valor = resultado[src];
           for (const p of esperando) {
             if (valor === undefined) {
-              p.reject(new Error(`El lote no devolvió nada para "${src}"`));
+              p.reject(new Error(`The batch returned nothing for "${src}"`));
             } else {
               p.resolve(valor);
             }

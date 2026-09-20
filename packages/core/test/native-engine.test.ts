@@ -149,7 +149,7 @@ describe('NativeEngine · attach', () => {
     const p = e.attach(container, stream());
     video.simularCarga();
     await p;
-    await expect(e.attach(container, stream())).rejects.toThrow(/ya está enganchado/);
+    await expect(e.attach(container, stream())).rejects.toThrow(/already attached/);
   });
 });
 
@@ -329,7 +329,7 @@ describe('NativeEngine · destroy', () => {
     e.destroy();
     expect(e.attached).toBe(false);
     expect(container.contains(video)).toBe(false);
-    await expect(e.attach(container, stream())).rejects.toThrow(/destruido/);
+    await expect(e.attach(container, stream())).rejects.toThrow(/destroyed/);
   });
 });
 

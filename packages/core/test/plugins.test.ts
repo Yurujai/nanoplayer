@@ -52,12 +52,12 @@ describe('topoSort', () => {
     expect(() => topoSort([
       plug('a', { dependsOn: ['b'] }),
       plug('b', { dependsOn: ['a'] }),
-    ])).toThrow(/Ciclo de dependencias/);
+    ])).toThrow(/dependency cycle/);
   });
 
   it('denuncia una dependencia que no existe', () => {
     expect(() => topoSort([plug('a', { dependsOn: ['fantasma'] })]))
-      .toThrow(/depende de "fantasma"/);
+      .toThrow(/depends on "fantasma"/);
   });
 
   it('acepta dependencias compartidas sin duplicar', () => {

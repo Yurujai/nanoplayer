@@ -36,14 +36,14 @@ function hayMse(): boolean {
  */
 function traducirError(el: HTMLVideoElement): PlayerError {
   const e = el.error;
-  if (!e) return playerError('media/decode', 'Fallo de reproducción sin detalle');
+  if (!e) return playerError('media/decode', 'Playback failure with no detail');
   switch (e.code) {
-    case 1: return playerError('media/network', 'Reproducción abortada', e);
-    case 2: return playerError('media/network', e.message || 'Error de red al cargar el medio', e);
-    case 3: return playerError('media/decode', e.message || 'No se pudo decodificar el medio', e);
+    case 1: return playerError('media/network', 'Playback aborted', e);
+    case 2: return playerError('media/network', e.message || 'Network error while loading the media', e);
+    case 3: return playerError('media/decode', e.message || 'The media could not be decoded', e);
     case 4: return playerError('engine/unsupported',
-      e.message || 'Ninguna fuente reproducible para este navegador', e);
-    default: return playerError('media/decode', e.message || 'Fallo de reproducción', e);
+      e.message || 'No playable source for this browser', e);
+    default: return playerError('media/decode', e.message || 'Playback failure', e);
   }
 }
 
@@ -82,8 +82,8 @@ export class NativeEngine implements MediaEngine {
     stream: Stream,
     options: AttachOptions = {},
   ): Promise<void> {
-    if (this.#destruido) throw new Error('El motor fue destruido');
-    if (this.#el) throw new Error('El motor ya está enganchado: llama a detach() antes');
+    if (this.#destruido) throw new Error('The engine has been destroyed');
+    if (this.#el) throw new Error('The engine is already attached: call detach() first');
 
     const el = this.#crearElemento();
     this.#el = el;
@@ -224,8 +224,8 @@ export class NativeEngine implements MediaEngine {
       // UI debe distinguirlas: una se arregla mostrando un botón de play.
       const pe = err.name === 'NotAllowedError'
         ? playerError('media/blocked',
-            'El navegador bloqueó la reproducción: hace falta una interacción del usuario', error)
-        : playerError('media/decode', err.message ?? 'No se pudo iniciar la reproducción', error);
+            'The browser blocked playback: a user interaction is required', error)
+        : playerError('media/decode', err.message ?? 'Playback could not be started', error);
       this.#cb.onError?.(pe);
       throw pe;
     }
@@ -309,7 +309,7 @@ export class NativeEngine implements MediaEngine {
   }
 
   #requerir(): HTMLVideoElement {
-    if (!this.#el) throw new Error('El motor no está enganchado');
+    if (!this.#el) throw new Error('The engine is not attached');
     return this.#el;
   }
 }

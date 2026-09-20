@@ -64,7 +64,7 @@ describe('NanoPlayer.create', () => {
 
   it('falla claro si el selector no encuentra nada', () => {
     expect(() => create('#no-existe', { manifest: MANIFIESTO as never }))
-      .toThrow(/No se encontró/);
+      .toThrow(/No element found/);
   });
 
   it('no descarga nada al crearse', () => {

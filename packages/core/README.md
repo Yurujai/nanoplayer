@@ -307,6 +307,42 @@ Un recorte sobre un directo se rechaza: no tiene sentido.
 
 ---
 
+## Errores: código para la interfaz, mensaje para quien depura
+
+`PlayerError` trae siempre las dos cosas, y sirven a públicos distintos:
+
+```ts
+{ code: 'media/network', message: 'HLS network error: fragLoadError 404', retryable: true }
+```
+
+**`message` es diagnóstico y va siempre en inglés.** Lleva el estado HTTP, el
+detalle de hls.js o la ruta del manifiesto, y está pensado para un `console.log`,
+un issue o un buscador. **No se le enseña nunca al usuario final.**
+
+**`code` es lo que decide qué se le dice a quien mira.** La interfaz por defecto
+resuelve un texto propio por cada código —`ui.error.media/network` y
+compañía—, traducible como el resto del catálogo, y cae a `ui.error.generic`
+ante un código que no conozca. Así un usuario con lector de pantalla oye «se ha
+perdido la conexión con el vídeo» y no «hls.js cannot run in this browser: no
+Media Source Extensions».
+
+Es lo mismo que vale para `retryable`: decidir con el código y no emparejando
+cadenas es lo que permite traducir sin romper nada.
+
+| Código | |
+|---|---|
+| `manifest/fetch` | No se pudo obtener el manifiesto. Reintentable |
+| `manifest/invalid` | Llegó, pero no pasa la validación |
+| `engine/unsupported` | Ningún motor sabe reproducir esas fuentes |
+| `engine/failed` | El motor falló al arrancar. Reintentable |
+| `media/decode` | El medio no se pudo decodificar |
+| `media/network` | Se cortó por red. Reintentable |
+| `media/blocked` | El navegador bloqueó la reproducción |
+| `internal` | Fallo de programación |
+
+Los mensajes de **validación** siguen la misma regla: van en inglés, porque los
+lee quien integra y no quien mira.
+
 ## Validar antes de reproducir
 
 ```ts

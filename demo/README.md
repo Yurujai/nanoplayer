@@ -87,7 +87,9 @@ más del manifiesto. El evento `engine:attach:ok` dice cuál ha ganado.
 `bus.onAny()`, que es por donde se conectará la analítica sin tocar el núcleo.
 
 **Que la validación no es decorativa.** El manifiesto con dos pistas de audio
-falla con el motivo: *"reproducir dos pistas a la vez no funciona en iOS"*.
+falla con el motivo: *"playing two tracks at once does not work on iOS"*.
+Los mensajes de validación van en inglés a propósito: los lee quien
+integra, por consola, y son lo que se acaba pegando en un buscador.
 
 ---
 

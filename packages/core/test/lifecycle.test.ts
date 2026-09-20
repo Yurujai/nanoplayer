@@ -88,7 +88,7 @@ describe('Lifecycle', () => {
 
   it('lanza ante una transición inválida, y no cambia de estado', () => {
     const { lc } = nuevo();
-    expect(() => lc.transition('active')).toThrow(/Transición inválida/);
+    expect(() => lc.transition('active')).toThrow(/Invalid transition/);
     expect(lc.state).toBe('idle');
   });
 
@@ -175,7 +175,7 @@ describe('Lifecycle', () => {
   it('no se sale de destroyed', () => {
     const { lc } = nuevo();
     lc.destroy();
-    expect(() => lc.transition('idle')).toThrow(/estado terminal/);
+    expect(() => lc.transition('idle')).toThrow(/terminal state/);
   });
 
   // --- recorrido completo -------------------------------------------------

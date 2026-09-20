@@ -18,7 +18,7 @@
  */
 import { strings } from '@nanoplayer/core';
 import type {
-  BarControlDecl, Catalogues, OverlayDecl, OverlayHandle, Player,
+  BarControlDecl, Catalogues, OverlayDecl, OverlayHandle, Player, PlayerError,
   SettingsPanelDecl, Translate, UiSlots,
 } from '@nanoplayer/core';
 import { formatPercent, formatTime, spokenTime } from './format.js';
@@ -358,6 +358,26 @@ export class ControlBar implements UiSlots {
     }
   }
 
+  /**
+   * Qué decirle a quien mira cuando algo falla.
+   *
+   * Se deriva del **código**, nunca de `error.message`. Ese mensaje es
+   * diagnóstico para quien integra —lleva el estado HTTP, el detalle de
+   * hls.js, la ruta del manifiesto— y va siempre en inglés: anunciarlo por la
+   * región viva le leía a un usuario con lector de pantalla cosas como
+   * «hls.js cannot run in this browser: no Media Source Extensions».
+   *
+   * Es además lo que el propio `errors.ts` pedía desde el principio: emparejar
+   * por texto «es como se rompen las cosas al traducir».
+   *
+   * Un código sin clave cae al genérico en lugar de enseñar `ui.error.loquesea`.
+   */
+  #textoError(error: PlayerError): string {
+    const clave = `ui.error.${error.code}`;
+    const texto = this.#t(clave);
+    return texto === clave ? this.#t('ui.error.generic') : texto;
+  }
+
   #boton(etiqueta: string, icono: string): HTMLButtonElement {
     const b = this.#root.ownerDocument.createElement('button');
     b.type = 'button';
@@ -423,7 +443,7 @@ export class ControlBar implements UiSlots {
     this.#desatar.push(p.on('pause', () => { this.#anunciar(this.#t('ui.status.paused')); this.#pintar(); }));
     this.#desatar.push(p.on('ended', () => { this.#anunciar(this.#t('ui.status.ended')); this.#pintar(); }));
     this.#desatar.push(p.on('stall:start', () => this.#anunciar(this.#t('ui.status.buffering'))));
-    this.#desatar.push(p.on('error', ({ error }) => this.#anunciar(error.message)));
+    this.#desatar.push(p.on('error', ({ error }) => this.#anunciar(this.#textoError(error))));
 
     this.#on(this.#root, 'keydown', (ev: KeyboardEvent) => this.#atajos(ev));
     this.#on(this.#root, 'pointermove', () => this.#despertar());
