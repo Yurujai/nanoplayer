@@ -75,6 +75,15 @@ jobs:
         run: node a11y.mjs --serve ../demo/dist
         working-directory: e2e
 
+      # El build completo, no solo el del bundle: para emitir sus tipos, tsc
+      # resuelve los paquetes hermanos contra lo construido —igual que hará
+      # quien los instale— y en este job todavía no hay ningún `dist`.
+      #
+      # En un paso aparte porque `pnpm build` con `working-directory: e2e`
+      # ejecutaría el script de ESE paquete, que no tiene ninguno.
+      - name: Construir los paquetes
+        run: pnpm build
+
       # Va en este job y no en el de tests porque aquí ya hay un navegador
       # instalado, y montarlo otra vez cuesta más que la comprobación.
       #
@@ -83,7 +92,5 @@ jobs:
       # objetivo O5 entero, y es lo único que no pueden verificar ni los tipos
       # ni los tests de unidad.
       - name: Comprobar la etiqueta script
-        run: |
-          pnpm --filter @nanoplayer/bundle build
-          node script-tag.mjs
+        run: node script-tag.mjs
         working-directory: e2e
