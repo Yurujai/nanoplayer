@@ -91,7 +91,10 @@
     <ul class="hallazgos">
       <li>Mientras se ve el póster no hay ningún <code>&lt;video&gt;</code> en
           el DOM ni un byte de vídeo descargado</li>
-      <li>Navegable entero con el teclado; verificado en CI con axe-core</li>
+      <li>Operable entero con el teclado, verificado en CI en Chromium y
+          WebKit. En Safari, Tab no entra en los botones salvo que actives la
+          navegación por teclado del sistema — los atajos funcionan igual con
+          el foco en el reproductor</li>
       <li>Los subtítulos se activan solos porque el manifiesto trae pistas</li>
       <li>Cuatro disposiciones en el menú de ajustes: lado a lado, imagen en
           imagen, solo ponente y solo presentación</li>

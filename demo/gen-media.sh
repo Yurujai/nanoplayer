@@ -24,16 +24,26 @@ SIZE=${SIZE:-1280x720}
 CRF=${CRF:-23}
 FONT=${FONT:-/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf}
 
-if [ ! -f "$FONT" ]; then
-  echo "No se encuentra la fuente: $FONT" >&2
-  echo "Instala fonts-dejavu-core, o pasa la ruta con FONT=/ruta/a.ttf" >&2
-  exit 1
+# `drawtext` necesita que ffmpeg lleve libfreetype, y el de Homebrew en macOS
+# **no lo trae**. En vez de fallar, se degrada: sin timecode incrustado, pero
+# con un cuadro en movimiento para poder ver que el vídeo avanza. Basta para
+# desarrollar en local; en CI, que es Ubuntu, sí hay drawtext y salen completos.
+if ffmpeg -hide_banner -filters 2>/dev/null | grep -q drawtext && [ -f "$FONT" ]; then
+  HAY_TEXTO=1
+else
+  HAY_TEXTO=0
+  echo "AVISO: sin drawtext o sin fuente; los vídeos saldrán sin timecode."
+  echo "       Para tenerlo en macOS: brew install homebrew-ffmpeg/ffmpeg/ffmpeg --with-freetype"
+  echo
 fi
 
 BOX="drawbox=x=0:y=(ih-ih/4):w=iw:h=(ih/4):color=black@0.8:t=fill"
-label()  { echo "drawtext=fontfile=${FONT}:text='$1':x=(w/40):y=(h-h/4+h/40):fontsize=(w/30):fontcolor=white"; }
-tc()     { echo "drawtext=fontfile=${FONT}:text='%{pts\\:hms}':x=(w/40):y=(h-h/6):fontsize=(w/14):fontcolor=$1"; }
-frames() { echo "drawtext=fontfile=${FONT}:text='f%{n}':x=(w-tw-w/40):y=(h-h/6):fontsize=(w/14):fontcolor=$1"; }
+# El cuadro móvil sustituye al timecode cuando no hay texto: sobre una imagen
+# fija no se puede saber si el vídeo avanza o está congelado.
+MOVIL="drawbox=x='(iw-iw/12)*mod(t\\,4)/4':y='ih-ih/5':w='iw/12':h='ih/12':color=white:t=fill"
+label()  { [ "$HAY_TEXTO" = 1 ] && echo "drawtext=fontfile=${FONT}:text='$1':x=(w/40):y=(h-h/4+h/40):fontsize=(w/30):fontcolor=white" || echo "$MOVIL"; }
+tc()     { [ "$HAY_TEXTO" = 1 ] && echo "drawtext=fontfile=${FONT}:text='%{pts\\:hms}':x=(w/40):y=(h-h/6):fontsize=(w/14):fontcolor=$1" || echo "null"; }
+frames() { [ "$HAY_TEXTO" = 1 ] && echo "drawtext=fontfile=${FONT}:text='f%{n}':x=(w-tw-w/40):y=(h-h/6):fontsize=(w/14):fontcolor=$1" || echo "null"; }
 
 echo "Generando presenter.mp4 (${SIZE}, 30fps, con audio)..."
 ffmpeg -y -loglevel error \

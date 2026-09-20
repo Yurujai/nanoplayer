@@ -43,7 +43,17 @@ export class Poster {
     this.#boton.addEventListener('click', () => this.#arrancar());
 
     this.#capa.appendChild(this.#boton);
-    this.#raiz.appendChild(this.#capa);
+    /*
+     * Delante de la barra en el DOM, y por tanto en el orden de tabulación.
+     *
+     * En el estado inicial este botón es el único control grande y visible de
+     * la pantalla, y añadiéndolo al final se alcanzaba en el Tab 9, después de
+     * toda una barra que ni siquiera se está viendo. El orden de tabulación
+     * debe seguir al orden visual, y aquí el póster va por delante.
+     */
+    const barra = this.#raiz.querySelector('.np__bar');
+    if (barra) this.#raiz.insertBefore(this.#capa, barra);
+    else this.#raiz.appendChild(this.#capa);
 
     this.#desatar.push(player.on('state:change', () => this.#pintar()));
     this.#desatar.push(player.on('manifest:resolve:ok', () => this.#pintarImagen()));

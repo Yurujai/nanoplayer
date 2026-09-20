@@ -52,8 +52,12 @@ jobs:
       # Google Chrome, no el Chromium que empaqueta Playwright: este último no
       # trae códecs H.264, y sin decodificar el vídeo las pruebas de teclado
       # —que comprueban que el espacio inicia la reproducción— no valdrían nada.
-      - name: Instalar Chrome
-        run: pnpm exec playwright install --with-deps chrome
+      # Chrome del sistema para la auditoría —trae los códecs H.264 que el
+      # Chromium empaquetado no garantiza— y WebKit para el recorrido de
+      # teclado: es el motor de Safari y el único de iOS, y no tabula los
+      # botones por defecto. Sin probarlo allí, ese comportamiento no se ve.
+      - name: Instalar navegadores
+        run: pnpm exec playwright install --with-deps chrome chromium webkit
         working-directory: e2e
 
       - name: Generar medios de la demo
@@ -73,6 +77,14 @@ jobs:
 
       - name: Auditar accesibilidad
         run: node a11y.mjs --serve ../demo/dist
+        working-directory: e2e
+
+      # Aparte de la auditoría porque comprueba otra cosa y en otros motores:
+      # el camino del foco DESDE EL DOCUMENTO, no desde un `focus()` puesto a
+      # mano. Ese atajo era lo que ocultaba que en WebKit el Tab no entra en
+      # los controles.
+      - name: Recorrido de teclado
+        run: node teclado.mjs --serve ../demo/dist
         working-directory: e2e
 
       # El build completo, no solo el del bundle: para emitir sus tipos, tsc

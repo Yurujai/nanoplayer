@@ -32,6 +32,25 @@ No es una intención: se comprueba en CI y **bloquea el merge**.
 tercio de los problemas reales. Que pase en verde evita regresiones, pero no
 sustituye una revisión con lector de pantalla.
 
+### Safari y el recorrido con Tab
+
+**Safari no tabula los botones por defecto.** Con los ajustes de fábrica, Tab
+solo recorre campos de texto y enlaces; botones, deslizadores y selects se
+saltan hasta que se activa *Ajustes del Sistema → Teclado → Navegación por
+teclado* (o, en Safari, *Avanzado → «Pulsar Tab para resaltar cada elemento»*).
+
+Le ocurre a cualquier página, no solo a esta, pero conviene saberlo porque
+Safari es el navegador por defecto en macOS y **el único motor en iOS**.
+
+Por eso el contenedor lleva `tabindex="0"`: en ese modo es lo único que recibe
+foco, y **los atajos siguen funcionando desde ahí**. Comprobado en WebKit —
+espacio reproduce, las flechas saltan, `M` silencia— con el foco en el
+reproductor y sin entrar en ningún control.
+
+El recorrido se verifica en CI **en los dos motores y partiendo del documento**
+(`e2e/teclado.mjs`), no con un `focus()` programático: ese atajo era lo que
+impedía ver este comportamiento.
+
 ## Teclado
 
 | Tecla | Acción |
