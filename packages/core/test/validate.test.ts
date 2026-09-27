@@ -80,6 +80,50 @@ describe('validateManifest', () => {
     expect(pathsOf(validateManifest(m))).toContain('streams[0].sources[0].type');
   });
 
+  // --- cabecera y cola ----------------------------------------------------
+
+  const pieza = (src: string) => ({ sources: [{ src, type: 'video/mp4' }] });
+
+  it('acepta cabecera y cola por separado, juntas o ninguna', () => {
+    for (const over of [
+      {},
+      { intro: pieza('intro.mp4') },
+      { outro: pieza('outro.mp4') },
+      { intro: pieza('intro.mp4'), outro: pieza('outro.mp4') },
+    ]) {
+      const r = validateManifest(dual(over));
+      expect(r.ok, JSON.stringify(over)).toBe(true);
+      expect(r.warnings).toEqual([]);
+    }
+  });
+
+  it('exige fuentes en la cabecera y en la cola', () => {
+    expect(pathsOf(validateManifest(dual({ intro: {} })))).toContain('intro.sources');
+    expect(pathsOf(validateManifest(dual({ outro: { sources: [] } })))).toContain('outro.sources');
+  });
+
+  it('valida las fuentes de la cabecera y la cola como las de un stream', () => {
+    const r = validateManifest(dual({
+      intro: { sources: [{ src: 'intro.mp4' }] },
+      outro: { sources: [{ type: 'video/mp4', height: -1 }] },
+    }));
+    expect(pathsOf(r)).toEqual(expect.arrayContaining([
+      'intro.sources[0].type', 'outro.sources[0].src', 'outro.sources[0].height',
+    ]));
+  });
+
+  it('rechaza cabecera y cola en un directo', () => {
+    expect(pathsOf(validateManifest(dual({ live: true, intro: pieza('intro.mp4') }))))
+      .toEqual(['intro']);
+    expect(pathsOf(validateManifest(dual({ live: true, outro: pieza('outro.mp4') }))))
+      .toEqual(['outro']);
+  });
+
+  it('rechaza una cabecera o cola que no es un objeto', () => {
+    const r = validateManifest(dual({ intro: 'intro.mp4', outro: [] }));
+    expect(pathsOf(r)).toEqual(expect.arrayContaining(['intro', 'outro']));
+  });
+
   // --- anotaciones --------------------------------------------------------
 
   it('acepta recorte, capítulo y contenido interactivo juntos', () => {

@@ -51,6 +51,21 @@ export interface Stream {
   poster?: string;
 }
 
+/**
+ * Pieza que se encadena delante o detrás del contenido: una cabecera
+ * institucional, una cola con créditos.
+ *
+ * Es mono-stream a propósito, aunque el contenido sea dual: una cabecera es un
+ * único vídeo con su sonido, y no hay nada que sincronizar.
+ *
+ * No hay campo para decidir si se puede saltar porque no es configurable: la
+ * cabecera siempre se puede saltar y la cola nunca. Eso depende del papel de la
+ * pieza, no de cada manifiesto.
+ */
+export interface Bumper {
+  sources: Source[];
+}
+
 /** Recorte de reproducción. No modifica el medio: remapea el timeline visible. */
 export interface TrimAnnotation {
   kind: 'trim';
@@ -108,6 +123,13 @@ export interface Manifest {
   duration?: number;
   /** Un stream para mono, dos o más para multi-stream. */
   streams: Stream[];
+  /**
+   * Cabecera, antes del contenido. Opcional e independiente de `outro`: puede
+   * haber una, la otra, las dos o ninguna. Se puede saltar.
+   */
+  intro?: Bumper;
+  /** Cola, después del contenido. Opcional. **No se puede saltar.** */
+  outro?: Bumper;
   annotations?: Annotation[];
   textTracks?: TextTrackDef[];
   /** Directo. Cambia los estados de la UI y desactiva lo que no aplica. */

@@ -1,6 +1,6 @@
 // --- manifiesto -------------------------------------------------------------
 export type {
-  Annotation, ChapterAnnotation, InteractiveAnnotation, Manifest,
+  Annotation, Bumper, ChapterAnnotation, InteractiveAnnotation, Manifest,
   Source, Stream, StreamRole, TextTrackDef, TrimAnnotation,
 } from './manifest.js';
 export {

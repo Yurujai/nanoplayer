@@ -60,6 +60,21 @@ export function validateManifest(input: unknown): ValidationResult {
   const duration = isNum(input['duration']) ? input['duration'] : undefined;
   const live = input['live'] === true;
 
+  const checkSources = (sources: unknown, at: string) => {
+    if (!Array.isArray(sources) || sources.length === 0) {
+      return err(at, 'Required, at least one source');
+    }
+    sources.forEach((src: unknown, j: number) => {
+      const sat = `${at}[${j}]`;
+      if (!isObj(src)) return err(sat, 'Must be an object');
+      if (!isStr(src['src'])) err(`${sat}.src`, 'Required, non-empty string');
+      if (!isStr(src['type'])) err(`${sat}.type`, 'Required: the MIME type decides the engine');
+      if (src['height'] !== undefined && (!isNum(src['height']) || src['height'] <= 0)) {
+        err(`${sat}.height`, 'Must be a positive number if present');
+      }
+    });
+  };
+
   // --- streams ------------------------------------------------------------
   const streams = input['streams'];
   if (!Array.isArray(streams) || streams.length === 0) {
@@ -89,20 +104,7 @@ export function validateManifest(input: unknown): ValidationResult {
         err(at, 'An audio-only stream with `audio: false` contributes nothing');
       }
 
-      const sources = s['sources'];
-      if (!Array.isArray(sources) || sources.length === 0) {
-        err(`${at}.sources`, 'Required, at least one source');
-      } else {
-        sources.forEach((src: unknown, j: number) => {
-          const sat = `${at}.sources[${j}]`;
-          if (!isObj(src)) return err(sat, 'Must be an object');
-          if (!isStr(src['src'])) err(`${sat}.src`, 'Required, non-empty string');
-          if (!isStr(src['type'])) err(`${sat}.type`, 'Required: the MIME type decides the engine');
-          if (src['height'] !== undefined && (!isNum(src['height']) || src['height'] <= 0)) {
-            err(`${sat}.height`, 'Must be a positive number if present');
-          }
-        });
-      }
+      checkSources(s['sources'], `${at}.sources`);
     });
 
     // Regla central del modelo maestro/esclavo. Medido en los spikes:
@@ -116,6 +118,27 @@ export function validateManifest(input: unknown): ValidationResult {
                      'playing two tracks at once does not work on iOS and leaves ' +
                      'the synchronisation without a master');
     }
+  }
+
+  // --- cabecera y cola ----------------------------------------------------
+  // Independientes: cualquiera de las dos puede faltar. Si una se puede saltar
+  // no se valida porque no se declara: lo decide su papel, no el manifiesto.
+  //
+  // En directo se rechazan las dos. Mientras suena la cabecera la emisión
+  // avanza y se llega tarde al borde, y la cola depende de que la emisión
+  // termine, algo que el directo no garantiza (S6 §7). Es más fácil
+  // permitirlo el día que esté resuelto que retirarlo cuando ya se use.
+  for (const key of ['intro', 'outro'] as const) {
+    const b = input[key];
+    if (b === undefined) continue;
+    if (live) err(key, key === 'intro'
+      ? 'An intro is not allowed on a live stream: the broadcast keeps moving while it plays'
+      : 'An outro is not allowed on a live stream: nothing guarantees the broadcast ends');
+    if (!isObj(b)) {
+      err(key, 'Must be an object with `sources` if present');
+      continue;
+    }
+    checkSources(b['sources'], `${key}.sources`);
   }
 
   // --- anotaciones --------------------------------------------------------

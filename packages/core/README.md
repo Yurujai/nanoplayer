@@ -166,6 +166,35 @@ cambia: **el audio es el maestro** y el vídeo mudo lo persigue.
 ]
 ```
 
+### Cabecera y cola
+
+Piezas que se encadenan delante y detrás del contenido: una cabecera
+institucional o una cola con créditos.
+
+```json
+"intro": { "sources": [{ "src": "cabecera.mp4", "type": "video/mp4" }] },
+"outro": { "sources": [{ "src": "cola.mp4", "type": "video/mp4" }] }
+```
+
+**Las dos son opcionales y no dependen una de otra.** Se puede poner una sola,
+las dos o ninguna.
+
+Cada una es **una sola pieza con su sonido**, aunque el contenido sea
+dual-stream: no hay nada que sincronizar.
+
+**La cabecera se puede saltar; la cola, no.** Por eso no hay un campo para
+configurarlo: lo decide el papel de la pieza. No saltar la cola significa que
+tampoco se puede adelantar con la barra, el teclado ni los controles del
+sistema. Sí se puede **retroceder** al contenido, y al volver a llegar al final
+la cola se reproduce de nuevo.
+
+La barra de progreso muestra **solo el contenido**, ya recortado si hay `trim`.
+Ni `duration` ni `currentTime` cuentan la cabecera ni la cola.
+
+**En directo se rechazan las dos.** Mientras suena la cabecera, la emisión
+sigue avanzando y se llega tarde al borde. La cola depende de que la emisión
+termine, y un directo no lo garantiza.
+
 ### Anotaciones
 
 Datos anclados al timeline. Unifica lo que parecen features sueltas: recorte,
@@ -280,9 +309,17 @@ Un recorte sobre un directo se rechaza: no tiene sentido.
 | `title` | `string` | |
 | `poster` | `string` | También se puede pasar en `createPlayer` para tenerlo sin resolver |
 | `duration` | `number` | Segundos |
+| `intro` | `Bumper` | Cabecera. Se puede saltar. No admitida en directo |
+| `outro` | `Bumper` | Cola. No se puede saltar. No admitida en directo |
 | `annotations` | `Annotation[]` | |
 | `textTracks` | `TextTrackDef[]` | |
 | `live` | `boolean` | |
+
+### Bumper
+
+| Campo | Tipo | |
+|---|---|---|
+| `sources` | `Source[]` | **Requerido**, al menos una |
 
 ### Stream
 

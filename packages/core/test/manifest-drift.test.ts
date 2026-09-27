@@ -11,7 +11,7 @@
  * de comportamiento— pero sí que la decisión se haya tomado a conciencia.
  */
 import { describe, expect, it } from 'vitest';
-import type { Manifest, Source, Stream, TextTrackDef } from '../src/manifest.js';
+import type { Bumper, Manifest, Source, Stream, TextTrackDef } from '../src/manifest.js';
 import { validateManifest } from '../src/validate.js';
 
 type Estado = 'validado' | 'libre';
@@ -19,6 +19,8 @@ type Estado = 'validado' | 'libre';
 const MANIFEST: Record<keyof Manifest, Estado> = {
   id: 'validado',
   streams: 'validado',
+  intro: 'validado',
+  outro: 'validado',
   duration: 'validado',
   annotations: 'validado',
   textTracks: 'validado',
@@ -45,6 +47,10 @@ const SOURCE: Record<keyof Source, Estado> = {
   label: 'libre',
 };
 
+const BUMPER: Record<keyof Bumper, Estado> = {
+  sources: 'validado',
+};
+
 const TEXT_TRACK: Record<keyof TextTrackDef, Estado> = {
   src: 'validado',
   lang: 'validado',
@@ -55,7 +61,7 @@ const TEXT_TRACK: Record<keyof TextTrackDef, Estado> = {
 
 describe('deriva entre tipos y validador', () => {
   it('cada campo declarado tiene una decisión tomada', () => {
-    for (const mapa of [MANIFEST, STREAM, SOURCE, TEXT_TRACK]) {
+    for (const mapa of [MANIFEST, STREAM, SOURCE, BUMPER, TEXT_TRACK]) {
       for (const [campo, estado] of Object.entries(mapa)) {
         expect(estado, `campo "${campo}"`).toMatch(/^(validado|libre)$/);
       }
@@ -91,6 +97,8 @@ describe('deriva entre tipos y validador', () => {
         { id: 'slides', role: 'presentation', label: 'Diapositivas', audio: false,
           sources: [{ src: 'slides.mp4', type: 'video/mp4' }] },
       ],
+      intro: { sources: [{ src: 'intro.mp4', type: 'video/mp4' }] },
+      outro: { sources: [{ src: 'outro.mp4', type: 'video/mp4' }] },
       annotations: [
         { kind: 'trim', start: 12, end: 3500 },
         { kind: 'chapter', start: 60, end: 900, title: 'Primer principio' },
