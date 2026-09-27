@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>NanoPlayer · banco de pruebas del núcleo</title>
+<title>NanoPlayer · Test bench</title>
 <link rel="icon" href="data:,">
 <style>
   :root{
@@ -62,82 +62,94 @@
 </head>
 <body>
 <main>
-  <p style="margin:0 0 1rem;font-size:.9rem"><a href="./" style="color:var(--accent)">← El reproductor</a></p>
-  <h1>NanoPlayer · banco de pruebas del núcleo</h1>
+  <p style="margin:0 0 1rem;font-size:.9rem"><a href="../" style="color:var(--accent)">← NanoPlayer</a></p>
+  <h1>NanoPlayer · Test bench</h1>
   <p class="lead">
-    Usa la API pública tal cual la usaría un integrador: <code>createPlayer()</code>
-    y los métodos del ciclo de vida.
+    The core through its public API, exactly as an integrator would use it:
+    <code>createPlayer()</code> and the lifecycle methods, one step at a time.
   </p>
 
   <p class="aviso">
-    <strong>Ya hay barra de controles.</strong> Prueba a navegarla solo con el
-    teclado: <kbd>Tab</kbd> para moverte, <kbd>Espacio</kbd> o <kbd>K</kbd> para
-    reproducir, flechas para buscar y ajustar volumen, <kbd>M</kbd> para
-    silenciar, <kbd>F</kbd> para pantalla completa. Los botones del ciclo de
-    vida siguen en crudo a propósito: son lo interesante de enseñar.
+    <strong>The control bar is here too.</strong> Try it with the keyboard only:
+    <kbd>Tab</kbd> to move, <kbd>Space</kbd> or <kbd>K</kbd> to play, arrows to
+    seek and change the volume, <kbd>M</kbd> to mute, <kbd>F</kbd> for full
+    screen. The lifecycle buttons are deliberately raw: they are what this page
+    is here to show.
   </p>
   <p class="aviso">
-    Con dos streams el sincronizador ya está activo. Pulsa
-    <strong>Desincronizar 400&nbsp;ms</strong> o <strong>Saltar al azar</strong>
-    y observa cómo se cierra la deriva: el indicador de <em>acción del lazo</em>
-    muestra si corrige de forma suave o con un salto duro. Los timecodes
-    incrustados en los vídeos permiten comprobarlo a simple vista.
+    With two streams the synchronizer is running. Press
+    <strong>Desync by 400&nbsp;ms</strong> or <strong>Seek at random</strong>
+    and watch the drift close: <em>Loop action</em> shows whether it corrects
+    smoothly or with a hard seek. The timecodes burned into the videos let you
+    check it by eye.
   </p>
 
   <section>
-    <h2>Ciclo de vida</h2>
+    <h2>Lifecycle</h2>
     <div class="metricas">
-      <div><div class="k">Estado</div><div class="val" id="estado">idle</div></div>
-      <div><div class="k">Peticiones de red</div><div class="val" id="peticiones">0</div></div>
-      <div><div class="k">Elementos &lt;video&gt;</div><div class="val" id="videos">0</div></div>
-      <div><div class="k">Posición guardada</div><div class="val" id="resumeAt">0.00 s</div></div>
-      <div><div class="k">Tiempo</div><div class="val" id="tiempo">0.00 s</div></div>
-      <div><div class="k">Deriva</div><div class="val" id="deriva">—</div></div>
-      <div><div class="k">Acción del lazo</div><div class="val" id="accion">—</div></div>
+      <div><div class="k">State</div><div class="val" id="estado">idle</div></div>
+      <div><div class="k">Network requests</div><div class="val" id="peticiones">0</div></div>
+      <div><div class="k">&lt;video&gt; elements</div><div class="val" id="videos">0</div></div>
+      <div><div class="k">Saved position</div><div class="val" id="resumeAt">0.00 s</div></div>
+      <div><div class="k">Time</div><div class="val" id="tiempo">0.00 s</div></div>
+      <div><div class="k">Drift</div><div class="val" id="deriva">—</div></div>
+      <div><div class="k">Loop action</div><div class="val" id="accion">—</div></div>
     </div>
     <div class="barra">
-      <select id="fuente" aria-label="Manifiesto">
-        <option value="mono">Mono-stream</option>
-        <option value="dual">Dual-stream</option>
-        <option value="hls">Dual-stream por HLS</option>
-        <option value="audio">Solo audio</option>
-        <option value="audio-slides">Audio con diapositivas</option>
-        <option value="recorte">Con recorte (trim)</option>
-        <option value="invalido">Manifiesto inválido (2 audios)</option>
+      <select id="fuente" aria-label="Manifest">
+        <option value="mono">Single stream</option>
+        <option value="dual">Dual stream</option>
+        <option value="hls">Dual stream over HLS</option>
+        <option value="audio">Audio only</option>
+        <option value="audio-slides">Audio with slides</option>
+        <option value="recorte">Trimmed</option>
+        <option value="invalido">Invalid manifest (two audio tracks)</option>
       </select>
-      <button id="btn-resolver">1 · Resolver manifiesto</button>
-      <button id="btn-enganchar">2 · Enganchar motor</button>
-      <button id="btn-play">3 · Reproducir</button>
-      <button id="btn-pause">Pausar</button>
-      <button id="btn-seek">Saltar al azar</button>
-      <button id="btn-sync">Desincronizar 400 ms</button>
-      <button id="btn-desalojar">Soltar motor</button>
-      <button id="btn-reiniciar">Reiniciar</button>
+      <button id="btn-resolver">1 · Resolve manifest</button>
+      <button id="btn-enganchar">2 · Attach engine</button>
+      <button id="btn-play">3 · Play</button>
+      <button id="btn-pause">Pause</button>
+      <button id="btn-seek">Seek at random</button>
+      <button id="btn-sync">Desync by 400 ms</button>
+      <button id="btn-desalojar">Detach engine</button>
+      <button id="btn-reiniciar">Reset</button>
     </div>
   </section>
 
   <section>
-    <h2>Escenario</h2>
+    <h2>Stage</h2>
     <div id="escenario">
-      <p class="vacio">Estado <code>idle</code>: solo el póster. Ni una petición de red.</p>
+      <p class="vacio">State <code>idle</code>: poster only. Not a single network request.</p>
       <div id="player"></div>
     </div>
   </section>
 
   <section>
-    <h2>Manifiesto · lo que hay que pasarle al reproductor</h2>
+    <h2>Manifest · what the player is given</h2>
     <p class="nota" id="manifiesto-nota"></p>
     <div class="barra" style="margin-bottom:.6rem">
-      <button id="btn-copiar">Copiar manifiesto</button>
+      <button id="btn-copiar">Copy manifest</button>
     </div>
     <pre><code id="manifiesto"></code></pre>
   </section>
 
   <section>
-    <h2>Bus de eventos · todo lo que ve <code>onAny()</code></h2>
+    <h2>Event bus · everything <code>onAny()</code> sees</h2>
     <div id="eventos"></div>
   </section>
+
+  <footer style="color:var(--dim);font-size:.88rem;margin-top:2rem">
+    <p style="margin:0 0 .4rem"><strong style="color:var(--fg)">Lab notebooks.</strong>
+      The experiments that shaped the design, before any architecture was written.
+      They are development notes, written in Spanish.</p>
+    <p style="margin:0">
+      <a href="../spikes/s1-dual-sync/" style="color:var(--accent)">S1 · Dual-stream sync</a> ·
+      <a href="../probe/" style="color:var(--accent)">S2 · Device probe</a> ·
+      <a href="https://github.com/Yurujai/nanoplayer/tree/main/spikes/s5-live-dual" style="color:var(--accent)">S5 · Live dual-stream</a> ·
+      <a href="../spikes/s6-chaining/" style="color:var(--accent)">S6 · Intro and outro chaining</a>
+    </p>
+  </footer>
 </main>
-<script type="module" src="/src/banco.ts"></script>
+<script type="module" src="/src/bench.ts"></script>
 </body>
 </html>

@@ -1,9 +1,12 @@
-name: Publicar spikes y demo
+name: Publicar la web y los spikes
 
-# Publica en GitHub Pages un índice con los bancos de pruebas y la demo:
+# Publica en GitHub Pages la web del proyecto y los spikes:
 #
-#   /                        índice
-#   /demo/                   banco de pruebas del núcleo
+#   /                        portada: qué es, por qué y casos de uso
+#   /video/                  demo de vídeo (MP4, mono y dual)
+#   /live/                   demo de directo (sin directo enlazado todavía)
+#   /bench/                  banco de pruebas del núcleo
+#   /demo/                   redirecciones desde las direcciones antiguas
 #   /spikes/s1-dual-sync/    spike de sincronización dual-stream
 #   /spikes/s6-chaining/     spike de encadenado de cabecera y cola
 #   /probe/                  sonda de diagnóstico de dispositivo (S2)
@@ -19,7 +22,6 @@ on:
   push:
     branches: [main]
     paths:
-      - 'site/**'
       - 'demo/**'
       - 'spikes/**'
       - 'packages/**'
@@ -70,10 +72,6 @@ jobs:
       - name: Preparar el sitio
         run: mkdir -p _site
 
-      # --- índice ---------------------------------------------------------
-      - name: Copiar el índice
-        run: cp site/index.html _site/index.html
-
       # --- S2: sonda de diagnóstico ---------------------------------------
       - name: Construir la sonda de diagnóstico
         working-directory: spikes/s2-device-matrix
@@ -111,15 +109,24 @@ jobs:
           cp index.html chain.js "$dest/"
           cp -r media "$dest/"
 
-      # --- demo -----------------------------------------------------------
-      - name: Construir la demo
+      # --- web -------------------------------------------------------------
+      # La web ocupa la raíz. Las direcciones antiguas de la demo se
+      # redirigen para no romper los enlaces que ya se han compartido.
+      - name: Construir la web
         working-directory: demo
         env:
           DUR: '40'
         run: |
           ./gen-media.sh
           pnpm build
-          cp -r dist "$GITHUB_WORKSPACE/_site/demo"
+          cp -r dist/. "$GITHUB_WORKSPACE/_site/"
+          redirigir() {
+            mkdir -p "$(dirname "$GITHUB_WORKSPACE/_site/$1")"
+            printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=%s"><link rel="canonical" href="%s"><a href="%s">Moved</a>\n' "$2" "$2" "$2" \
+              > "$GITHUB_WORKSPACE/_site/$1"
+          }
+          redirigir demo/index.html ../video/
+          redirigir demo/banco.html ../bench/
 
       - name: Tamaño del sitio
         run: du -sh _site && du -sh _site/*

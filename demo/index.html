@@ -1,106 +1,112 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>NanoPlayer · el reproductor</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>NanoPlayer</title>
+<meta name="description" content="An accessible web video player for lectures: two synchronized videos, live streams, and no forks required.">
 <link rel="icon" href="data:,">
+<link rel="stylesheet" href="/src/site.css">
 <style>
-  :root{
-    --bg:#0f1115; --card:#171a20; --line:#262b33; --fg:#e8eaed; --dim:#98a1ac;
-    --ok:#5ddc7a; --warn:#ffb648; --accent:#6aa9ff; color-scheme:dark;
-  }
-  @media (prefers-color-scheme:light){
-    :root{ --bg:#f6f7f9; --card:#fff; --line:#e2e5ea; --fg:#15181d; --dim:#5a636e;
-           --ok:#0a6f31; --warn:#7a4300; --accent:#0b5fd0; color-scheme:light; }
-  }
-  *{box-sizing:border-box}
-  body{margin:0;padding:1.5rem 1rem 4rem;background:var(--bg);color:var(--fg);
-       font:16px/1.6 system-ui,-apple-system,sans-serif}
-  main{max-width:1000px;margin:0 auto}
-  h1{font-size:1.5rem;margin:0 0 .3rem}
-  p.lead{color:var(--dim);margin:0 0 1.5rem}
-  nav{margin-bottom:1.5rem;font-size:.9rem}
-  nav a{color:var(--accent)}
-  .cols{display:grid;grid-template-columns:1fr;gap:1.25rem}
-  @media (min-width:900px){ .cols{grid-template-columns:1fr 17rem} }
-  #player{width:100%;border-radius:10px;overflow:hidden}
-  aside{background:var(--card);border:1px solid var(--line);border-radius:10px;
-        padding:1rem;font-size:.875rem;align-self:start}
-  aside h2{font-size:.72rem;margin:0 0 .7rem;color:var(--dim);
-           text-transform:uppercase;letter-spacing:.07em}
-  aside h2:not(:first-child){margin-top:1.2rem}
-  dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:.35rem .6rem}
-  dt{color:var(--dim)}
-  dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;
-     overflow-wrap:anywhere}
-  .dato.si{color:var(--ok)} .dato.no{color:var(--warn)}
-  ul#eventos{list-style:none;margin:0;padding:0;font:12px/1.6 ui-monospace,monospace;
-             color:var(--dim)}
-  code{background:color-mix(in srgb,var(--fg) 8%,transparent);
-       padding:.1rem .3rem;border-radius:4px;font-size:.88em}
-  pre{background:var(--card);border:1px solid var(--line);border-radius:10px;
-      padding:1rem;overflow-x:auto;font-size:.82rem;line-height:1.5;margin:1.5rem 0 0}
-  details{margin-top:1.5rem;color:var(--dim);font-size:.9rem}
-  summary{cursor:pointer;color:var(--fg)}
-  kbd{background:color-mix(in srgb,var(--fg) 12%,transparent);border-radius:4px;
-      padding:.1rem .35rem;font-size:.85em;font-family:inherit}
+  .reglas{margin:0 0 .9rem;padding-left:1.2rem}
+  .reglas li{margin:.3rem 0;max-width:64ch}
+  .casos{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+  .caso{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:.9rem 1rem}
+  .caso p{margin:0;color:var(--dim);font-size:.94rem}
+  .puertas{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem}
+  .puerta{display:flex;flex-direction:column;gap:.2rem;padding:1rem 1.1rem;border-radius:10px;
+          border:1px solid var(--line);background:var(--card);color:var(--fg);text-decoration:none;
+          transition:border-color .15s,transform .15s}
+  .puerta:hover{border-color:var(--accent);transform:translateY(-1px)}
+  .puerta.primaria{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  .puerta b{font-size:1.02rem}
+  .puerta span{font-size:.88rem;opacity:.85}
+  @media (max-width:640px){.casos,.puertas{grid-template-columns:1fr}}
+  @media (prefers-reduced-motion:reduce){.puerta{transition:none}.puerta:hover{transform:none}}
 </style>
 </head>
 <body>
 <main>
-  <nav><a href="banco.html">Banco de pruebas del núcleo →</a></nav>
+  <header>
+    <h1>NanoPlayer</h1>
+    <p class="lead">
+      An accessible web video player for lectures. It keeps the speaker and the
+      slides in sync, handles live streams, and never makes you fork it.
+    </p>
+    <span class="estado">In development · nothing released yet</span>
+  </header>
 
-  <h1>NanoPlayer</h1>
-  <p class="lead">
-    El reproductor tal cual lo vería quien lo integre: dual-stream sincronizado,
-    subtítulos en dos idiomas y menú de ajustes. Sin controles de laboratorio.
+  <h2>What it is</h2>
+  <p>
+    NanoPlayer plays recorded and live lectures in the browser. It can show two
+    videos at once — the speaker and the slides — and keep them in sync, it
+    works entirely from the keyboard and with screen readers, and it fits into
+    any site or learning platform with a single script tag.
   </p>
 
-  <div class="cols">
-    <div>
-      <div id="player"></div>
+  <h2>Why it exists</h2>
+  <p>It was built from four requirements that came out of running lecture video in production:</p>
+  <ul class="reglas">
+    <li><strong>Accessibility you can verify.</strong> WCAG 2.1 AA and EN 301 549,
+        checked automatically on every change.</li>
+    <li><strong>No network until someone presses play.</strong> A course page can
+        hold dozens of players; loading one downloads nothing.</li>
+    <li><strong>Configuration, not forks.</strong> Every feature is switched on or
+        off at runtime, never with a custom build.</li>
+    <li><strong>Theming without forks.</strong> Documented CSS variables change the
+        look without touching the player.</li>
+  </ul>
 
-      <details>
-        <summary>Cómo se prueba con el teclado</summary>
-        <p>
-          <kbd>Tab</kbd> recorre los controles · <kbd>Espacio</kbd> o <kbd>K</kbd>
-          reproduce · <kbd>←</kbd> <kbd>→</kbd> saltan 5 s · <kbd>J</kbd>
-          <kbd>L</kbd> saltan 10 s · <kbd>↑</kbd> <kbd>↓</kbd> volumen ·
-          <kbd>M</kbd> silencia · <kbd>F</kbd> pantalla completa ·
-          <kbd>0</kbd>–<kbd>9</kbd> saltan a ese porcentaje.
-        </p>
-        <p>
-          Dentro del menú de ajustes recorren las <strong>flechas</strong>, no
-          Tab, y <kbd>Esc</kbd> retrocede un panel antes de cerrar.
-        </p>
-      </details>
-
-      <pre><code>import { create } from '@nanoplayer/core';
-import { attachControls } from '@nanoplayer/ui';
-import '@nanoplayer/plugin-captions';   // se auto-registra
-
-const player = create('#player', { manifest: '/api/video/123' });
-attachControls(player);</code></pre>
+  <h2>What it solves</h2>
+  <div class="casos">
+    <div class="caso">
+      <h3>Recorded lectures</h3>
+      <p>Speaker and slides side by side, in sync, with four layouts to choose from.</p>
     </div>
-
-    <aside>
-      <h2>Qué está pasando</h2>
-      <dl>
-        <dt>Estado</dt><dd id="d-estado" class="dato">idle</dd>
-        <dt>Elementos <code>&lt;video&gt;</code></dt><dd id="d-videos" class="dato">0</dd>
-        <dt>Plugins activos</dt><dd id="d-plugins" class="dato">—</dd>
-      </dl>
-      <p style="color:var(--dim);margin:.8rem 0 0;font-size:.82rem">
-        Mientras se ve el póster no hay ningún <code>&lt;video&gt;</code> en el
-        DOM ni un byte de vídeo descargado.
-      </p>
-
-      <h2>Bus de eventos</h2>
-      <ul id="eventos"></ul>
-    </aside>
+    <div class="caso">
+      <h3>Course pages with many videos</h3>
+      <p>32 players can share a single request, and only one plays at a time.</p>
+    </div>
+    <div class="caso">
+      <h3>Live classes and events</h3>
+      <p>Rewind within the live window, jump back to live, and a clear notice when
+         the stream hasn't started.</p>
+    </div>
+    <div class="caso">
+      <h3>Embedding in an LMS</h3>
+      <p>One script tag. A separate stylesheet for sites with a strict Content
+         Security Policy.</p>
+    </div>
+    <div class="caso">
+      <h3>Institutional intro and outro</h3>
+      <p>Chained without a black gap. The intro can be skipped; the outro can't.</p>
+    </div>
+    <div class="caso">
+      <h3>Captions and any language</h3>
+      <p>Captions switch on by themselves, and the interface can be translated
+         without code.</p>
+    </div>
   </div>
+
+  <h2>Try it</h2>
+  <nav class="puertas" aria-label="Demos">
+    <a class="puerta primaria" href="video/">
+      <b>Video demo</b><span>Recorded lecture, one or two videos</span>
+    </a>
+    <a class="puerta" href="live/">
+      <b>Live demo</b><span>Two synced live streams</span>
+    </a>
+    <a class="puerta" href="bench/">
+      <b>Test bench</b><span>The core, instrumented</span>
+    </a>
+  </nav>
+
+  <footer>
+    <p>
+      Source code and documentation on
+      <a href="https://github.com/Yurujai/nanoplayer">GitHub</a> · Apache-2.0
+    </p>
+  </footer>
 </main>
-<script type="module" src="/src/main.ts"></script>
 </body>
 </html>

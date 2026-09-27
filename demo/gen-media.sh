@@ -73,6 +73,25 @@ ffmpeg -y -loglevel error \
   -filter_complex "[0:a][1:a]amix=inputs=2:duration=first,volume=0.5[a]" \
   -map "[a]" -c:a aac -b:a 96k audio.m4a
 
+# --- cabecera y cola ---
+# Color plano y distinto en cada una, como en S6: si el encadenado dejara un
+# hueco se vería como un destello negro. Cortas, porque la demo arranca sin
+# ellas y quien las activa quiere ver la costura, no esperar.
+pieza() {
+  local nombre="$1" color="$2" texto="$3" dur="$4" filtros="${MOVIL}"
+  [ "$HAY_TEXTO" = 1 ] && filtros="${filtros},drawtext=fontfile=${FONT}:text='${texto}':x=(w-tw)/2:y=(h-th)/2:fontsize=(w/10):fontcolor=white"
+  echo "Generando ${nombre}.mp4 (${dur} s)..."
+  ffmpeg -y -loglevel error \
+    -f lavfi -i "color=c=${color}:size=${SIZE}:rate=25:duration=${dur}" \
+    -f lavfi -i "sine=frequency=660:sample_rate=48000:duration=${dur}" \
+    -vf "${filtros}" -map 0:v -map 1:a \
+    -c:v libx264 -preset veryfast -pix_fmt yuv420p -crf "${CRF}" -g 50 -c:a aac -b:a 96k \
+    -movflags +faststart -shortest \
+    "${nombre}.mp4"
+}
+pieza intro 0x7b2cbf 'INTRO' 5
+pieza outro 0xd9480f 'OUTRO' 4
+
 # --- HLS, para el motor con hls.js ---
 # `-c copy` reempaqueta sin recodificar: los segmentos pesan lo mismo que el
 # MP4 de origen y la generación es instantánea.
@@ -89,6 +108,6 @@ echo "Generando poster.jpg (fotograma del ponente)..."
 ffmpeg -y -loglevel error -ss 3 -i presenter.mp4 -frames:v 1 -vf scale=960:-1 poster.jpg
 
 echo
-ls -lh presenter.mp4 slides.mp4 poster.jpg audio.m4a
+ls -lh presenter.mp4 slides.mp4 intro.mp4 outro.mp4 poster.jpg audio.m4a
 ls hls/*.m3u8 | sed "s/^/  /"
 echo "Listo."

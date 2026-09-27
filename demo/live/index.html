@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>NanoPlayer · Live demo</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/src/site.css">
+<style>
+  .probar{margin:0;padding-left:1.2rem}
+  .probar li{margin:.3rem 0;max-width:66ch}
+</style>
+</head>
+<body>
+<main class="ancho">
+  <p class="migas"><a href="../">← NanoPlayer</a></p>
+  <h1>Live demo</h1>
+  <p class="lead">
+    Two live streams — camera and slides — kept in sync by the time of day
+    they were broadcast.
+  </p>
+
+  <p class="aviso" role="note">
+    <strong>This demo doesn't work yet.</strong> There is no live stream connected
+    to this page, so pressing play will only show the notice that the broadcast
+    hasn't started. The player itself supports live streams; what's missing is a
+    stream to point it at.
+  </p>
+
+  <div id="player" class="reproductor"></div>
+
+  <h2>What it will show</h2>
+  <ul class="probar">
+    <li><strong>Two synced live streams.</strong> Kept together by their broadcast
+        time (<code>EXT-X-PROGRAM-DATE-TIME</code>), not by when each one started loading.</li>
+    <li><strong>Rewind and return.</strong> Go back within the live window, then
+        use the <strong>LIVE</strong> button to jump back to the latest moment.</li>
+    <li><strong>Before it starts.</strong> A clear notice that the broadcast hasn't
+        started yet, retrying on its own until it does.</li>
+    <li><strong>When one drops out.</strong> If the slides stop, the camera keeps
+        playing and the notice appears only where the slides were.</li>
+  </ul>
+
+  <h2>What it takes</h2>
+  <pre><code>create('#player', {
+  manifest: {
+    id: 'closing-ceremony',
+    live: true,
+    streams: [
+      { id: 'camera', role: 'presenter', audio: true,
+        sources: [{ src: 'camera.m3u8', type: 'application/vnd.apple.mpegurl' }] },
+      { id: 'slides', role: 'presentation', audio: false,
+        sources: [{ src: 'slides.m3u8', type: 'application/vnd.apple.mpegurl' }] },
+    ],
+  },
+});</code></pre>
+</main>
+<script type="module" src="/src/live.ts"></script>
+</body>
+</html>

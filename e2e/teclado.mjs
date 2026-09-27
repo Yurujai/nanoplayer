@@ -87,8 +87,8 @@ async function recorrer(page, pasos = 14) {
   return visto;
 }
 
-const CONTROLES = ['Reproducir vídeo', 'Posición', 'Silenciar', 'Volumen',
-                   'Ajustes', 'Pantalla completa'];
+const CONTROLES = ['Play video', 'Seek', 'Mute', 'Volume',
+                   'Settings', 'Full screen'];
 
 for (const [nombre, motor] of [['Chromium', chromium], ['WebKit', webkit]]) {
   console.log(`\n[${nombre}] recorrido con Tab desde el documento`);
@@ -100,7 +100,8 @@ for (const [nombre, motor] of [['Chromium', chromium], ['WebKit', webkit]]) {
     continue;
   }
   const page = await navegador.newPage();
-  await page.goto(URL_BASE, { waitUntil: 'load' });
+  // El reproductor vive en la demo de vídeo; la portada es solo texto.
+  await page.goto(new URL('video/', URL_BASE).href, { waitUntil: 'load' });
   await page.waitForTimeout(500);
 
   const visto = await recorrer(page);

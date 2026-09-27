@@ -1,11 +1,14 @@
 # Demo
 
-Dos páginas con propósitos distintos, servidas por el mismo Vite:
+La web pública del proyecto. Cuatro páginas servidas por el mismo Vite, **todas
+en inglés**, que se publican en la raíz de GitHub Pages:
 
 | | |
 |---|---|
-| [`index.html`](index.html) | **El reproductor**, tal cual lo vería quien lo integre. Sin instrumentación |
-| [`banco.html`](banco.html) | **El banco de pruebas del núcleo**, con el ciclo de vida en crudo |
+| [`index.html`](index.html) | **Portada.** Qué es el reproductor, por qué existe y qué casos resuelve. Solo texto y tres botones |
+| [`video/`](video/index.html) | **Demo de vídeo.** El reproductor completo con MP4, mono o dual, con o sin cabecera y cola |
+| [`live/`](live/index.html) | **Demo de directo.** Dual en directo. **Aún sin directo enlazado**: la página lo avisa |
+| [`bench/`](bench/index.html) | **Banco de pruebas** del núcleo, con el ciclo de vida en crudo |
 
 ```bash
 ./gen-media.sh     # requiere ffmpeg; genera los vídeos con timecode incrustado
@@ -13,40 +16,44 @@ pnpm install
 pnpm --filter @nanoplayer/demo dev    # http://localhost:5180
 ```
 
-La demo apunta al **código fuente** de los paquetes, no a su build: los cambios
-se ven al instante mientras se desarrolla.
+La web apunta al **código fuente** de los paquetes, no a su build: los cambios
+se ven al instante mientras se desarrolla. Los estilos comunes están en
+[`src/site.css`](src/site.css).
+
+Las direcciones antiguas (`/demo/` y `/demo/banco.html`) las redirige el
+workflow de Pages, para no romper los enlaces ya compartidos.
 
 ---
 
-## El reproductor
+## Demo de vídeo (`video/`)
 
-Dual-stream sincronizado, subtítulos en dos idiomas, menú de ajustes y barra de
-controles. Son literalmente las tres líneas que promete el objetivo O5:
-
-```ts
-import '@nanoplayer/plugin-captions';   // se auto-registra
-
-const player = create('#player', { manifest: MANIFIESTO });
-attachControls(player, { lang: 'es' });
-```
-
-El panel de la derecha no forma parte de lo que necesitaría un integrador: está
-para poder ver el estado, el número de elementos `<video>` y el bus de eventos
-sin abrir las herramientas de desarrollo.
-
-Lo que conviene mirar:
+Es literalmente lo que haría un integrador: `create()` y `attachControls()`.
+Lo único propio de la demo es cambiar de manifiesto sin recargar, y se hace
+igual que lo haría cualquiera: destruir el reproductor y crear otro,
+conservando la posición. Activar la cabecera a mitad de clase **no la
+repite**: sigue por donde iba.
 
 - **Mientras se ve el póster no hay ningún `<video>` en el DOM** ni se ha
-  descargado un byte de vídeo. El contador lo enseña.
-- **Los subtítulos se activan solos** porque el manifiesto trae `textTracks`. No
-  hay una línea de configuración que los encienda.
-- **Se navega entero con el teclado.** Dentro del menú de ajustes recorren las
-  flechas, no Tab, y `Esc` retrocede un panel antes de cerrar.
-- **Los layouts están en el menú de ajustes**, bajo *Disposición*: lado a lado,
-  imagen en imagen, solo ponente y solo presentación. Aparecen solos porque el
-  manifiesto trae dos streams.
+  descargado un byte de vídeo.
+- **Los subtítulos se activan solos** porque el manifiesto trae `textTracks`.
+- **Los layouts están en el menú de ajustes**, bajo *Layout*, y solo aparecen
+  en dual.
+- **Cabecera y cola**, desactivadas por defecto para que quien entra por
+  primera vez no vea antes que nada una cabecera.
 
-## El banco de pruebas del núcleo
+Es la página que auditan en CI `e2e/a11y.mjs` y `e2e/teclado.mjs`.
+
+## Demo de directo (`live/`)
+
+GitHub Pages solo sirve ficheros estáticos, así que **no hay un directo al que
+conectarse**. La página está montada y el reproductor configurado; al pulsar
+play enseña el aviso de «aún no ha empezado» y reintenta, que es lo que haría
+ante cualquier directo que no emite. Para enlazar uno basta con cambiar
+`FUENTES` en [`src/live.ts`](src/live.ts): las dos listas tienen que traer
+`EXT-X-PROGRAM-DATE-TIME`, o no se podrá medir la sincronización (spike
+[S5](../spikes/s5-live-dual/)).
+
+## Banco de pruebas (`bench/`)
 
 Usa la API pública tal cual la usaría un integrador — si algo aquí necesitase
 saltársela, sería señal de que la API está mal. Lo que cambia es que los pasos
@@ -68,12 +75,12 @@ peticiones de red y el de elementos `<video>` cambian al avanzar de estado:
 | `resolved` | 1 | 0 |
 | `attached` | 1 | 2 |
 
-**Que el sincronizador corrige de verdad.** *Desincronizar 400 ms* mete el
+**Que el sincronizador corrige de verdad.** *Desync by 400 ms* mete el
 desfase a propósito; la deriva y la acción del lazo se ven en vivo, y el valor
 vuelve por debajo de los 33 ms de un frame. El spike S1 midió una mediana de
 9,8 ms.
 
-**Que soltar el motor conserva la posición.** Pulsa *Soltar motor* a mitad de
+**Que soltar el motor conserva la posición.** Pulsa *Detach engine* a mitad de
 reproducción: los elementos `<video>` desaparecen del DOM, se liberan los
 decodificadores y la posición queda guardada. Al volver a enganchar, continúa
 donde estaba. Es lo que hace viable una página con muchos reproductores — S2
@@ -91,11 +98,3 @@ falla con el motivo: *"playing two tracks at once does not work on iOS"*.
 Los mensajes de validación van en inglés a propósito: los lee quien
 integra, por consola, y son lo que se acaba pegando en un buscador.
 
----
-
-## Lo que todavía no se ve aquí
-
-Funciona en el núcleo, pero no tiene escenario en la demo: el **directo**
-—ventana DVR, salto al borde, espera por flujo— que validó el spike
-[S5](../spikes/s5-live-dual/), y el caso **multi-instancia** de muchos
-reproductores coordinándose en una misma página.

@@ -120,8 +120,10 @@ async function auditar(etiqueta) {
 
 /* ------------------------------------------------------------------------- */
 
-console.log(`Auditando ${URL_BASE}\n`);
-await page.goto(URL_BASE, { waitUntil: 'load' });
+// El reproductor vive en la demo de vídeo; la portada es solo texto.
+const URL_DEMO = new URL('video/', URL_BASE).href;
+console.log(`Auditando ${URL_DEMO}\n`);
+await page.goto(URL_DEMO, { waitUntil: 'load' });
 
 // Estado inicial: solo el póster. Es el que ve la mayoría de visitantes, y
 // el que más se olvida de auditar.
@@ -239,7 +241,7 @@ for (let i = 0; i < 8; i++) {
 }
 console.log('  alcanzados: ' + (alcanzados.join(', ') || 'ninguno'));
 
-const ESPERADOS = ['Pausar', 'Silenciar', 'Volumen', 'Posición', 'Pantalla completa'];
+const ESPERADOS = ['Pause', 'Mute', 'Volume', 'Seek', 'Full screen'];
 for (const e of ESPERADOS) {
   if (alcanzados.some((a) => a.includes(e))) bien(`"${e}" es alcanzable con Tab`);
   else nota(`"${e}" NO se alcanza con Tab`);

@@ -78,8 +78,9 @@ Por orden de lo que bloquea a más gente:
   falta hls.js, que hoy solo se puede cargar por la vía npm.
 - **Plugins previstos:** multi-audio, Chromecast, listas de reproducción y H5P.
   Las anotaciones del manifiesto ya son el mecanismo por el que entrarán.
-- **Demo.** El directo y el caso multi-instancia funcionan pero no tienen
-  escenario donde verlos, y el spike S5 no se publica en Pages.
+- **Demo.** La página de directo existe pero no tiene un directo enlazado, el
+  caso multi-instancia no tiene escenario donde verlo, y el spike S5 no se
+  publica en Pages.
 
 El alcance detallado y el calendario se publicarán cuando el MVP esté más
 avanzado.
@@ -157,9 +158,9 @@ cd demo
 pnpm --filter @nanoplayer/demo dev      # http://localhost:5180
 ```
 
-Dos páginas: el **reproductor** tal cual lo vería quien lo integre, y el
-**banco de pruebas** del núcleo, con el ciclo de vida en crudo. Ver
-[`demo/README.md`](demo/README.md).
+Es la web pública, en inglés: una portada que explica qué es el reproductor,
+una demo de vídeo, una de directo —aún sin directo enlazado— y el **banco de
+pruebas** del núcleo. Ver [`demo/README.md`](demo/README.md).
 
 ### Los spikes
 

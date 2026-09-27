@@ -23,77 +23,77 @@ const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)
 const MANIFIESTOS: Record<string, unknown> = {
   mono: {
     id: 'demo-mono',
-    title: 'Un solo stream',
+    title: 'Single stream',
     duration: 40,
     streams: [
-      { id: 'cam', role: 'presenter', label: 'Ponente', audio: true,
-        sources: [{ src: 'media/presenter.mp4', type: 'video/mp4' }] },
+      { id: 'cam', role: 'presenter', label: 'Speaker', audio: true,
+        sources: [{ src: '../media/presenter.mp4', type: 'video/mp4' }] },
     ],
   },
   dual: {
     id: 'demo-dual',
-    title: 'Dos streams',
+    title: 'Dual stream',
     duration: 40,
     streams: [
-      { id: 'cam', role: 'presenter', label: 'Ponente', audio: true,
-        sources: [{ src: 'media/presenter.mp4', type: 'video/mp4' }] },
-      { id: 'slides', role: 'presentation', label: 'Diapositivas', audio: false,
-        sources: [{ src: 'media/slides.mp4', type: 'video/mp4' }] },
+      { id: 'cam', role: 'presenter', label: 'Speaker', audio: true,
+        sources: [{ src: '../media/presenter.mp4', type: 'video/mp4' }] },
+      { id: 'slides', role: 'presentation', label: 'Slides', audio: false,
+        sources: [{ src: '../media/slides.mp4', type: 'video/mp4' }] },
     ],
     textTracks: [
-      { src: 'media/es.vtt', lang: 'es', label: 'Español', kind: 'subtitles' },
-      { src: 'media/en.vtt', lang: 'en', label: 'English', kind: 'subtitles' },
+      { src: '../media/es.vtt', lang: 'es', label: 'Español', kind: 'subtitles' },
+      { src: '../media/en.vtt', lang: 'en', label: 'English', kind: 'subtitles' },
     ],
   },
   // Mismo contenido servido como HLS: el selector debe preferir hls.js donde
   // haya MSE, sin que nada más cambie.
   hls: {
     id: 'demo-hls',
-    title: 'Dos streams por HLS',
+    title: 'Dual stream over HLS',
     duration: 40,
     streams: [
-      { id: 'cam', role: 'presenter', label: 'Ponente', audio: true,
-        sources: [{ src: 'media/hls/presenter.m3u8',
+      { id: 'cam', role: 'presenter', label: 'Speaker', audio: true,
+        sources: [{ src: '../media/hls/presenter.m3u8',
                     type: 'application/vnd.apple.mpegurl' }] },
-      { id: 'slides', role: 'presentation', label: 'Diapositivas', audio: false,
-        sources: [{ src: 'media/hls/slides.m3u8',
+      { id: 'slides', role: 'presentation', label: 'Slides', audio: false,
+        sources: [{ src: '../media/hls/slides.m3u8',
                     type: 'application/vnd.apple.mpegurl' }] },
     ],
   },
   // Solo sonido. No hace falta declarar nada: el tipo `audio/mp4` ya lo dice.
   audio: {
     id: 'demo-audio',
-    title: 'Solo audio',
+    title: 'Audio only',
     duration: 40,
-    poster: 'media/poster.jpg',
+    poster: '../media/poster.jpg',
     streams: [
-      { id: 'locucion', role: 'presenter', label: 'Locución', audio: true,
-        sources: [{ src: 'media/audio.m4a', type: 'audio/mp4' }] },
+      { id: 'locucion', role: 'presenter', label: 'Narration', audio: true,
+        sources: [{ src: '../media/audio.m4a', type: 'audio/mp4' }] },
     ],
   },
   // El caso probablemente más útil: una clase sin cámara, pero con las
   // diapositivas. El audio es el maestro y el vídeo mudo lo persigue.
   'audio-slides': {
     id: 'demo-audio-slides',
-    title: 'Audio con diapositivas',
+    title: 'Audio with slides',
     duration: 40,
-    poster: 'media/poster.jpg',
+    poster: '../media/poster.jpg',
     streams: [
-      { id: 'locucion', role: 'presenter', label: 'Locución', audio: true,
-        sources: [{ src: 'media/audio.m4a', type: 'audio/mp4' }] },
-      { id: 'slides', role: 'presentation', label: 'Diapositivas', audio: false,
-        sources: [{ src: 'media/slides.mp4', type: 'video/mp4' }] },
+      { id: 'locucion', role: 'presenter', label: 'Narration', audio: true,
+        sources: [{ src: '../media/audio.m4a', type: 'audio/mp4' }] },
+      { id: 'slides', role: 'presentation', label: 'Slides', audio: false,
+        sources: [{ src: '../media/slides.mp4', type: 'video/mp4' }] },
     ],
   },
   // El medio dura 40 s y solo se enseñan del 10 al 25. El fichero no se toca:
   // lo que cambia es el timeline que ve quien mira.
   recorte: {
     id: 'demo-recorte',
-    title: 'Con recorte',
+    title: 'Trimmed',
     duration: 40,
     streams: [
-      { id: 'cam', role: 'presenter', label: 'Ponente', audio: true,
-        sources: [{ src: 'media/presenter.mp4', type: 'video/mp4' }] },
+      { id: 'cam', role: 'presenter', label: 'Speaker', audio: true,
+        sources: [{ src: '../media/presenter.mp4', type: 'video/mp4' }] },
     ],
     annotations: [{ kind: 'trim', start: 10, end: 25 }],
   },
@@ -103,9 +103,9 @@ const MANIFIESTOS: Record<string, unknown> = {
     id: 'demo-roto',
     streams: [
       { id: 'a', role: 'presenter', audio: true,
-        sources: [{ src: 'media/presenter.mp4', type: 'video/mp4' }] },
+        sources: [{ src: '../media/presenter.mp4', type: 'video/mp4' }] },
       { id: 'b', role: 'presentation', audio: true,
-        sources: [{ src: 'media/slides.mp4', type: 'video/mp4' }] },
+        sources: [{ src: '../media/slides.mp4', type: 'video/mp4' }] },
     ],
   },
 };
@@ -118,23 +118,23 @@ const MANIFIESTOS: Record<string, unknown> = {
  * comportamiento.
  */
 const CLAVES: Record<string, string> = {
-  mono: 'Un solo stream. <b>audio: true</b> lo convierte en el maestro del reloj.',
-  dual: 'Dos streams. <b>Exactamente uno</b> lleva <b>audio: true</b>: es el maestro, ' +
-        'y los demás lo persiguen. Dos pistas de audio se rechazan porque iOS no las reproduce. ' +
-        'Los <b>textTracks</b> activan el plugin de subtítulos sin configurar nada.',
-  hls: 'Mismo contenido, pero las fuentes son <b>application/vnd.apple.mpegurl</b>. ' +
-       'Eso hace que gane el motor de hls.js donde hay MediaSource, y el nativo donde no. ' +
-       'No cambia nada más del manifiesto.',
-  audio: 'Sin declarar nada: el tipo <b>audio/mp4</b> basta para saber que no hay imagen. ' +
-         'La carátula se queda puesta durante la reproducción en vez de dejar un rectángulo negro.',
-  'audio-slides': 'Una clase sin cámara pero con la presentación. El <b>audio es el maestro</b> ' +
-                  'y el vídeo mudo lo persigue: el modelo de sincronización no cambia nada.',
-  recorte: 'El vídeo dura 40 s y la anotación <b>trim</b> deja ver del 10 al 25. ' +
-           'La barra marca <b>0:15</b>, no 0:40, y el timecode incrustado empieza en 10: ' +
-           'el fichero no se toca, lo que se remapea es el tiempo que se enseña. ' +
-           'Al llegar al final para solo, aunque al medio le queden 15 s.',
-  invalido: 'Los <b>dos</b> streams llevan <b>audio: true</b>. La validación lo rechaza ' +
-            'con el motivo, en vez de dejar un reproductor que falla solo en iPhone.',
+  mono: 'One stream. <b>audio: true</b> makes it the master of the clock.',
+  dual: 'Two streams. <b>Exactly one</b> has <b>audio: true</b>: it is the master, ' +
+        'and the others follow it. Two audio tracks are rejected because iOS cannot play them. ' +
+        'The <b>textTracks</b> switch on the captions plugin with no configuration.',
+  hls: 'Same content, but the sources are <b>application/vnd.apple.mpegurl</b>. ' +
+       'That makes the hls.js engine win where MediaSource exists, and the native one elsewhere. ' +
+       'Nothing else in the manifest changes.',
+  audio: 'Nothing to declare: the <b>audio/mp4</b> type is enough to know there is no picture. ' +
+         'The artwork stays up during playback instead of leaving a black rectangle.',
+  'audio-slides': 'A lecture with no camera but with the slides. The <b>audio is the master</b> ' +
+                  'and the silent video follows it: the sync model does not change at all.',
+  recorte: 'The video is 40 s long and the <b>trim</b> annotation shows 10 to 25. ' +
+           'The bar reads <b>0:15</b>, not 0:40, and the burned-in timecode starts at 10: ' +
+           'the file is untouched, only the time shown is remapped. ' +
+           'It stops at the end even though the media has 15 s left.',
+  invalido: '<b>Both</b> streams have <b>audio: true</b>. Validation rejects it and says why, ' +
+            'instead of leaving a player that only fails on iPhone.',
 };
 
 let player: Player | null = null;
@@ -168,7 +168,7 @@ function crear(clave: string): Player {
   });
 
   p.bus.onAny((type, payload) => log(type, payload));
-  p.on('engine:attach:ok', ({ engine }) => log('motor elegido', { engine }));
+  p.on('engine:attach:ok', ({ engine }) => log('engine chosen', { engine }));
   p.on('state:change', pintar);
   p.on('time', pintar);
 
@@ -222,9 +222,9 @@ $('#btn-enganchar').addEventListener('click', async () => {
   await player?.attach().catch(() => {});
   // La barra se monta después de enganchar, cuando ya hay streams que envolver.
   if (player && !controles) {
-    controles = attachControls(player, { lang: 'es' });
+    controles = attachControls(player, { lang: 'en' });
     const res = await plugins.activate(player, {}, player.manifest);
-    log('plugins:activados', { activados: res.activated, omitidos: res.skipped });
+    log('plugins:activated', { activated: res.activated, skipped: res.skipped });
   }
   pintar();
 });
@@ -243,8 +243,8 @@ $('#btn-seek').addEventListener('click', () => {
 
 $('#btn-desalojar').addEventListener('click', () => {
   player?.detach();
-  limpiarEscenario('Motor soltado. Cero elementos &lt;video&gt; en el DOM, ' +
-    'posición conservada.');
+  limpiarEscenario('Engine detached. Zero &lt;video&gt; elements in the DOM, ' +
+    'position kept.');
   pintar();
 });
 
@@ -256,7 +256,7 @@ $('#btn-reiniciar').addEventListener('click', () => {
   $('#deriva').textContent = '—';
   $('#deriva').className = 'val';
   $('#accion').textContent = '—';
-  limpiarEscenario('Estado <code>idle</code>: solo el póster. Ni una petición de red.');
+  limpiarEscenario('State <code>idle</code>: poster only. Not a single network request.');
   pintar();
 });
 
@@ -272,11 +272,11 @@ $('#btn-copiar').addEventListener('click', async () => {
   const btn = $<HTMLButtonElement>('#btn-copiar');
   try {
     await navigator.clipboard.writeText($('#manifiesto').textContent ?? '');
-    btn.textContent = 'Copiado';
+    btn.textContent = 'Copied';
   } catch {
-    btn.textContent = 'No se pudo copiar';
+    btn.textContent = 'Could not copy';
   }
-  setTimeout(() => { btn.textContent = 'Copiar manifiesto'; }, 2000);
+  setTimeout(() => { btn.textContent = 'Copy manifest'; }, 2000);
 });
 
 $('#fuente').addEventListener('change', () => {
@@ -297,7 +297,7 @@ $('#btn-sync').addEventListener('click', () => {
   const esclavos = [...document.querySelectorAll<HTMLVideoElement>('#escenario video')]
     .filter((v) => v.muted);
   for (const v of esclavos) v.currentTime = Math.max(0, v.currentTime - 0.4);
-  log('demo:desincronizado', { streams: esclavos.length, ms: -400 });
+  log('demo:desynced', { streams: esclavos.length, ms: -400 });
 });
 
 pintar();
