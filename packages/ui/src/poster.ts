@@ -56,6 +56,7 @@ export class Poster {
     else this.#raiz.appendChild(this.#capa);
 
     this.#desatar.push(player.on('state:change', () => this.#pintar()));
+    this.#desatar.push(player.on('live:status', () => this.#pintar()));
     this.#desatar.push(player.on('manifest:resolve:ok', () => this.#pintarImagen()));
     this.#pintarImagen();
     this.#pintar();
@@ -91,7 +92,16 @@ export class Poster {
   }
 
   #pintar(): void {
-    const conMedios = this.#player.state === 'attached' || this.#player.state === 'active';
+    /*
+     * Un directo que aún no emite devuelve el reproductor a `resolved`, pero
+     * ya se pidió reproducir: lo que toca enseñar es el aviso de espera que la
+     * barra pone en el hueco de cada flujo. Con el póster encima, ese aviso
+     * quedaba tapado y parecía que el botón no hacía nada.
+     */
+    const esperandoDirecto = !!this.#player.manifest?.live
+      && this.#player.liveStatus !== 'unknown';
+    const conMedios = this.#player.state === 'attached' || this.#player.state === 'active'
+      || esperandoDirecto;
     /*
      * Con solo audio la capa **se queda**: no hay imagen detrás que enseñar, y
      * retirarla dejaría un rectángulo negro donde estaba la carátula. Lo que sí
