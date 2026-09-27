@@ -9,6 +9,10 @@ export {
 } from './validate.js';
 export type { ValidationIssue, ValidationResult } from './validate.js';
 
+// --- cabecera y cola --------------------------------------------------------
+export { ANTICIPACION_MS, firstFrame } from './chain.js';
+export type { ChainPhase } from './chain.js';
+
 // --- textos -----------------------------------------------------------------
 export { IDIOMA_BASE, StringRegistry, strings } from './i18n.js';
 export type { Catalogue, Catalogues, Translate } from './i18n.js';

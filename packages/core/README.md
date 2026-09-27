@@ -195,6 +195,31 @@ Ni `duration` ni `currentTime` cuentan la cabecera ni la cola.
 sigue avanzando y se llega tarde al borde. La cola depende de que la emisión
 termine, y un directo no lo garantiza.
 
+#### Cómo se encadena
+
+Arrancar la pieza siguiente cuando termina la anterior deja un hueco negro de
+340–445 ms (spike S6). Por eso la siguiente se arranca **600 ms antes**, en
+silencio y detrás, y el cambio se hace **en su primer fotograma**, no en cuanto
+acepta el `play()`. Así no queda hueco en ningún motor.
+
+| | |
+|---|---|
+| `player.phase` | `'intro'`, `'main'` o `'outro'` |
+| `player.canSkip` | `true` solo durante la cabecera |
+| `player.skipIntro()` | Salta la cabecera, sin hueco. No hay `skipOutro()` |
+| `chain:phase` | `{ from, to, skipped }`, en el instante del cambio visible |
+| `chain:time` | Progreso de la cabecera o la cola. `time` es solo del contenido |
+| `chain:unavailable` | Una pieza no carga y se omite; el contenido sigue |
+
+La fase también se publica como `data-phase` en el contenedor: la interfaz
+decide con **ese único atributo** qué se ve, y cambiarlo de golpe es lo que hace
+que el cambio sea instantáneo.
+
+`ended` llega al terminar **la cola**, no el contenido. Dar al play después
+vuelve al principio del contenido, sin repetir la cabecera. Si el reproductor
+se desaloja a mitad de una pieza, al volver esa pieza empieza desde el
+principio.
+
 ### Anotaciones
 
 Datos anclados al timeline. Unifica lo que parecen features sueltas: recorte,

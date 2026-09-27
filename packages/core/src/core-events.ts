@@ -10,6 +10,7 @@
  * parten en `:start` / `:ok` / `:fail`. Así la analítica puede medir duraciones
  * y tasas de error sin instrumentación adicional.
  */
+import type { ChainPhase } from './chain.js';
 import type { Empty } from './events.js';
 import type { PlayerError } from './errors.js';
 import type { Manifest } from './manifest.js';
@@ -44,6 +45,23 @@ export interface CoreEvents {
   'seek:end': { at: number };
   'ratechange': { rate: number };
   'volumechange': { volume: number; muted: boolean };
+
+  // --- cabecera y cola ----------------------------------------------------
+  /**
+   * Cambió la pieza que se ve. Se emite en el instante del cambio visible, no
+   * al pedirlo: entre uno y otro pasa la anticipación.
+   */
+  'chain:phase': { from: ChainPhase; to: ChainPhase; skipped: boolean };
+  /**
+   * Progreso de la cabecera o la cola. Va aparte de `time` porque la barra de
+   * progreso solo enseña el contenido: mezclarlos la haría saltar.
+   */
+  'chain:time': { phase: 'intro' | 'outro'; current: number; duration: number };
+  /**
+   * Una cabecera o cola no se pudo reproducir y se ha omitido. No es un
+   * `error`: el contenido sigue, y una cabecera rota no debe impedir verlo.
+   */
+  'chain:unavailable': { phase: 'intro' | 'outro'; error: PlayerError };
 
   // --- multi-stream -------------------------------------------------------
   /**
