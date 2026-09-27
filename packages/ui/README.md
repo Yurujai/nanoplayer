@@ -67,6 +67,24 @@ impedía ver este comportamiento.
 Los atajos ceden las teclas que el control enfocado ya usa: las flechas sobre un
 deslizador son suyas, y el espacio sobre un botón lo activa.
 
+Durante la **cabecera** las teclas de salto no hacen nada: no hay barra a la que
+referirlas. Durante la **cola**, hacia atrás vuelven al contenido y hacia
+delante se ignoran, porque la cola no se salta.
+
+## Cabecera y cola
+
+Las dos se pintan **encima** del contenido, no en su lugar, así que el escenario
+no cambia de tamaño al pasar de una a otro. Qué se ve lo decide un único
+atributo, `data-phase`, que pone el reproductor.
+
+- **Saltar cabecera** aparece dentro del vídeo, abajo a la derecha, como el de
+  los anuncios. No se oculta con la barra: durante la cabecera es lo único que
+  se puede hacer. Va antes que la barra en el orden de tabulación.
+- **La barra de progreso se esconde** mientras suena una de las dos, y en su
+  lugar el tiempo dice qué es y cuánto le queda: «Cabecera · 0:05». La barra es
+  solo del contenido.
+- La cola **no tiene botón** ni se puede adelantar.
+
 ## Subtítulos
 
 Se pintan en una capa del ancho del reproductor, no dentro de un `<video>`. El
@@ -146,6 +164,7 @@ Sin decir nada se usa el del documento que contiene al reproductor
 | `ui.*` | Botones y deslizadores de la barra |
 | `ui.status.*` | Región viva: reproduciendo, en pausa, cargando |
 | `ui.live.*` | Directo: distintivo, espera, ir al borde |
+| `ui.chain.*` | Cabecera y cola: nombres y botón de saltar |
 | `ui.poster.*` | El póster antes de reproducir |
 | `ui.settings.*` | Menú de ajustes |
 | `ui.layout.*` | Nombres de las disposiciones |

@@ -55,7 +55,7 @@ export const CSS = `
   line-height:1;
 }
 .np:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:2px}
-.np__stage{display:flex;width:100%}
+.np__stage{position:relative;display:flex;width:100%}
 .np__stage>[data-stream]{position:relative;flex:1;min-width:0}
 /* Un flujo que aún no emite no tiene vídeo dentro, así que no tendría altura:
    se le da la del hueco que le toca para que el aviso caiga en su sitio. */
@@ -300,6 +300,43 @@ button.np__directo:focus-visible{outline:3px solid var(--np-color-focus);outline
   .np--layout-side-by-side .np__stage{flex-direction:column}
 }
 
+/* --- cabecera y cola ---
+   Van encima del contenido, no en su lugar: así el escenario conserva el
+   tamaño que le da el contenido y el cambio no mueve nada. Solo se ve la que
+   diga data-phase, y cambiar ese único atributo es lo que hace el cambio
+   instantáneo. Transparente y no display:none, para que la que espera siga
+   decodificando (S6). Mismo nivel que la imagen en imagen, pero después en el
+   DOM: la tapa. */
+.np__stage>[data-bumper]{
+  position:absolute;inset:0;z-index:var(--np-z-pip);
+  background:#000;opacity:0;pointer-events:none;
+}
+.np__stage>[data-bumper] video{width:100%;height:100%;object-fit:contain}
+.np[data-phase="intro"] .np__stage>[data-bumper="intro"],
+.np[data-phase="outro"] .np__stage>[data-bumper="outro"]{opacity:1}
+/* Solo audio esconde el escenario; una cabecera con imagen necesita verse. */
+.np--solo-audio:is([data-phase="intro"],[data-phase="outro"]) .np__stage{
+  display:block;position:absolute;inset:0;
+}
+
+/* Saltar cabecera: dentro del vídeo, abajo a la derecha, como el de los
+   anuncios. Por encima de la barra, y no se oculta con ella: es lo único que
+   se puede hacer durante la cabecera, y tiene que estar a mano. */
+button.np__skip{
+  position:absolute;right:0;bottom:5.25rem;z-index:var(--np-z-bar);
+  display:inline-flex;align-items:center;gap:.5rem;
+  padding:.65rem .9rem .65rem 1.1rem;
+  border:1px solid rgba(255,255,255,.35);border-right:0;
+  border-radius:var(--np-radius) 0 0 var(--np-radius);
+  background:rgba(0,0,0,.72);color:var(--np-color-control);
+  font:inherit;font-size:.9375rem;cursor:pointer;
+  transition:bottom var(--np-transition),background var(--np-transition);
+}
+button.np__skip:hover{background:rgba(0,0,0,.88)}
+button.np__skip:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:-3px}
+button.np__skip svg{width:1.25rem;height:1.25rem;fill:currentColor;pointer-events:none}
+.np--inactive button.np__skip{bottom:1.5rem}
+
 /* --- accesibilidad --- */
 .np__sr{
   position:absolute;width:1px;height:1px;padding:0;margin:-1px;
@@ -312,7 +349,7 @@ button.np__directo:focus-visible{outline:3px solid var(--np-color-focus);outline
 }
 /* En alto contraste, los fondos translúcidos desaparecen: hacen falta bordes. */
 @media (forced-colors:active){
-  button.np__btn{border:1px solid ButtonText}
+  button.np__btn,button.np__skip{border:1px solid ButtonText}
   .np__bar{background:Canvas}
 }
 `;

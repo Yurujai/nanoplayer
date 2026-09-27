@@ -55,6 +55,12 @@ strings.register('es', {
   'ui.error.media/blocked': 'Pulsa reproducir para empezar',
   'ui.error.internal': 'No se ha podido reproducir el vídeo',
 
+  // Cabecera y cola. Para quien mira, "cola" es jerga: se le dice "cierre".
+  'ui.chain.intro': 'Cabecera',
+  'ui.chain.outro': 'Cierre',
+  'ui.chain.skip': 'Saltar cabecera',
+  'ui.chain.skipped': 'Cabecera saltada',
+
   'ui.poster.play': 'Reproducir vídeo',
   'ui.poster.loading': 'Cargando…',
 
@@ -108,6 +114,11 @@ strings.register('en', {
   'ui.error.media/network': 'The connection to the video was lost',
   'ui.error.media/blocked': 'Press play to start',
   'ui.error.internal': 'The video could not be played',
+
+  'ui.chain.intro': 'Intro',
+  'ui.chain.outro': 'Outro',
+  'ui.chain.skip': 'Skip intro',
+  'ui.chain.skipped': 'Intro skipped',
 
   'ui.poster.play': 'Play video',
   'ui.poster.loading': 'Loading…',

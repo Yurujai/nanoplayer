@@ -77,6 +77,7 @@ export class ControlBar implements UiSlots {
   #btnPlay!: HTMLButtonElement;
   #btnMute!: HTMLButtonElement;
   #btnFs!: HTMLButtonElement;
+  #btnSaltar!: HTMLButtonElement;
   #menu!: SettingsMenu;
   #poster: Poster | null = null;
   #zonaControles!: HTMLElement;
@@ -90,6 +91,8 @@ export class ControlBar implements UiSlots {
   #vivo!: HTMLElement;
 
   #velocidad = 1;
+  /** Segundos que le quedan a la cabecera o la cola, según `chain:time`. */
+  #restantePieza: number | null = null;
   #layout: LayoutId = 'side-by-side';
   #arrastrando = false;
   #volumenPrevio = 1;
@@ -197,6 +200,20 @@ export class ControlBar implements UiSlots {
     filaBotones.append(this.#btnFs);
 
     this.#bar.append(filaProgreso, filaBotones);
+
+    // Antes de la barra en el DOM, para que el Tab lo alcance primero: durante
+    // la cabecera es lo que más probablemente se quiera hacer.
+    this.#btnSaltar = doc.createElement('button');
+    this.#btnSaltar.type = 'button';
+    this.#btnSaltar.className = 'np__skip';
+    this.#btnSaltar.hidden = true;
+    this.#btnSaltar.setAttribute('aria-label', this.#t('ui.chain.skip'));
+    const textoSaltar = doc.createElement('span');
+    textoSaltar.textContent = this.#t('ui.chain.skip');
+    this.#btnSaltar.append(textoSaltar);
+    this.#btnSaltar.insertAdjacentHTML('beforeend', ICONS.skip);
+    this.#root.appendChild(this.#btnSaltar);
+
     this.#root.appendChild(this.#bar);
     this.#registrarPanelesPropios();
   }
@@ -349,13 +366,15 @@ export class ControlBar implements UiSlots {
     });
   }
 
-  /** Mueve al escenario los streams que el Player haya montado. */
+  /**
+   * Mueve al escenario los streams que el Player haya montado, y la cabecera y
+   * la cola **detrás**: comparten nivel con la imagen en imagen, y a igualdad
+   * de nivel tapa la que va después en el DOM.
+   */
   #recogerStreams(): void {
-    for (const hijo of [...this.#root.children]) {
-      if (hijo instanceof HTMLElement && hijo.dataset['stream']) {
-        this.#escenario.appendChild(hijo);
-      }
-    }
+    const hijos = [...this.#root.children].filter((h): h is HTMLElement => h instanceof HTMLElement);
+    for (const h of hijos) if (h.dataset['stream']) this.#escenario.appendChild(h);
+    for (const h of hijos) if (h.dataset['bumper']) this.#escenario.appendChild(h);
   }
 
   /**
@@ -414,6 +433,7 @@ export class ControlBar implements UiSlots {
     this.#on(this.#btnPlay, 'click', () => this.#alternarReproduccion());
     this.#on(this.#btnMute, 'click', () => this.#alternarSilencio());
     this.#on(this.#btnFs, 'click', () => this.#alternarPantallaCompleta());
+    this.#on(this.#btnSaltar, 'click', () => this.#saltarCabecera());
 
     // `input` mientras se arrastra, `change` al soltar: buscar en cada píxel
     // provocaría una tormenta de saltos.
@@ -439,7 +459,20 @@ export class ControlBar implements UiSlots {
     this.#desatar.push(p.on('live:status', (d) => this.#pintarDirecto(d)));
     this.#desatar.push(p.on('state:change', () => this.#pintar()));
     this.#desatar.push(p.on('time', () => this.#pintarProgreso()));
-    this.#desatar.push(p.on('play', () => { this.#anunciar(this.#t('ui.status.playing')); this.#pintar(); }));
+    this.#desatar.push(p.on('play', () => {
+      this.#anunciar(this.#t(p.phase === 'intro' ? 'ui.chain.intro' : 'ui.status.playing'));
+      this.#pintar();
+    }));
+    this.#desatar.push(p.on('chain:phase', ({ to, skipped }) => {
+      this.#restantePieza = null;
+      if (to === 'outro') this.#anunciar(this.#t('ui.chain.outro'));
+      else if (skipped) this.#anunciar(this.#t('ui.chain.skipped'));
+      this.#pintar();
+    }));
+    this.#desatar.push(p.on('chain:time', ({ current, duration }) => {
+      this.#restantePieza = Number.isFinite(duration) ? Math.max(0, duration - current) : null;
+      this.#pintarProgreso();
+    }));
     this.#desatar.push(p.on('pause', () => { this.#anunciar(this.#t('ui.status.paused')); this.#pintar(); }));
     this.#desatar.push(p.on('ended', () => { this.#anunciar(this.#t('ui.status.ended')); this.#pintar(); }));
     this.#desatar.push(p.on('stall:start', () => this.#anunciar(this.#t('ui.status.buffering'))));
@@ -468,6 +501,13 @@ export class ControlBar implements UiSlots {
   #alternarReproduccion(): void {
     if (this.#player.paused) void this.#player.play().catch(() => {});
     else this.#player.pause();
+  }
+
+  #saltarCabecera(): void {
+    // El botón va a desaparecer: sin esto el foco caería al <body> y quien
+    // navega con teclado tendría que volver a entrar en el reproductor.
+    if (this.#root.ownerDocument.activeElement === this.#btnSaltar) this.#root.focus();
+    this.#player.skipIntro();
   }
 
   #alternarSilencio(): void {
@@ -555,6 +595,14 @@ export class ControlBar implements UiSlots {
 
     const p = this.#player;
     const d = p.duration || 0;
+    /*
+     * Durante la cabecera no hay barra a la que referir un salto: mover el
+     * contenido a ciegas sería un efecto que nadie ve. Durante la cola sí se
+     * dejan pasar: hacia atrás vuelven al contenido, y hacia delante el
+     * reproductor los ignora, porque la cola no se salta.
+     */
+    const teclasDeSalto = /^([0-9]|ArrowLeft|ArrowRight|[jJlL]|Home|End)$/;
+    if (p.phase === 'intro' && teclasDeSalto.test(ev.key)) return;
     const saltar = (delta: number) => p.seek(Math.min(d, Math.max(0, p.currentTime + delta)));
     const volumen = (delta: number) => {
       const v = Math.min(1, Math.max(0, Number(this.#volumen.value) + delta));
@@ -591,13 +639,24 @@ export class ControlBar implements UiSlots {
     this.#btnPlay.setAttribute('aria-label', reproduciendo ? this.#t('ui.pause') : this.#t('ui.play'));
     this.#pintarProgreso();
     this.#pintarPantallaCompleta();
+    this.#pintarCadena();
     if (reproduciendo) this.#programarOcultado();
     else this.#despertar();
+  }
+
+  /** El botón de saltar: solo con la cabecera en pantalla. */
+  #pintarCadena(): void {
+    const p = this.#player;
+    const conMedios = p.state === 'attached' || p.state === 'active';
+    this.#btnSaltar.hidden = !(conMedios && p.canSkip);
   }
 
   #pintarProgreso(): void {
     if (this.#arrastrando) return;
     if (this.#player.manifest?.live) return this.#pintarProgresoDirecto();
+    if (this.#player.phase !== 'main') return this.#pintarProgresoPieza();
+    const fila = this.#progreso.parentElement;
+    if (fila) fila.hidden = false;
     const p = this.#player;
     const d = p.duration || 0;
     const t = p.currentTime;
@@ -614,6 +673,25 @@ export class ControlBar implements UiSlots {
       const fin = buffered.end(buffered.length - 1);
       this.#progreso.style.setProperty('--np-buffered', `${Math.min(100, (fin / d) * 100)}%`);
     }
+  }
+
+  /**
+   * Durante la cabecera o la cola, la barra de progreso **se esconde** y el
+   * tiempo dice qué es y cuánto le queda.
+   *
+   * La barra es del contenido: pintar en ella la cabecera haría que la
+   * posición saltara al cambiar de pieza. Y durante la cola, esconderla es
+   * además lo que impide arrastrarla hacia delante.
+   */
+  #pintarProgresoPieza(): void {
+    const p = this.#player;
+    const fila = this.#progreso.parentElement;
+    if (fila) fila.hidden = true;
+    const nombre = this.#t(p.phase === 'intro' ? 'ui.chain.intro' : 'ui.chain.outro');
+    // El motor de la pieza no se expone; su tiempo llega por `chain:time`, y
+    // mientras no llegue se enseña solo el nombre.
+    const quedan = this.#restantePieza;
+    this.#tiempo.textContent = quedan === null ? nombre : `${nombre} · ${formatTime(quedan)}`;
   }
 
   /**
@@ -823,6 +901,7 @@ export class ControlBar implements UiSlots {
     this.#player.setUi(null);
     this.#menu.destroy();
     this.#bar.remove();
+    this.#btnSaltar.remove();
     this.#vivo.remove();
     this.#root.classList.remove('np', 'np--inactive');
     this.#root.removeAttribute('role');
