@@ -256,9 +256,25 @@ describe('NativeEngine · reproducción', () => {
     });
   });
 
+  it('un play() interrumpido por pause() no es un fallo', async () => {
+    /*
+     * Lo tomaba por error del medio. El desbloqueo del encadenado hace
+     * play() y pause() seguidos, y con la cola aún sin datos eso rechaza con
+     * AbortError: la cola se daba por rota y desaparecía.
+     */
+    const e = motor();
+    const onError = vi.fn();
+    const p = e.attach(container, stream(), { callbacks: { onError } });
+    video.simularCarga();
+    await p;
+    video.bloquearPlay('AbortError');
+    await expect(e.play()).resolves.toBeUndefined();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it('trata cualquier otro rechazo como fallo de reproducción', async () => {
     const e = await enganchado();
-    video.bloquearPlay('AbortError');
+    video.bloquearPlay('NotSupportedError');
     await expect(e.play()).rejects.toMatchObject({ code: 'media/decode' });
   });
 

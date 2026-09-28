@@ -199,6 +199,10 @@ export abstract class MediaElementEngine implements MediaEngine {
       await el.play();
     } catch (error) {
       const err = error as { name?: string; message?: string };
+      // Un play() interrumpido por un pause() no es un fallo: pasa al pausar
+      // mientras carga, y en el desbloqueo del encadenado. Tratarlo como error
+      // hacía que la cola se diera por rota y desapareciera.
+      if (err.name === 'AbortError') return;
       // NotAllowedError es la política de autoplay, no un fallo del medio. La
       // UI debe distinguirlas: una se arregla mostrando un botón de play.
       const pe = err.name === 'NotAllowedError'
