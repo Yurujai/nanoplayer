@@ -23,14 +23,15 @@ import type { LiveStatus, RetryPolicy } from './live.js';
 import { LiveBroadcast } from './live-broadcast.js';
 import { LiveEdge } from './live-edge.js';
 import type { Bumper, Manifest, Stream } from './manifest.js';
+import { ContentSet } from './content-set.js';
 import { StallCoordinator } from './stall-coordinator.js';
 import { TrimTimeline, type TrimRange } from './trim-timeline.js';
 import { nativeEngineFactory } from './native-engine.js';
 import type { UiSlots } from './slots.js';
 import type { PlayerState } from './state.js';
-import { Synchronizer, type SyncProfile } from './sync.js';
+import type { SyncProfile } from './sync.js';
 import {
-  isAudioOnlyManifest, masterStream, slaveStreams, trimOf,
+  isAudioOnlyManifest, masterStream, trimOf,
 } from './manifest-queries.js';
 import { validateManifest } from './validate.js';
 
@@ -97,14 +98,12 @@ export class Player {
   readonly #engines: readonly EngineFactory[];
 
   #manifest: Manifest | null = null;
-  #instancias = new Map<string, MediaEngine>();
-  #sync: Synchronizer | null = null;
-  #cajas: HTMLElement[] = [];
+  readonly #contenido: ContentSet;
   #ui: UiSlots | null = null;
   readonly #emision: LiveBroadcast;
   readonly #borde = new LiveEdge(() => this.master);
   readonly #t: Translate;
-  readonly #atascos = new StallCoordinator(() => this.#instancias.entries());
+  readonly #atascos = new StallCoordinator(() => this.#contenido.entries());
   /** El timeline del recorte, y de qué manifiesto salió: se rehace solo si cambia. */
   #linea = new TrimTimeline(null);
   #lineaDe: Manifest | null = null;
@@ -136,12 +135,18 @@ export class Player {
     this.#opts = options;
     this.#mudo = options.muted === true;
     this.#volumen = options.volume ?? 1;
+    this.#engines = options.engines ?? [nativeEngineFactory];
+    this.#contenido = new ContentSet({
+      container: options.container,
+      engines: this.#engines,
+      bus: this.bus,
+      ...(options.syncProfile ? { syncProfile: options.syncProfile } : {}),
+    });
     this.#emision = new LiveBroadcast({
       bus: this.bus,
       ...(options.liveRetry ? { retry: options.liveRetry } : {}),
       reconnect: (id) => { void this.#reintentar(id); },
     });
-    this.#engines = options.engines ?? [nativeEngineFactory];
     // Del documento del contenedor y no del global `document`: dentro de un
     // iframe el idioma que manda es el del iframe.
     const idioma = options.lang
@@ -215,7 +220,7 @@ export class Player {
   /** Motor del stream que lleva el audio: el que gobierna el reloj. */
   get master(): MediaEngine | null {
     if (!this.#manifest) return null;
-    return this.#instancias.get(masterStream(this.#manifest).id) ?? null;
+    return this.#contenido.engine(masterStream(this.#manifest).id);
   }
 
   /** Estado de emisión del conjunto. `unknown` si no es un directo. */
@@ -439,7 +444,7 @@ export class Player {
        */
       if (m.outro) await this.#engancharPieza('outro', m.outro);
 
-      this.#montarSync(m);
+      this.#contenido.mountSync(m);
       this.#lc.transition('attached');
       this.bus.emit('engine:attach:ok', {
         engine: nombreMotor, resumeAt: this.#lc.resumeAt,
@@ -454,58 +459,19 @@ export class Player {
     }
   }
 
-  /**
-   * Engancha un solo flujo. Devuelve el nombre del motor elegido.
-   *
-   * En directo, **la caja del flujo se conserva aunque falle**: es el hueco
-   * donde la interfaz pone el aviso de que ese flujo no emite. Sin ella el
-   * mensaje acabaría encima del flujo que sí funciona, que es justo al revés
-   * de lo que hay que enseñar.
-   */
   async #engancharStream(stream: Stream): Promise<string> {
-    const factory = selectEngine(this.#engines, stream);
-    if (!factory) {
-      throw playerError('engine/unsupported',
-        `No engine can play stream "${stream.id}"`);
-    }
-    // Reutilizar la caja si ya existe: un reintento no debe duplicarla.
-    let caja = this.#cajas.find((c) => c.dataset['stream'] === stream.id);
-    if (!caja) {
-      caja = document.createElement('div');
-      caja.dataset['stream'] = stream.id;
-      caja.dataset['role'] = stream.role;
-      this.#opts.container.appendChild(caja);
-      this.#cajas.push(caja);
-    }
-
-    const engine = factory.create();
-    this.#instancias.set(stream.id, engine);
-    try {
-      await engine.attach(caja, stream, {
-        // `resumeAt` está en tiempo visible; el motor quiere el del medio. Sin
-        // recorte son lo mismo, y con él esto es lo que hace que un enganche
-        // en frío empiece en `start` y no en el segundo cero del fichero.
-        startAt: this.toMediaTime(this.#lc.resumeAt),
-        // Con cabecera, el contenido espera detrás en silencio hasta descubrirse.
-        muted: this.#mudo || !stream.audio || this.#fase === 'intro',
-        playsInline: true,
-        callbacks: this.#callbacks(stream),
-      });
-    } catch (error) {
-      engine.destroy();
-      this.#instancias.delete(stream.id);
-      // Bajo demanda no hay nada que esperar, así que la caja sobra. En directo
-      // se queda: es el hueco donde va el aviso mientras el flujo no emite.
-      if (!this.#manifest?.live) {
-        caja.remove();
-        this.#cajas = this.#cajas.filter((c) => c !== caja);
-      }
-      throw error;
-    }
-    if (stream.audio) {
-      engine.setVolume(this.#volumen);
-    }
-    return factory.name;
+    const motor = await this.#contenido.attach(stream, {
+      // `resumeAt` está en tiempo visible; el motor quiere el del medio. Sin
+      // recorte son lo mismo, y con él esto es lo que hace que un enganche
+      // en frío empiece en `start` y no en el segundo cero del fichero.
+      startAt: this.toMediaTime(this.#lc.resumeAt),
+      // Con cabecera, el contenido espera detrás en silencio hasta descubrirse.
+      muted: this.#mudo || !stream.audio || this.#fase === 'intro',
+      playsInline: true,
+      callbacks: this.#callbacks(stream),
+    }, this.#manifest?.live === true);
+    if (stream.audio) this.#contenido.engine(stream.id)?.setVolume(this.#volumen);
+    return motor;
   }
 
   /**
@@ -572,33 +538,14 @@ export class Player {
         this.#lc.transition('attaching');
         this.#lc.transition('attached');
       }
-      this.#montarSync(this.#manifest);
+      this.#contenido.mountSync(this.#manifest);
       if (this.#lc.state === 'active' || this.#atascos.playing) {
-        await this.#instancias.get(stream.id)?.play().catch(() => {});
+        await this.#contenido.engine(stream.id)?.play().catch(() => {});
       }
     } catch {
       this.#emision.markUnavailable(stream.id);
       this.#emision.retryLater(stream.id);
     }
-  }
-
-  #montarSync(m: Manifest): void {
-    const esclavos = slaveStreams(m)
-      .map((s) => ({ id: s.id, engine: this.#instancias.get(s.id) }))
-      .filter((x): x is { id: string; engine: MediaEngine } => !!x.engine);
-    if (esclavos.length === 0) return;
-
-    const maestro = this.#instancias.get(masterStream(m).id);
-    if (!maestro) return;
-
-    this.#sync = new Synchronizer({
-      master: { id: masterStream(m).id, engine: maestro },
-      slaves: esclavos,
-      live: m.live === true,
-      bus: this.bus,
-      ...(this.#opts.syncProfile ? { profile: this.#opts.syncProfile } : {}),
-    });
-    this.#sync.align();
   }
 
   /* ------------------------------------------------------ attached → resolved */
@@ -635,10 +582,7 @@ export class Player {
 
   #soltarMotores(): void {
     this.#emision.cancelRetries();
-    this.#sync?.stop();
-    this.#sync = null;
-    for (const e of this.#instancias.values()) e.destroy();
-    this.#instancias.clear();
+    this.#contenido.release();
     /*
      * Las piezas no conservan posición: duran segundos, y retomar una cabecera
      * a la mitad no tiene sentido. La fase sí se conserva, así que al volver
@@ -657,8 +601,6 @@ export class Player {
     // conjunto marcado como atascado para siempre y nadie volvería a reanudar.
     this.#atascos.reset();
     this.#finRecorteAvisado = false;
-    for (const caja of this.#cajas) caja.remove();
-    this.#cajas = [];
   }
 
   /* ------------------------------------------------------------ reproducción */
@@ -705,17 +647,7 @@ export class Player {
       this.seek(0);
     }
 
-    // El maestro primero: es quien fija el reloj que los demás persiguen.
-    const maestro = this.master;
-    if (maestro) await maestro.play();
-    for (const [id, e] of this.#instancias) {
-      if (id !== masterStream(m).id) await e.play().catch(() => {});
-    }
-
-    // Cuadrar antes de arrancar el lazo: si no, el retraso de partida se
-    // quedaría como offset y la corrección suave tardaría en absorberlo.
-    this.#sync?.align();
-    this.#sync?.start();
+    await this.#contenido.play(masterStream(m).id);
 
     // El cambio de estado y el evento los dispara el callback `onPlay` del
     // motor, que es quien sabe si de verdad ha empezado a sonar.
@@ -726,9 +658,8 @@ export class Player {
     // reanudar la vigilancia vuelve a disparar el cambio.
     this.#cancelarCambio();
     clearInterval(this.#vigilante);
-    this.#sync?.stop();
     this.#atascos.userPaused();
-    for (const e of this.#instancias.values()) e.pause();
+    this.#contenido.pause();
     for (const { engine } of this.#piezas.values()) engine.pause();
   }
 
@@ -781,7 +712,7 @@ export class Player {
     maestro.seek(this.toMediaTime(destino));
     // Los esclavos van de golpe: perseguir un salto con corrección suave
     // tardaría segundos y se vería.
-    this.#sync?.align();
+    this.#contenido.align();
     this.bus.emit('seek:end', { at: destino });
   }
 
@@ -850,8 +781,7 @@ export class Player {
     this.#turno++;
     this.#conmutando = null;
     if (destino === 'main') {
-      this.#sync?.stop();
-      for (const e of this.#instancias.values()) e.pause();
+      this.#contenido.pause();
     } else {
       const e = this.#piezas.get(destino)?.engine;
       e?.pause();
@@ -893,7 +823,7 @@ export class Player {
     if (this.#desbloqueado) return;
     this.#desbloqueado = true;
     const despues: MediaEngine[] = [];
-    if (this.#fase === 'intro') despues.push(...this.#instancias.values());
+    if (this.#fase === 'intro') despues.push(...this.#contenido.engines());
     const cola = this.#piezas.get('outro')?.engine;
     if (cola && this.#fase !== 'outro') despues.push(cola);
     for (const e of despues) {
@@ -996,8 +926,7 @@ export class Player {
     this.#ponerFaseYAvisar(destino, saltada);
     entrante?.setMuted(this.#mudo);
     if (origen === 'main') {
-      this.#sync?.stop();
-      for (const e of this.#instancias.values()) e.pause();
+      this.#contenido.pause();
     } else {
       this.#piezas.get(origen)?.engine.pause();
     }
@@ -1095,8 +1024,7 @@ export class Player {
           // el último fotograma a la vista, y la cola entra encima.
           if (this.#piezas.has('outro')) {
             if (!this.#conmutando) void this.#pasarA('outro', false);
-            this.#sync?.stop();
-            for (const e of this.#instancias.values()) e.pause();
+            this.#contenido.pause();
             return;
           }
           if (!this.#finRecorteAvisado) {
