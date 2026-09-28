@@ -20,9 +20,10 @@ export type LayoutId = 'side-by-side' | 'presenter' | 'presentation' | 'pip';
 export interface LayoutDef {
   id: LayoutId;
   label: string;
-  /** Cuántos streams hacen falta como mínimo. */
-  minStreams: number;
 }
+
+/** Todas las disposiciones reparten dos flujos: con uno no hay nada que elegir. */
+const FLUJOS_MINIMOS = 2;
 
 /**
  * Los layouts que tienen sentido con ese número de flujos, ya etiquetados.
@@ -31,9 +32,9 @@ export interface LayoutDef {
  * resolver el catálogo conviviendo con la del reproductor.
  */
 export function layoutsFor(streamCount: number, t: Translate): LayoutDef[] {
-  const todos: LayoutDef[] = (['side-by-side', 'pip', 'presenter', 'presentation'] as const)
-    .map((id) => ({ id, label: t(`ui.layout.${id}`), minStreams: 2 }));
-  return todos.filter((l) => streamCount >= l.minStreams);
+  if (streamCount < FLUJOS_MINIMOS) return [];
+  return (['side-by-side', 'pip', 'presenter', 'presentation'] as const)
+    .map((id) => ({ id, label: t(`ui.layout.${id}`) }));
 }
 
 const CLASES: readonly string[] = [

@@ -13,13 +13,15 @@
  * eso jamás.
  */
 
+/** Horas, minutos y segundos enteros. Lo negativo o lo que no es número, a cero. */
+function horasMinutosSegundos(seconds: number): { h: number; m: number; s: number } {
+  const total = Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 0;
+  return { h: Math.floor(total / 3600), m: Math.floor((total % 3600) / 60), s: total % 60 };
+}
+
 /** `1:05:03` o `4:07`. La hora solo aparece si hace falta. */
 export function formatTime(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) seconds = 0;
-  const total = Math.floor(seconds);
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
+  const { h, m, s } = horasMinutosSegundos(seconds);
   const dosDigitos = (n: number) => String(n).padStart(2, '0');
   return h > 0 ? `${h}:${dosDigitos(m)}:${dosDigitos(s)}` : `${m}:${dosDigitos(s)}`;
 }
@@ -33,11 +35,7 @@ export function formatTime(seconds: number): string {
  * catalán, gallego, euskera y lo que haga falta.
  */
 export function spokenTime(seconds: number, lang = 'es'): string {
-  if (!Number.isFinite(seconds) || seconds < 0) seconds = 0;
-  const total = Math.floor(seconds);
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
+  const { h, m, s } = horasMinutosSegundos(seconds);
 
   const unidad = (valor: number, unit: 'hour' | 'minute' | 'second') =>
     new Intl.NumberFormat(lang, { style: 'unit', unit, unitDisplay: 'long' })
