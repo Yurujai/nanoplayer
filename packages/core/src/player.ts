@@ -19,7 +19,9 @@ import { playerError, type PlayerError } from './errors.js';
 import { strings, type Catalogues, type Translate } from './i18n.js';
 import { EventBus, type Unsubscribe } from './events.js';
 import { Lifecycle } from './lifecycle.js';
-import { LiveTracker, type LiveStatus, type RetryPolicy } from './live.js';
+import type { LiveStatus, RetryPolicy } from './live.js';
+import { LiveBroadcast } from './live-broadcast.js';
+import { LiveEdge } from './live-edge.js';
 import type { Bumper, Manifest, Stream } from './manifest.js';
 import { StallCoordinator } from './stall-coordinator.js';
 import { TrimTimeline, type TrimRange } from './trim-timeline.js';
@@ -80,23 +82,6 @@ export interface PlayerOptions {
   strings?: Catalogues;
 }
 
-/**
- * Margen por detrás del borde al saltar al directo, en segundos.
- *
- * Ir al final exacto del tramo alcanzable provoca un corte inmediato: ese
- * instante todavía no está en el búfer.
- */
-const MARGEN_BORDE = 3;
-
-/**
- * Hasta cuántos segundos por detrás se sigue considerando "en directo".
- *
- * S5 midió unos 6 s de retraso normal con la configuración por defecto de
- * hls.js. La tolerancia deja margen sobre eso para no llamar "retrasado" a lo
- * que es simplemente el búfer haciendo su trabajo.
- */
-const TOLERANCIA_BORDE = 12;
-
 const resolverPorDefecto: ManifestResolver = async (src) => {
   const res = await fetch(src);
   if (!res.ok) {
@@ -116,8 +101,8 @@ export class Player {
   #sync: Synchronizer | null = null;
   #cajas: HTMLElement[] = [];
   #ui: UiSlots | null = null;
-  readonly #vivo = new LiveTracker();
-  #reintentos = new Map<string, ReturnType<typeof setTimeout>>();
+  readonly #emision: LiveBroadcast;
+  readonly #borde = new LiveEdge(() => this.master);
   readonly #t: Translate;
   readonly #atascos = new StallCoordinator(() => this.#instancias.entries());
   /** El timeline del recorte, y de qué manifiesto salió: se rehace solo si cambia. */
@@ -151,6 +136,11 @@ export class Player {
     this.#opts = options;
     this.#mudo = options.muted === true;
     this.#volumen = options.volume ?? 1;
+    this.#emision = new LiveBroadcast({
+      bus: this.bus,
+      ...(options.liveRetry ? { retry: options.liveRetry } : {}),
+      reconnect: (id) => { void this.#reintentar(id); },
+    });
     this.#engines = options.engines ?? [nativeEngineFactory];
     // Del documento del contenedor y no del global `document`: dentro de un
     // iframe el idioma que manda es el del iframe.
@@ -230,12 +220,12 @@ export class Player {
 
   /** Estado de emisión del conjunto. `unknown` si no es un directo. */
   get liveStatus(): LiveStatus {
-    return this.#vivo.overall;
+    return this.#emision.overall;
   }
 
   /** Estado de emisión de un flujo concreto. */
   liveStatusOf(streamId: string): LiveStatus {
-    return this.#vivo.status(streamId);
+    return this.#emision.status(streamId);
   }
 
   /** Imagen para la espera de un directo. Cae al póster si no hay una propia. */
@@ -257,76 +247,31 @@ export class Player {
 
   /* ------------------------------------------------------------- directo -- */
 
-  /**
-   * Cuánto se puede retroceder en un directo, en segundos.
-   *
-   * Es lo que el servidor conserva: si la lista mantiene seis segmentos de dos
-   * segundos, son doce. En Wowza lo gobierna nDVR, y guardar más cuesta disco.
-   * `0` si no es un directo o si no hay nada que recorrer.
-   */
+  /** Cuánto se puede retroceder en un directo, en segundos. */
   get dvrWindow(): number {
-    const s = this.master?.seekable;
-    if (!s || s.length === 0) return 0;
-    const w = s.end(s.length - 1) - s.start(0);
-    return Number.isFinite(w) && w > 0 ? w : 0;
+    return this.#borde.window;
   }
 
   /** Posición más reciente disponible. */
   get liveEdge(): number {
-    const s = this.master?.seekable;
-    if (!s || s.length === 0) return 0;
-    const e = s.end(s.length - 1);
-    return Number.isFinite(e) ? e : 0;
+    return this.#borde.edge;
   }
 
   /** Cuántos segundos por detrás del borde se está reproduciendo. */
   get behindLive(): number {
-    if (!this.#manifest?.live) return 0;
-    return Math.max(0, this.liveEdge - this.currentTime);
+    return this.#manifest?.live ? this.#borde.behind(this.currentTime) : 0;
   }
 
-  /**
-   * Si se está viendo el borde de la emisión.
-   *
-   * La tolerancia es generosa a propósito: reproducir un directo siempre va
-   * unos segundos por detrás —el búfer que evita los cortes, medido en unos 6 s
-   * en S5— y llamar "retrasado" a eso sería mentir al revés.
-   */
+  /** Si se está viendo el directo, con la tolerancia del búfer normal. */
   get atLiveEdge(): boolean {
-    if (!this.#manifest?.live) return false;
-    // Sin borde conocido no se está en él. Antes devolvía `true` porque la
-    // resta de dos ceros entra en la tolerancia, y así un directo que aún no
-    // ha empezado se declaraba "en el borde" de nada.
-    if (this.liveEdge <= 0) return false;
-    // Si el motor sabe dónde conviene estar, la tolerancia se cuenta desde
-    // ahí y no desde el borde. Con segmentos largos lo recomendado ya queda
-    // bastante atrás, y el borde avanza a saltos de un segmento: contado desde
-    // el borde, la marca decía "ir al directo" nada más volver al directo.
-    const recomendada = this.#posicionDirecto();
-    if (recomendada !== null) return recomendada - this.currentTime <= TOLERANCIA_BORDE;
-    return this.behindLive <= TOLERANCIA_BORDE;
+    return !!this.#manifest?.live && this.#borde.isAtEdge(this.currentTime);
   }
 
-  /** Dónde conviene ver el directo, según el motor del maestro, si lo sabe. */
-  #posicionDirecto(): number | null {
-    const p = this.master?.liveSyncPosition?.();
-    return typeof p === 'number' && Number.isFinite(p) && p > 0 ? p : null;
-  }
-
-  /**
-   * Salta al borde de la emisión.
-   *
-   * Deja un margen de seguridad en vez de ir al final exacto: el último
-   * instante alcanzable casi nunca está en el búfer todavía, y saltar ahí
-   * provoca un corte inmediato.
-   */
+  /** Salta al directo, a la posición que recomienda el motor o con margen. */
   seekToLive(): void {
     if (!this.#manifest?.live) return;
-    // La posición que recomienda el motor tiene en cuenta la duración de los
-    // segmentos; el margen fijo es para cuando no la sabe.
-    const destino = this.#posicionDirecto() ?? this.liveEdge - MARGEN_BORDE;
-    if (destino <= 0) return;
-    this.seek(destino);
+    const destino = this.#borde.seekTarget;
+    if (destino !== null) this.seek(destino);
   }
 
   /* ------------------------------------------------------------- recorte -- */
@@ -458,7 +403,7 @@ export class Player {
       for (const stream of m.streams) {
         try {
           nombreMotor = await this.#engancharStream(stream);
-          if (m.live) this.#anunciarVivo(stream.id, 'live');
+          if (m.live) this.#emision.markLive(stream.id);
         } catch (error) {
           /*
            * En directo, que un flujo no esté emitiendo **no impide reproducir
@@ -471,8 +416,8 @@ export class Player {
            */
           if (!m.live) throw error;
           fallidos.push(stream.id);
-          this.#anunciarVivo(stream.id, 'no-disponible');
-          this.#programarReintento(stream);
+          this.#emision.markUnavailable(stream.id);
+          this.#emision.retryLater(stream.id);
         }
       }
 
@@ -611,47 +556,17 @@ export class Player {
     });
   }
 
-  #anunciarVivo(streamId: string, que: 'live' | 'no-disponible'): void {
-    const cambio = que === 'live'
-      ? this.#vivo.markLive(streamId)
-      : this.#vivo.markUnavailable(streamId);
-    if (!cambio) return;
-    const status = this.#vivo.status(streamId);
-    if (status === 'unknown') return;
-    this.bus.emit('live:status', {
-      stream: streamId,
-      status,
-      ...(status === 'live' ? {} :
-        { retryInMs: this.#vivo.nextDelay(streamId, this.#opts.liveRetry) }),
-    });
-  }
-
-  /**
-   * Vuelve a intentar un flujo que no emitía.
-   *
-   * La espera crece entre intentos: un evento que empieza dos horas tarde
-   * serían miles de peticiones inútiles por espectador. Con tope, porque una
-   * espera sin límite tardaría minutos en enterarse de que ya ha empezado.
-   */
-  #programarReintento(stream: Stream): void {
-    if (this.#lc.isDestroyed) return;
-    clearTimeout(this.#reintentos.get(stream.id));
-    const espera = this.#vivo.nextDelay(stream.id, this.#opts.liveRetry);
-    this.#reintentos.set(stream.id, setTimeout(() => {
-      void this.#reintentar(stream);
-    }, espera));
-  }
-
-  async #reintentar(stream: Stream): Promise<void> {
-    this.#reintentos.delete(stream.id);
-    if (this.#lc.isDestroyed || !this.#manifest?.live) return;
+  /** Vuelve a intentar un flujo de directo que no emitía. */
+  async #reintentar(streamId: string): Promise<void> {
+    const stream = this.#manifest?.streams.find((s) => s.id === streamId);
+    if (this.#lc.isDestroyed || !this.#manifest?.live || !stream) return;
     // Si ya no hay motores montados, el reproductor está desalojado: no tiene
     // sentido seguir insistiendo hasta que alguien vuelva a engancharlo.
     if (!this.#lc.hasEngine && this.#lc.state !== 'resolved') return;
 
     try {
       await this.#engancharStream(stream);
-      this.#anunciarVivo(stream.id, 'live');
+      this.#emision.markLive(stream.id);
       // Si el reproductor estaba esperando a que empezara algo, ya hay señal.
       if (this.#lc.state === 'resolved') {
         this.#lc.transition('attaching');
@@ -662,8 +577,8 @@ export class Player {
         await this.#instancias.get(stream.id)?.play().catch(() => {});
       }
     } catch {
-      this.#anunciarVivo(stream.id, 'no-disponible');
-      this.#programarReintento(stream);
+      this.#emision.markUnavailable(stream.id);
+      this.#emision.retryLater(stream.id);
     }
   }
 
@@ -719,8 +634,7 @@ export class Player {
   }
 
   #soltarMotores(): void {
-    for (const t of this.#reintentos.values()) clearTimeout(t);
-    this.#reintentos.clear();
+    this.#emision.cancelRetries();
     this.#sync?.stop();
     this.#sync = null;
     for (const e of this.#instancias.values()) e.destroy();
@@ -899,7 +813,7 @@ export class Player {
 
   destroy(): void {
     if (this.#lc.isDestroyed) return;
-    this.#vivo.reset();
+    this.#emision.reset();
     this.#soltarMotores();
     this.#lc.destroy();
     this.bus.clear();
@@ -1249,7 +1163,7 @@ export class Player {
         // En un directo, un fallo de red en un flujo ya enganchado es una
         // interrupción, no un "aún no ha empezado": ese flujo llegó a emitir.
         if (this.#manifest?.live && error.retryable) {
-          this.#anunciarVivo(stream.id, 'no-disponible');
+          this.#emision.markUnavailable(stream.id);
         }
       },
     };
