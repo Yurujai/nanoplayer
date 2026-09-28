@@ -28,6 +28,7 @@ import { SettingsMenu, type SettingsPanel } from './settings-menu.js';
 import { createButton } from './dom.js';
 import { FullscreenButton } from './fullscreen-button.js';
 import { KeyboardShortcuts } from './keyboard-shortcuts.js';
+import { LiveNotices } from './live-notices.js';
 import { ProgressBar } from './progress-bar.js';
 import { VolumeControl } from './volume-control.js';
 import { injectStyles } from './styles.js';
@@ -394,7 +395,15 @@ export class ControlBar implements UiSlots {
       this.#recogerStreams();
       this.#pintar();
     }));
-    this.#desatar.push(p.on('live:status', (d) => this.#pintarDirecto(d)));
+    const avisos = new LiveNotices({
+      root: this.#root, stage: this.#escenario, player: p, t: this.#t,
+      announce: (m) => this.#anunciar(m),
+      collectStreams: () => this.#recogerStreams(),
+    });
+    this.#desatar.push(p.on('live:status', ({ stream, status }) => {
+      avisos.update(stream, status);
+      this.#progreso.render();
+    }));
     this.#desatar.push(p.on('state:change', () => this.#pintar()));
     this.#desatar.push(p.on('time', () => this.#progreso.render()));
     this.#desatar.push(p.on('play', () => {
@@ -470,57 +479,6 @@ export class ControlBar implements UiSlots {
     const p = this.#player;
     const conMedios = hasEngine(p.state);
     this.#btnSaltar.hidden = !(conMedios && p.canSkip);
-  }
-
-  /**
-   * Estado de emisión de un flujo.
-   *
-   * La capa se pone **sobre el hueco de ese flujo**, no sobre el reproductor
-   * entero: si la cámara emite y las diapositivas no, hay que enseñar la cámara
-   * y avisar solo en el hueco que falta.
-   */
-  #pintarDirecto(d: { stream: string; status: string }): void {
-    const doc = this.#root.ownerDocument;
-    /*
-     * Recoger primero. El aviso de un flujo que no emite llega **antes** de
-     * `engine:attach:ok` —ese evento espera a que se hayan intentado todos— así
-     * que su caja todavía cuelga del contenedor y no del escenario. Sin esto,
-     * el aviso acababa suelto en el escenario, encima del flujo que sí emite.
-     */
-    this.#recogerStreams();
-    const caja = this.#root.querySelector<HTMLElement>(
-      `[data-stream="${CSS.escape(d.stream)}"]`);
-
-    if (d.status === 'live') {
-      this.#root.querySelector(`[data-espera="${CSS.escape(d.stream)}"]`)?.remove();
-      this.#progreso.render();
-      return;
-    }
-
-    // "Aún no ha empezado" y "se ha interrumpido" no son lo mismo: quien
-    // llevaba veinte minutos viendo algo no debe leer que no ha empezado.
-    const texto = d.status === 'interrupted' ? this.#t('ui.live.interrupted') : this.#t('ui.live.waiting');
-    const previa = this.#root.querySelector<HTMLElement>(
-      `[data-espera="${CSS.escape(d.stream)}"]`);
-    if (previa) {
-      previa.querySelector('.np__espera-texto')!.textContent = texto;
-      return;
-    }
-
-    const capa = doc.createElement('div');
-    capa.className = 'np__espera';
-    capa.dataset['espera'] = d.stream;
-    capa.setAttribute('role', 'status');
-    const img = this.#player.liveWaitingImage;
-    if (img) capa.style.backgroundImage = `url("${img.replace(/"/g, '%22')}")`;
-    const t = doc.createElement('p');
-    t.className = 'np__espera-texto';
-    t.textContent = texto;
-    capa.appendChild(t);
-
-    // Sobre la caja del flujo si existe; si no, sobre el escenario entero.
-    (caja ?? this.#escenario).appendChild(capa);
-    this.#anunciar(texto);
   }
 
   #anunciar(mensaje: string): void {
