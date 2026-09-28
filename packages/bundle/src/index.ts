@@ -28,8 +28,9 @@ import {
   VERSION, type CreateConfig,
 } from '@nanoplayer/core';
 import { attachControls, type ControlBarOptions } from '@nanoplayer/ui';
-// Importarlo basta: se auto-registra y aporta sus cadenas al catálogo.
+// Importarlos basta: se auto-registran y aportan sus cadenas al catálogo.
 import '@nanoplayer/plugin-captions';
+import '@nanoplayer/plugin-chapters';
 
 export interface Config extends CreateConfig {
   /**
@@ -127,7 +128,7 @@ export type {
   ManifestResolver, PlayerOptions, BatchResolverOptions, RegistryOptions,
   LiveStatus, RetryPolicy,
   BarControlDecl, OverlayDecl, OverlayHandle, SettingsOptionDecl, SettingsPanelDecl,
-  UiSlots, ActivationResult, PluginConfig, PluginContext, PluginImpl, PluginManifest,
+  TimelineMarkerDecl, TimelineMarkersDecl, UiSlots, ActivationResult, PluginConfig, PluginContext, PluginImpl, PluginManifest,
   CreateConfig,
 } from '@nanoplayer/core';
 

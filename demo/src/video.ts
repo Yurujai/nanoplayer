@@ -7,8 +7,9 @@
  */
 import { create, type Manifest, type Player } from '@nanoplayer/core';
 import { attachControls, type ControlBar } from '@nanoplayer/ui';
-// Importarlo basta: el plugin se auto-registra y el núcleo no lo conoce.
+// Importarlos basta: los plugins se auto-registran y el núcleo no los conoce.
 import '@nanoplayer/plugin-captions';
+import '@nanoplayer/plugin-chapters';
 
 // La página cuelga de /video/ y los medios de la raíz de la web.
 const MEDIOS = '../media/';

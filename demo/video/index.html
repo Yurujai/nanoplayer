@@ -53,7 +53,9 @@
         stay together.</li>
     <li><strong>Captions.</strong> They switch on by themselves because the video has
         caption tracks. Change the language in Settings.</li>
-    <li><strong>Chapters.</strong> Three of them, marked on the progress bar.</li>
+    <li><strong>Chapters.</strong> Three of them, marked on the progress bar. Hover
+        the bar to see where each one falls, or jump to one from
+        <strong>⚙ Settings → Chapters</strong>.</li>
     <li><strong>Intro and outro.</strong> Tick the box above. The intro has a
         <em>Skip intro</em> button; the outro can't be skipped or fast-forwarded.</li>
     <li><strong>Nothing loads early.</strong> Until you press play there is no
@@ -78,7 +80,8 @@
   <h2>What it takes</h2>
   <pre><code>import { create } from '@nanoplayer/core';
 import { attachControls } from '@nanoplayer/ui';
-import '@nanoplayer/plugin-captions';   // registers itself
+import '@nanoplayer/plugin-captions';   // they register themselves
+import '@nanoplayer/plugin-chapters';
 
 const player = create('#player', { manifest: '/api/video/123' });
 attachControls(player);</code></pre>

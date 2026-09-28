@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 const src = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
 // Al revés que los demás paquetes: aquí **no** se externaliza nada. Que el
-// núcleo, la interfaz y los subtítulos queden dentro es justamente el motivo de
+// núcleo, la interfaz, los subtítulos y los capítulos queden dentro es justamente el motivo de
 // que este paquete exista — una etiqueta `<script>` no resuelve imports.
 export default defineConfig({
   resolve: {
@@ -12,6 +12,7 @@ export default defineConfig({
       '@nanoplayer/core': src('../core/src/index.ts'),
       '@nanoplayer/ui': src('../ui/src/index.ts'),
       '@nanoplayer/plugin-captions': src('../plugin-captions/src/index.ts'),
+      '@nanoplayer/plugin-chapters': src('../plugin-chapters/src/index.ts'),
     },
   },
   build: {

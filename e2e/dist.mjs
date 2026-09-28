@@ -18,7 +18,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createContext, runInContext } from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
-const PAQUETES = ['core', 'ui', 'engine-hls', 'plugin-captions', 'bundle'];
+const PAQUETES = ['core', 'ui', 'engine-hls', 'plugin-captions', 'plugin-chapters', 'bundle'];
 const raiz = new URL('../packages/', import.meta.url);
 
 let fallos = 0;
@@ -54,6 +54,10 @@ console.log('\nUna sola instancia del núcleo');
 await import('@nanoplayer/plugin-captions');
 comprobar(core.plugins.has('captions'),
   'el plugin se registra en el registro del núcleo',
+  `registrados: [${core.plugins.registered.join(', ')}]`);
+await import('@nanoplayer/plugin-chapters');
+comprobar(core.plugins.has('chapters'),
+  'el de capítulos también',
   `registrados: [${core.plugins.registered.join(', ')}]`);
 
 const hls = await import('@nanoplayer/engine-hls');

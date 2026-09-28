@@ -5,7 +5,8 @@
     "paths": {
       "@nanoplayer/core": ["../core/src/index.ts"],
       "@nanoplayer/ui": ["../ui/src/index.ts"],
-      "@nanoplayer/plugin-captions": ["../plugin-captions/src/index.ts"]
+      "@nanoplayer/plugin-captions": ["../plugin-captions/src/index.ts"],
+      "@nanoplayer/plugin-chapters": ["../plugin-chapters/src/index.ts"]
     }
   },
   "include": ["src"]

@@ -129,6 +129,27 @@ button.np__btn[disabled]{opacity:.4;cursor:default}
   color:var(--np-color-control-dim);padding:0 .5rem;white-space:nowrap;
 }
 .np__spacer{flex:1 1 auto}
+/* Nombre del tramo en curso (el capítulo). Cede sitio antes que los botones. */
+.np__segment{
+  flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:.8125rem;color:var(--np-color-control);
+}
+.np__segment:empty{display:none}
+
+/* --- tramos en la barra de progreso --- */
+.np__row--progress{position:relative}
+.np__marks{
+  position:absolute;left:0;right:0;top:50%;height:var(--np-bar-height-active);
+  transform:translateY(-50%);pointer-events:none;
+}
+/* Un corte en la barra, del color del fondo: separa sin añadir otro color. */
+.np__mark{position:absolute;top:0;bottom:0;width:3px;margin-left:-1.5px;background:rgba(0,0,0,.7)}
+.np__tip{
+  position:absolute;bottom:calc(100% + .45rem);transform:translateX(-50%);
+  padding:.25rem .55rem;border-radius:4px;
+  background:rgba(20,22,26,.94);color:var(--np-color-control);
+  font-size:.78rem;white-space:nowrap;pointer-events:none;
+}
 .np__plugins{display:inline-flex;align-items:center}
 
 /* --- deslizadores ---

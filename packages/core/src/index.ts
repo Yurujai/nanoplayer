@@ -64,7 +64,7 @@ export type { LiveStatus, RetryPolicy } from './live.js';
 // --- anclajes de interfaz ---------------------------------------------------
 export type {
   BarControlDecl, OverlayDecl, OverlayHandle,
-  SettingsOptionDecl, SettingsPanelDecl, UiSlots,
+  SettingsOptionDecl, SettingsPanelDecl, TimelineMarkerDecl, TimelineMarkersDecl, UiSlots,
 } from './slots.js';
 
 // --- plugins ----------------------------------------------------------------

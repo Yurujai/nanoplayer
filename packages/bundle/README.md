@@ -1,7 +1,7 @@
 # @nanoplayer/bundle
 
-El reproductor entero en un fichero, con la interfaz y los subtítulos ya
-puestos. **69 KB, 22 KB gzip.**
+El reproductor entero en un fichero, con la interfaz, los subtítulos y los
+capítulos ya puestos. **85 KB, 27 KB gzip.**
 
 Es el paquete del objetivo O5: instalar con una etiqueta `<script>` y tres
 líneas, sin build, sin herramientas y sin npm.

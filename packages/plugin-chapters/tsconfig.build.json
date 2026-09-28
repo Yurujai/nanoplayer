@@ -1,0 +1,15 @@
+{
+  // Solo para emitir los .d.ts; el bundle lo hace Vite.
+  //
+  // Extiende la base y NO el tsconfig del paquete, a propósito: aquel mapea
+  // `@nanoplayer/core` al código fuente del núcleo, y con `rootDir` eso da
+  // TS6059 por quedar fuera del directorio raíz. Aquí se resuelve contra el
+  // paquete ya construido, que es además lo que verá quien lo instale.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}

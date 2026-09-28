@@ -20,6 +20,7 @@ export default defineConfig({
       '@nanoplayer/core': fuente('packages/core/src/index.ts'),
       '@nanoplayer/ui': fuente('packages/ui/src/index.ts'),
       '@nanoplayer/plugin-captions': fuente('packages/plugin-captions/src/index.ts'),
+      '@nanoplayer/plugin-chapters': fuente('packages/plugin-chapters/src/index.ts'),
       '@nanoplayer/engine-hls': fuente('packages/engine-hls/src/index.ts'),
     },
   },

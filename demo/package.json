@@ -13,6 +13,7 @@
     "@nanoplayer/core": "workspace:*",
     "@nanoplayer/ui": "workspace:*",
     "@nanoplayer/plugin-captions": "workspace:*",
+    "@nanoplayer/plugin-chapters": "workspace:*",
     "@nanoplayer/engine-hls": "workspace:*"
   },
   "devDependencies": {

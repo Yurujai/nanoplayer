@@ -19,7 +19,7 @@
 import { strings } from '@nanoplayer/core';
 import type {
   BarControlDecl, Catalogues, OverlayDecl, OverlayHandle, Player, PlayerError,
-  SettingsPanelDecl, Translate, UiSlots,
+  SettingsPanelDecl, TimelineMarkerDecl, TimelineMarkersDecl, Translate, UiSlots,
 } from '@nanoplayer/core';
 import { formatPercent, formatTime, spokenTime } from './format.js';
 import { ICONS } from './icons.js';
@@ -88,7 +88,14 @@ export class ControlBar implements UiSlots {
   #progreso!: HTMLInputElement;
   #volumen!: HTMLInputElement;
   #tiempo!: HTMLElement;
+  #tramoActual!: HTMLElement;
+  #capaMarcas!: HTMLElement;
+  #etiquetaBarra!: HTMLElement;
   #vivo!: HTMLElement;
+  /** Marcas de la barra de progreso, por plugin. En tiempo del medio. */
+  readonly #marcas = new Map<string, readonly TimelineMarkerDecl[]>();
+  /** Duración con la que se colocaron las marcas; si cambia, se recolocan. */
+  #duracionMarcas = -1;
 
   #velocidad = 1;
   /** Segundos que le quedan a la cabecera o la cola, según `chain:time`. */
@@ -164,9 +171,18 @@ export class ControlBar implements UiSlots {
     this.#bar.className = 'np__bar';
 
     const filaProgreso = doc.createElement('div');
-    filaProgreso.className = 'np__row';
+    filaProgreso.className = 'np__row np__row--progress';
     this.#progreso = this.#rango(this.#t('ui.progress'), 0, 1, 0.001);
-    filaProgreso.appendChild(this.#progreso);
+    // Marcas y etiqueta son visuales: al lector de pantalla el tramo le llega
+    // por el `aria-valuetext` del deslizador, que es donde está el foco.
+    this.#capaMarcas = doc.createElement('div');
+    this.#capaMarcas.className = 'np__marks';
+    this.#capaMarcas.setAttribute('aria-hidden', 'true');
+    this.#etiquetaBarra = doc.createElement('div');
+    this.#etiquetaBarra.className = 'np__tip';
+    this.#etiquetaBarra.setAttribute('aria-hidden', 'true');
+    this.#etiquetaBarra.hidden = true;
+    filaProgreso.append(this.#progreso, this.#capaMarcas, this.#etiquetaBarra);
 
     const filaBotones = doc.createElement('div');
     filaBotones.className = 'np__row';
@@ -187,6 +203,12 @@ export class ControlBar implements UiSlots {
     // en una región viva sería un goteo constante e insoportable.
     this.#tiempo.setAttribute('aria-hidden', 'true');
 
+    // El tramo en curso, a la vista. No va oculto al lector como el tiempo:
+    // no cambia cada segundo, y es la única forma de saber en qué capítulo
+    // se está sin ir a la barra.
+    this.#tramoActual = doc.createElement('span');
+    this.#tramoActual.className = 'np__segment';
+
     const espaciador = doc.createElement('span');
     espaciador.className = 'np__spacer';
 
@@ -195,7 +217,8 @@ export class ControlBar implements UiSlots {
     this.#zonaControles = doc.createElement('span');
     this.#zonaControles.className = 'np__plugins';
 
-    filaBotones.append(this.#btnPlay, volumen, this.#tiempo, espaciador, this.#zonaControles);
+    filaBotones.append(this.#btnPlay, volumen, this.#tiempo, this.#tramoActual, espaciador,
+      this.#zonaControles);
     this.#menu = new SettingsMenu(filaBotones, this.#t);
     filaBotones.append(this.#btnFs);
 
@@ -235,6 +258,77 @@ export class ControlBar implements UiSlots {
 
   addSettingsPanel(panel: SettingsPanelDecl): () => void {
     return this.#menu.addPanel(panel);
+  }
+
+  addTimelineMarkers(decl: TimelineMarkersDecl): () => void {
+    this.#marcas.set(decl.id, decl.markers);
+    this.#duracionMarcas = -1;
+    this.#pintarProgreso();
+    return () => {
+      this.#marcas.delete(decl.id);
+      this.#duracionMarcas = -1;
+      this.#pintarProgreso();
+    };
+  }
+
+  /**
+   * Los tramos en tiempo visible, sin los que caen fuera del recorte.
+   *
+   * Un tramo sin fin llega hasta el siguiente de su mismo plugin, o hasta el
+   * final: es como se escriben los capítulos a mano, y exigir el fin de cada
+   * uno sería pedir lo que ya se deduce.
+   */
+  #tramos(): Array<{ start: number; end: number; label: string }> {
+    const p = this.#player;
+    const d = p.duration || Infinity;
+    const desplazamiento = p.trim?.start ?? 0;
+    const tramos: Array<{ start: number; end: number; label: string }> = [];
+    for (const lista of this.#marcas.values()) {
+      const orden = [...lista].sort((a, b) => a.start - b.start);
+      orden.forEach((m, i) => {
+        const fin = m.end ?? orden[i + 1]?.start ?? Infinity;
+        const start = Math.max(0, m.start - desplazamiento);
+        const end = Math.min(d, fin - desplazamiento);
+        if (end > start) tramos.push({ start, end, label: m.label });
+      });
+    }
+    return tramos;
+  }
+
+  #tramoEn(t: number): string | null {
+    return this.#tramos().find((x) => t >= x.start && t < x.end)?.label ?? null;
+  }
+
+  /** Coloca las marcas. Solo cuando cambia la duración o las marcas, no en cada tic. */
+  #pintarMarcas(d: number): void {
+    if (d === this.#duracionMarcas) return;
+    this.#duracionMarcas = d;
+    this.#capaMarcas.textContent = '';
+    if (!(d > 0)) return;
+    const doc = this.#root.ownerDocument;
+    for (const { start } of this.#tramos()) {
+      // Al principio no hay nada que separar.
+      if (start <= 0) continue;
+      const marca = doc.createElement('span');
+      marca.className = 'np__mark';
+      marca.style.left = `${(start / d) * 100}%`;
+      this.#capaMarcas.appendChild(marca);
+    }
+  }
+
+  /** Al pasar el ratón por la barra: el tiempo y el tramo de ese punto. */
+  #pintarEtiquetaBarra(ev: PointerEvent): void {
+    const d = this.#player.duration || 0;
+    if (this.#marcas.size === 0 || !(d > 0) || this.#player.manifest?.live) return;
+    const caja = this.#progreso.getBoundingClientRect();
+    if (caja.width <= 0) return;
+    const frac = Math.min(1, Math.max(0, (ev.clientX - caja.left) / caja.width));
+    const t = frac * d;
+    const tramo = this.#tramoEn(t);
+    this.#etiquetaBarra.textContent = tramo ? `${formatTime(t)} · ${tramo}` : formatTime(t);
+    // Acotada para que no se salga por los lados del reproductor.
+    this.#etiquetaBarra.style.left = `${Math.min(92, Math.max(8, frac * 100))}%`;
+    this.#etiquetaBarra.hidden = false;
   }
 
   /**
@@ -441,6 +535,8 @@ export class ControlBar implements UiSlots {
     this.#on(this.#progreso, 'input', () => this.#previsualizarBusqueda());
     this.#on(this.#progreso, 'change', () => this.#confirmarBusqueda());
     this.#on(this.#progreso, 'keydown', () => { this.#arrastrando = false; });
+    this.#on(this.#progreso, 'pointermove', (ev: PointerEvent) => this.#pintarEtiquetaBarra(ev));
+    this.#on(this.#progreso, 'pointerleave', () => { this.#etiquetaBarra.hidden = true; });
 
     this.#on(this.#volumen, 'input', () => {
       const v = Number(this.#volumen.value);
@@ -552,8 +648,11 @@ export class ControlBar implements UiSlots {
 
   #previsualizarBusqueda(): void {
     const t = Number(this.#progreso.value) * (this.#player.duration || 0);
+    const tramo = this.#tramoEn(t);
     this.#tiempo.textContent = `${formatTime(t)} / ${formatTime(this.#player.duration)}`;
-    this.#progreso.setAttribute('aria-valuetext', spokenTime(t, this.#lang));
+    this.#tramoActual.textContent = tramo ?? '';
+    this.#progreso.setAttribute('aria-valuetext',
+      tramo ? `${spokenTime(t, this.#lang)}, ${tramo}` : spokenTime(t, this.#lang));
     this.#progreso.style.setProperty('--np-progress', `${Number(this.#progreso.value) * 100}%`);
   }
 
@@ -664,9 +763,14 @@ export class ControlBar implements UiSlots {
 
     this.#progreso.value = String(frac);
     this.#progreso.style.setProperty('--np-progress', `${frac * 100}%`);
-    // El tiempo hablado es lo que convierte "735" en "12 minutos y 15 segundos".
-    this.#progreso.setAttribute('aria-valuetext', spokenTime(t, this.#lang));
+    this.#pintarMarcas(d);
+    const tramo = this.#tramoEn(t);
+    // El tiempo hablado es lo que convierte "735" en "12 minutos y 15 segundos",
+    // y el tramo dice dónde cae: "12 minutos y 15 segundos, Primer principio".
+    this.#progreso.setAttribute('aria-valuetext',
+      tramo ? `${spokenTime(t, this.#lang)}, ${tramo}` : spokenTime(t, this.#lang));
     this.#tiempo.textContent = `${formatTime(t)} / ${formatTime(d)}`;
+    this.#tramoActual.textContent = tramo ?? '';
 
     const buffered = p.master?.buffered;
     if (buffered && buffered.length > 0 && d > 0) {
@@ -687,6 +791,7 @@ export class ControlBar implements UiSlots {
     const p = this.#player;
     const fila = this.#progreso.parentElement;
     if (fila) fila.hidden = true;
+    this.#tramoActual.textContent = '';
     const nombre = this.#t(p.phase === 'intro' ? 'ui.chain.intro' : 'ui.chain.outro');
     // El motor de la pieza no se expone; su tiempo llega por `chain:time`, y
     // mientras no llegue se enseña solo el nombre.

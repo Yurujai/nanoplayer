@@ -19,6 +19,7 @@
  * |------------|------------------------------------------|
  * | `bar`      | Binario, frecuente, con estado visible    |
  * | `settings` | Elección entre varias opciones, ocasional |
+ * | `timeline` | Tramos con nombre sobre la barra de progreso |
  *
  * Un mismo plugin puede aportar en varios. Los subtítulos son el caso claro:
  * interruptor en la barra *y* panel en ajustes para elegir idioma.
@@ -66,6 +67,27 @@ export interface SettingsPanelDecl {
   priority?: number;
 }
 
+/**
+ * Un tramo con nombre en la barra de progreso: un capítulo, una actividad.
+ *
+ * Los tiempos van **en tiempo del medio**, igual que las anotaciones del
+ * manifiesto de las que salen. Si hay recorte, la interfaz los remapea y
+ * descarta lo que cae fuera: así ningún plugin tiene que acordarse de restar.
+ */
+export interface TimelineMarkerDecl {
+  start: number;
+  /** Si falta, el tramo llega hasta el siguiente o hasta el final. */
+  end?: number;
+  /** Nombre del tramo. Se enseña y se anuncia: es texto accesible. */
+  label: string;
+}
+
+/** Un conjunto de marcas que aporta un plugin. */
+export interface TimelineMarkersDecl {
+  id: string;
+  markers: readonly TimelineMarkerDecl[];
+}
+
 /** Una capa de contenido sobre el vídeo. */
 export interface OverlayDecl {
   id: string;
@@ -93,6 +115,15 @@ export interface OverlayHandle {
 export interface UiSlots {
   addBarControl(control: BarControlDecl): () => void;
   addSettingsPanel(panel: SettingsPanelDecl): () => void;
+  /**
+   * Marca tramos con nombre en la barra de progreso.
+   *
+   * Igual que en `bar` y `settings`, **el plugin declara y la interfaz
+   * construye**: marcas, el nombre del tramo actual y lo que anuncia el lector
+   * de pantalla al moverse por la barra. Los capítulos son el primer uso; las
+   * actividades H5P, el siguiente.
+   */
+  addTimelineMarkers(decl: TimelineMarkersDecl): () => void;
   /**
    * Reserva una capa sobre el vídeo y devuelve el nodo para rellenarlo.
    *

@@ -15,6 +15,7 @@ import {
 import { attachControls, type ControlBar } from '@nanoplayer/ui';
 // Basta con importarlo: el plugin se auto-registra. El núcleo no lo conoce.
 import '@nanoplayer/plugin-captions';
+import '@nanoplayer/plugin-chapters';
 import { plugins, nativeEngineFactory } from '@nanoplayer/core';
 import { enginesWithHls } from '@nanoplayer/engine-hls';
 
