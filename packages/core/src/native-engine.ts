@@ -118,16 +118,30 @@ export class NativeEngine implements MediaEngine {
     }
 
     if (options.startAt !== undefined && options.startAt > 0) {
-      try { el.currentTime = options.startAt; } catch { /* fuera de rango: se ignora */ }
+      const startAt = options.startAt;
+      const saltar = () => {
+        try { el.currentTime = startAt; } catch { /* fuera de rango: se ignora */ }
+      };
+      // Sin metadatos no hay a dónde saltar: en iOS llegan con el primer play.
+      if (el.readyState >= 1) saltar();
+      else el.addEventListener('loadedmetadata', saltar, { once: true });
     }
   }
 
   /**
-   * Espera a `readyState >= 2` (`HAVE_CURRENT_DATA`).
+   * Espera a `readyState >= 2` (`HAVE_CURRENT_DATA`), **o a que el navegador
+   * diga que no piensa descargar más** (`suspend`).
    *
    * No a `canplay`: S2 midió que en iOS ese evento puede no llegar nunca porque
-   * el sistema no bufferea hasta que se intenta reproducir. `loadeddata` sí
-   * llega y basta para operar.
+   * el sistema no bufferea hasta que se intenta reproducir.
+   *
+   * Y tampoco solo a `loadeddata`, por la misma razón llevada más lejos: en un
+   * iPhone 17 Pro con Safari 26.5 no llega ni ese. iOS no descarga un byte
+   * hasta el primer `play()`, así que el enganche se quedaba esperando para
+   * siempre, el `play()` que venía detrás no llegaba nunca y el botón de play
+   * no hacía nada. `suspend` es la forma estándar en que el navegador avisa de
+   * que ha dejado de descargar a propósito: el elemento está tan listo como va
+   * a estar hasta que alguien le pida reproducir.
    *
    * Sin efectos sobre la reproducción a propósito. Una versión de la sonda
    * lanzaba un `play()` para forzar la carga, y su promesa pausaba el vídeo por
@@ -141,9 +155,11 @@ export class NativeEngine implements MediaEngine {
       const fallo = () => { limpiar(); reject(traducirError(el)); };
       const limpiar = () => {
         el.removeEventListener('loadeddata', ok);
+        el.removeEventListener('suspend', ok);
         el.removeEventListener('error', fallo);
       };
       el.addEventListener('loadeddata', ok);
+      el.addEventListener('suspend', ok);
       el.addEventListener('error', fallo);
       if (el.networkState === 0 /* NETWORK_EMPTY */) el.load();
     });

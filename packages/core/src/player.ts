@@ -378,7 +378,10 @@ export class Player {
   get duration(): number {
     const r = this.#recorteActual();
     if (r) return Math.max(0, r.end - r.start);
-    return this.master?.duration ?? this.#manifest?.duration ?? 0;
+    // El motor dice 0 mientras no tiene metadatos, que en iOS es hasta el
+    // primer play: mientras tanto vale más la duración que trae el manifiesto.
+    const delMotor = this.master?.duration ?? 0;
+    return delMotor > 0 ? delMotor : this.#manifest?.duration ?? 0;
   }
 
   get paused(): boolean { return this.#motorActual()?.paused ?? true; }

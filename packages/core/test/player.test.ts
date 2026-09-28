@@ -151,6 +151,17 @@ describe('Player · manifiesto', () => {
   });
 });
 
+describe('Player · duración', () => {
+  it('sin metadatos en el motor, usa la del manifiesto', async () => {
+    // En iOS el motor no sabe la duración hasta el primer play: la barra
+    // marcaba 0:00 en lugar de lo que ya decía el manifiesto.
+    const { p, creados } = nuevo({ ...MONO, duration: 42 });
+    await p.attach();
+    Object.defineProperty(creados[0], 'duration', { get: () => 0 });
+    expect(p.duration).toBe(42);
+  });
+});
+
 describe('Player · audio y maestro', () => {
   it('solo suena el stream con audio', async () => {
     const { p, creados } = nuevo(DUAL);

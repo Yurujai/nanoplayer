@@ -38,6 +38,18 @@ function videoGobernable() {
   });
 
   return Object.assign(el, {
+    /**
+     * Simula a iOS: no descarga nada hasta el primer `play()`, y avisa de que
+     * ha dejado de descargar con `suspend`.
+     */
+    simularSuspenso() {
+      el.dispatchEvent(new Event('suspend'));
+    },
+    /** Simula que llegan los metadatos, sin datos de imagen todavía. */
+    simularMetadatos() {
+      readyState = 1;
+      el.dispatchEvent(new Event('loadedmetadata'));
+    },
     /** Simula que el medio ya tiene datos utilizables. */
     simularCarga() {
       readyState = 2;
@@ -122,6 +134,29 @@ describe('NativeEngine · attach', () => {
     video.simularCarga();
     await p;
     expect(resuelto).toBe(true);
+  });
+
+  it('resuelve también si el navegador no precarga nada (iOS)', async () => {
+    /*
+     * En un iPhone 17 Pro con Safari 26.5 no llegaba ni `loadeddata`: iOS no
+     * descarga hasta el primer play(). El enganche esperaba para siempre y el
+     * botón de play no hacía nada.
+     */
+    const e = motor();
+    const p = e.attach(container, stream());
+    video.simularSuspenso();
+    await p;
+    expect(video.readyState).toBe(0);
+  });
+
+  it('sin metadatos, la posición recuperada se aplica cuando llegan', async () => {
+    const e = motor();
+    const p = e.attach(container, stream(), { startAt: 137.5 });
+    video.simularSuspenso();
+    await p;
+    expect(video.currentTime).not.toBe(137.5);
+    video.simularMetadatos();
+    expect(video.currentTime).toBe(137.5);
   });
 
   it('continúa desde la posición recuperada de un desalojo', async () => {
