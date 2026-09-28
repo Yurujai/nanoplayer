@@ -26,6 +26,7 @@ import { ICONS } from './icons.js';
 import { applyLayout, layoutsFor, type LayoutId } from './layouts.js';
 import { Poster } from './poster.js';
 import { SettingsMenu, type SettingsPanel } from './settings-menu.js';
+import { FullscreenButton } from './fullscreen-button.js';
 import { VolumeControl } from './volume-control.js';
 import { injectStyles } from './styles.js';
 
@@ -75,7 +76,7 @@ export class ControlBar implements UiSlots {
   #bar!: HTMLElement;
   #escenario!: HTMLElement;
   #btnPlay!: HTMLButtonElement;
-  #btnFs!: HTMLButtonElement;
+  #pantallaCompleta!: FullscreenButton;
   #btnSaltar!: HTMLButtonElement;
   #menu!: SettingsMenu;
   #poster: Poster | null = null;
@@ -186,7 +187,7 @@ export class ControlBar implements UiSlots {
     filaBotones.className = 'np__row';
 
     this.#btnPlay = this.#boton(this.#t('ui.play'), ICONS.play);
-    this.#btnFs = this.#boton(this.#t('ui.fullscreenEnter'), ICONS.fullscreenEnter);
+    this.#pantallaCompleta = new FullscreenButton(this.#root, this.#player, this.#t);
 
     this.#volumen = new VolumeControl(doc, this.#player, this.#t);
 
@@ -213,7 +214,7 @@ export class ControlBar implements UiSlots {
     filaBotones.append(this.#btnPlay, this.#volumen.element, this.#tiempo, this.#tramoActual, espaciador,
       this.#zonaControles);
     this.#menu = new SettingsMenu(filaBotones, this.#t);
-    filaBotones.append(this.#btnFs);
+    filaBotones.append(this.#pantallaCompleta.element);
 
     this.#bar.append(filaProgreso, filaBotones);
 
@@ -517,7 +518,6 @@ export class ControlBar implements UiSlots {
     const p = this.#player;
 
     this.#on(this.#btnPlay, 'click', () => this.#alternarReproduccion());
-    this.#on(this.#btnFs, 'click', () => this.#alternarPantallaCompleta());
     this.#on(this.#btnSaltar, 'click', () => this.#saltarCabecera());
 
     // `input` mientras se arrastra, `change` al soltar: buscar en cada píxel
@@ -562,10 +562,6 @@ export class ControlBar implements UiSlots {
     this.#on(this.#root, 'pointerleave', () => this.#dormir());
     this.#on(this.#root, 'focusin', () => this.#despertar());
 
-    const doc = this.#root.ownerDocument;
-    this.#on(doc, 'fullscreenchange', () => this.#pintarPantallaCompleta());
-    this.#on(doc, 'webkitfullscreenchange', () => this.#pintarPantallaCompleta());
-
     // Al cambiar el ancho cambia cuántos controles caben.
     if (typeof ResizeObserver !== 'undefined') {
       this.#observador = new ResizeObserver(() => this.#pintarControles());
@@ -587,36 +583,6 @@ export class ControlBar implements UiSlots {
     // navega con teclado tendría que volver a entrar en el reproductor.
     if (this.#root.ownerDocument.activeElement === this.#btnSaltar) this.#root.focus();
     this.#player.skipIntro();
-  }
-
-  /**
-   * Pantalla completa.
-   *
-   * Si no hay API de contenedor se recurre a llevar el vídeo maestro al
-   * reproductor del sistema. **En iPhone es la única vía**: S2 midió que allí
-   * `requestFullscreen` sobre un contenedor no existe, y esa ruta hace
-   * desaparecer el segundo stream. Es limitación de iOS, no de WebKit — en
-   * Safari de escritorio sí funciona.
-   */
-  #alternarPantallaCompleta(): void {
-    const doc = this.#root.ownerDocument as Document & {
-      webkitFullscreenElement?: Element; webkitExitFullscreen?: () => void;
-    };
-    const root = this.#root as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
-
-    if (doc.fullscreenElement ?? doc.webkitFullscreenElement) {
-      void (doc.exitFullscreen?.() ?? doc.webkitExitFullscreen?.());
-      return;
-    }
-    const pedir = root.requestFullscreen ?? root.webkitRequestFullscreen;
-    if (pedir) {
-      void pedir.call(root).catch(() => {});
-      return;
-    }
-    const video = this.#player.master?.element as (HTMLVideoElement & {
-      webkitEnterFullscreen?: () => void;
-    }) | null;
-    video?.webkitEnterFullscreen?.();
   }
 
   #previsualizarBusqueda(): void {
@@ -686,7 +652,7 @@ export class ControlBar implements UiSlots {
       case 'ArrowUp': this.#volumen.step(1); break;
       case 'ArrowDown': this.#volumen.step(-1); break;
       case 'm': case 'M': this.#volumen.toggleMute(); break;
-      case 'f': case 'F': this.#alternarPantallaCompleta(); break;
+      case 'f': case 'F': this.#pantallaCompleta.toggle(); break;
       case 'Home': p.seek(0); break;
       case 'End': p.seek(d); break;
       default:
@@ -705,7 +671,7 @@ export class ControlBar implements UiSlots {
     this.#btnPlay.innerHTML = reproduciendo ? ICONS.pause : ICONS.play;
     this.#btnPlay.setAttribute('aria-label', reproduciendo ? this.#t('ui.pause') : this.#t('ui.play'));
     this.#pintarProgreso();
-    this.#pintarPantallaCompleta();
+    this.#pantallaCompleta.render();
     this.#pintarCadena();
     if (reproduciendo) this.#programarOcultado();
     else this.#despertar();
@@ -810,34 +776,6 @@ export class ControlBar implements UiSlots {
     this.#tiempo.textContent = !emitiendo || p.atLiveEdge
       ? '' : `−${formatTime(p.behindLive)}`;
     this.#marcaDirecto(emitiendo);
-  }
-
-  /**
-   * ¿Se puede usar la pantalla completa aquí?
-   *
-   * Dentro de un `<iframe>` sin `allow="fullscreen"` la llamada se rechaza con
-   * "Disallowed by permissions policy". Enseñar el botón igualmente deja un
-   * control que no hace nada, y quien lo pulse no entenderá por qué.
-   *
-   * En iPhone tampoco existe fullscreen de contenedor —lo midió S2— pero ahí sí
-   * queda la vía del vídeo suelto, así que el botón sigue teniendo sentido.
-   */
-  #hayPantallaCompleta(): boolean {
-    const doc = this.#root.ownerDocument as Document & {
-      webkitFullscreenEnabled?: boolean;
-    };
-    if (doc.fullscreenEnabled ?? doc.webkitFullscreenEnabled) return true;
-    // Recurso de iOS: llevar el vídeo al reproductor del sistema.
-    return 'webkitEnterFullscreen' in this.#root.ownerDocument.createElement('video');
-  }
-
-  #pintarPantallaCompleta(): void {
-    const doc = this.#root.ownerDocument as Document & { webkitFullscreenElement?: Element };
-    this.#btnFs.hidden = !this.#hayPantallaCompleta();
-    const dentro = !!(doc.fullscreenElement ?? doc.webkitFullscreenElement);
-    this.#btnFs.innerHTML = dentro ? ICONS.fullscreenExit : ICONS.fullscreenEnter;
-    this.#btnFs.setAttribute('aria-label',
-      dentro ? this.#t('ui.fullscreenExit') : this.#t('ui.fullscreenEnter'));
   }
 
   /**
@@ -965,6 +903,7 @@ export class ControlBar implements UiSlots {
     this.#player.setUi(null);
     this.#menu.destroy();
     this.#volumen.destroy();
+    this.#pantallaCompleta.destroy();
     this.#bar.remove();
     this.#btnSaltar.remove();
     this.#vivo.remove();
