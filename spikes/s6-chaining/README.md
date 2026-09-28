@@ -247,6 +247,18 @@ S2 —iPhone no reproduce dos audios a la vez—, y no ocurre en las costuras
 anticipadas, donde la entrante arranca muda. En escritorio el mismo salto daba
 0–28 ms.
 
+**Arrancándola muda, el salto queda en 0 ms.** Se cambió el banco para saltar
+como lo hace el reproductor —entrante silenciada, sonido al descubrirla— y se
+volvió a medir en el mismo iPhone, variante A con 600 ms:
+
+| Salto | Hueco | Latencia | Con sonido | Pausada al quitar el silencio |
+|---|---:|---:|---|---|
+| Entrante con sonido | 321 | 361 | sí | — |
+| Entrante muda | **0** | 364 | no | no |
+
+La latencia no cambia: lo que cambia es que la cabecera sigue pintando hasta
+que el contenido tiene imagen.
+
 ---
 
 ## 6. Conclusiones para la implementación
@@ -270,7 +282,8 @@ anticipadas, donde la entrante arranca muda. En escritorio el mismo salto daba
 5. **El botón de saltar reutiliza exactamente el mismo camino:** arrancar la
    entrante **en silencio**, esperar su primer fotograma, conmutar. Lo del
    silencio no es un detalle: en iPhone, arrancarla con sonido detiene la
-   saliente y deja 321 ms de hueco (§5). El reproductor ya lo hace así.
+   saliente y deja 321 ms de hueco; muda, 0 ms (§5). El reproductor ya lo
+   hace así.
 
 6. **El desbloqueo no hizo falta en iOS 26** (variante B, §5). Se mantiene de
    momento: es un solo dispositivo, y un iOS anterior podría seguir aplicando la
