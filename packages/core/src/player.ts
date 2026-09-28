@@ -1114,10 +1114,7 @@ export class Player {
     }
     // Si se saltó con la cabecera en pausa, el contenido acaba de arrancar y
     // el estado tiene que decirlo: su `onPlay` llegó mientras no contaba.
-    if (entrante && !entrante.paused && this.#lc.state !== 'active' && this.#lc.can('active')) {
-      this.#lc.transition('active');
-      this.bus.emit('play', { at: this.currentTime });
-    }
+    if (entrante && !entrante.paused && this.#lc.state !== 'active') this.#reflejarPlay();
     if (!entrante) {
       if (destino === 'outro') this.#terminarContenido();
       return;
@@ -1140,6 +1137,18 @@ export class Player {
     this.bus.emit('ended', { at: this.duration });
   }
 
+  /** El medio ha empezado a sonar: el estado y el bus lo cuentan. */
+  #reflejarPlay(): void {
+    if (this.#lc.can('active')) this.#lc.transition('active');
+    this.bus.emit('play', { at: this.currentTime });
+  }
+
+  /** El medio se ha parado. */
+  #reflejarPausa(): void {
+    if (this.#lc.state === 'active') this.#lc.transition('attached');
+    this.bus.emit('pause', { at: this.currentTime });
+  }
+
   #callbacksPieza(fase: 'intro' | 'outro') {
     // Solo cuenta lo que dice la pieza que se ve, y no durante un cambio.
     const cuenta = () => this.#fase === fase && this.#conmutando === null;
@@ -1149,13 +1158,11 @@ export class Player {
       },
       onPlay: () => {
         if (!cuenta()) return;
-        if (this.#lc.can('active')) this.#lc.transition('active');
-        this.bus.emit('play', { at: this.currentTime });
+        this.#reflejarPlay();
       },
       onPause: () => {
         if (!cuenta()) return;
-        if (this.#lc.state === 'active') this.#lc.transition('attached');
-        this.bus.emit('pause', { at: this.currentTime });
+        this.#reflejarPausa();
       },
       onEnded: () => {
         if (this.#fase !== fase) return;
@@ -1227,8 +1234,7 @@ export class Player {
        */
       onPlay: () => {
         if (!esMaestro || !cuenta()) return;
-        if (this.#lc.can('active')) this.#lc.transition('active');
-        this.bus.emit('play', { at: this.currentTime });
+        this.#reflejarPlay();
       },
       /*
        * Marca que la reproducción **ha empezado de verdad**, no solo que se ha
@@ -1239,8 +1245,7 @@ export class Player {
       onPause: () => {
         if (!esMaestro || !cuenta()) return;
         this.#sonando = false;
-        if (this.#lc.state === 'active') this.#lc.transition('attached');
-        this.bus.emit('pause', { at: this.currentTime });
+        this.#reflejarPausa();
       },
       onEnded: () => {
         if (!esMaestro || this.#fase !== 'main') return;
