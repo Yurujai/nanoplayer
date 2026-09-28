@@ -968,9 +968,9 @@ export class Player {
    * quitarle el silencio el navegador podría pausarla. Un `play()` seguido de
    * `pause()` dentro del gesto la deja autorizada.
    *
-   * Pendiente de medir en un iPhone (S6 §6): no se sabe si hace falta, pero
-   * cuesta poco y equivocarse sale caro. Tampoco se sabe si sobrevive a la
-   * espera del enganche, que ya separa esto del clic.
+   * En un iPhone con Safari 26.5 **no hizo falta** (S6 §5): sin desbloquear, el
+   * cambio tampoco se rechazó ni se pausó. Se mantiene hasta medirlo en un iOS
+   * anterior, donde la política por elemento podría seguir aplicándose.
    */
   #desbloquear(): void {
     if (this.#desbloqueado) return;

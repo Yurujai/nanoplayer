@@ -9,10 +9,11 @@ terminar la anterior deja un hueco de **340–445 ms** — diez fotogramas, se v
 perfectamente. Arrancarla unos cientos de milisegundos antes lo deja en **0 ms**
 en los dos motores de escritorio.
 
-**Falta la mitad que decide:** en escritorio la política de autoplay no llega a
-estorbar, porque Chromium y WebKit conceden la activación **por página**. En
-iOS es **por elemento**, y esa medición hay que hacerla a mano en un iPhone.
-Hasta entonces, la variante B no está descartada ni confirmada.
+**En iPhone también, y sin desbloqueo** (medido el 2026-09-28 en un iPhone 17
+Pro con Safari 26.5): con 600 ms de anticipación el hueco es **0 ms** en las
+dos costuras, desbloqueando en el gesto o sin hacerlo, y quitarle el silencio a
+la entrante no la pausa. Es un solo dispositivo con un solo Safari: la política
+por elemento es histórica en iOS y falta confirmarlo en un iOS anterior.
 
 > Código desechable. Lo que sobrevive son las conclusiones de §5.
 
@@ -220,6 +221,32 @@ permiso es de cada elemento y es donde B debería fallar.
 entrante a mitad de reproducción no la pausó en ninguno de los dos motores.
 Buena señal para la anticipación, pendiente de confirmar en iOS.
 
+### iPhone
+
+Medido el 2026-09-28 a mano, en un iPhone 17 Pro con Safari 26.5 (el UA dice
+«iPhone OS 18_7» porque Safari congela esa cifra desde la versión 26).
+
+| Variante | Anticipación | intro→main | main→outro | bloq | pausada al quitar el silencio |
+|---|---:|---:|---:|---|---|
+| A · desbloqueada | 0 | 434 | 384 | no | — |
+| B · sin desbloquear | 0 | 433 | 384 | no | — |
+| C · un elemento | 0 | 269 | 234 | no | — |
+| A · desbloqueada | 600 | **0** | **0** | no | no |
+| B · sin desbloquear | 600 | **0** | **0** | no | no |
+
+**B pasa, y es lo que decide.** Sin anticipación, el `play()` con sonido de la
+entrante sale de un `ended` unos 8 s después del toque, sin desbloqueo previo,
+y no se rechaza. Con anticipación, quitarle el silencio sin gesto tampoco la
+pausa. En este Safari el permiso se comporta como de página, igual que en
+escritorio. La latencia del `play()` va de 324 a 392 ms: los 600 ms cubren.
+
+**El salto con sonido sí deja hueco: 321 ms.** El salto del banco arranca la
+entrante **con sonido**, y el hueco es casi igual a su latencia (361 ms): la
+saliente deja de pintar en cuanto se pide ese `play()`. Encaja con lo que midió
+S2 —iPhone no reproduce dos audios a la vez—, y no ocurre en las costuras
+anticipadas, donde la entrante arranca muda. En escritorio el mismo salto daba
+0–28 ms.
+
 ---
 
 ## 6. Conclusiones para la implementación
@@ -240,13 +267,15 @@ Buena señal para la anticipación, pendiente de confirmar en iOS.
    tarda un cuarto de segundo conviven sin problema. Cualquier diseño que
    asuma que «ya está cargado, luego arranca ya» está mal.
 
-5. **El botón de saltar sale gratis** y reutiliza exactamente el mismo camino:
-   arrancar la entrante, esperar su primer fotograma, conmutar. No hace falta
-   nada aparte.
+5. **El botón de saltar reutiliza exactamente el mismo camino:** arrancar la
+   entrante **en silencio**, esperar su primer fotograma, conmutar. Lo del
+   silencio no es un detalle: en iPhone, arrancarla con sonido detiene la
+   saliente y deja 321 ms de hueco (§5). El reproductor ya lo hace así.
 
-6. **Pendiente de iOS:** si el desbloqueo en el gesto es necesario (variante A)
-   o si basta sin él (variante B). El coste de A es bajo y el riesgo de
-   equivocarse es alto, así que mientras no haya dato, **implementar A**.
+6. **El desbloqueo no hizo falta en iOS 26** (variante B, §5). Se mantiene de
+   momento: es un solo dispositivo, y un iOS anterior podría seguir aplicando la
+   política por elemento. Si B también pasa en iOS 17 o 18, se quita, y con él
+   la necesidad de enganchar la cola desde el principio de la reproducción.
 
 ## 7. Lo que este spike NO responde
 
