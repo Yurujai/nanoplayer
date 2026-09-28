@@ -29,6 +29,7 @@ import { createButton } from './dom.js';
 import { FullscreenButton } from './fullscreen-button.js';
 import { KeyboardShortcuts } from './keyboard-shortcuts.js';
 import { LiveNotices } from './live-notices.js';
+import { PluginControls } from './plugin-controls.js';
 import { ProgressBar } from './progress-bar.js';
 import { VolumeControl } from './volume-control.js';
 import { injectStyles } from './styles.js';
@@ -72,12 +73,9 @@ export class ControlBar implements UiSlots {
   #btnSaltar!: HTMLButtonElement;
   #menu!: SettingsMenu;
   #poster: Poster | null = null;
-  #zonaControles!: HTMLElement;
-  readonly #controles: BarControlDecl[] = [];
-  readonly #botonesPlugin = new Map<string, HTMLButtonElement>();
-  #quitarDesborde: (() => void) | null = null;
   #observador: ResizeObserver | null = null;
   #volumen!: VolumeControl;
+  #controlesPlugins!: PluginControls;
   #progreso!: ProgressBar;
   #vivo!: HTMLElement;
   #velocidad = 1;
@@ -162,13 +160,12 @@ export class ControlBar implements UiSlots {
     const espaciador = doc.createElement('span');
     espaciador.className = 'np__spacer';
 
-    // Los controles que aporten los plugins caen aquí, entre el espaciador y
-    // el engranaje: a la derecha, que es donde se esperan las acciones.
-    this.#zonaControles = doc.createElement('span');
-    this.#zonaControles.className = 'np__plugins';
-
     filaBotones.append(this.#btnPlay, this.#volumen.element, this.#progreso.time,
-      this.#progreso.segment, espaciador, this.#zonaControles);
+      this.#progreso.segment, espaciador);
+    // Los controles de los plugins, entre el espaciador y el engranaje: a la
+    // derecha, que es donde se esperan las acciones.
+    this.#controlesPlugins = new PluginControls(doc, () => this.#menu, this.#t);
+    filaBotones.append(this.#controlesPlugins.element);
     this.#menu = new SettingsMenu(filaBotones, this.#t);
     filaBotones.append(this.#pantallaCompleta.element);
 
@@ -195,15 +192,7 @@ export class ControlBar implements UiSlots {
 
   /** Añade un botón a la barra. Lo llama un plugin a través de `ctx.whenUi()`. */
   addBarControl(control: BarControlDecl): () => void {
-    this.#controles.push(control);
-    this.#pintarControles();
-    return () => {
-      const i = this.#controles.indexOf(control);
-      if (i >= 0) this.#controles.splice(i, 1);
-      this.#botonesPlugin.get(control.id)?.remove();
-      this.#botonesPlugin.delete(control.id);
-      this.#pintarControles();
-    };
+    return this.#controlesPlugins.add(control);
   }
 
   addSettingsPanel(panel: SettingsPanelDecl): () => void {
@@ -233,62 +222,7 @@ export class ControlBar implements UiSlots {
 
   /** Repinta los controles cuando un plugin cambia su estado. */
   refresh(): void {
-    this.#pintarControles();
-  }
-
-  /**
-   * Coloca los controles de plugins, y desborda al menú lo que no cabe.
-   *
-   * La barra es un recurso escaso: en móvil entran cuatro o cinco controles, y
-   * si cada plugin puede añadir botón, tres plugins la dejan inservible. Lo que
-   * no cabe **no desaparece**: se agrupa en un panel "Más opciones" del menú de
-   * ajustes, donde sigue siendo alcanzable por teclado y por lector de pantalla.
-   */
-  #pintarControles(): void {
-    const disponibles = this.#controles
-      .filter((c) => c.available?.() ?? true)
-      .sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100));
-
-    // Ancho libre de la fila, descontando lo fijo. Con `--np-control-size` de
-    // 2.5rem, cada botón ocupa unos 40 px.
-    const anchoBoton = this.#zonaControles.getBoundingClientRect().height || 40;
-    const anchoFila = this.#bar.getBoundingClientRect().width;
-    const reservado = 4 * anchoBoton + 90;   // play, volumen, tiempo, ajustes, fullscreen
-    const caben = Math.max(0, Math.floor((anchoFila - reservado) / anchoBoton));
-
-    const enBarra = disponibles.slice(0, caben);
-    const desbordados = disponibles.slice(caben);
-
-    this.#zonaControles.textContent = '';
-    this.#botonesPlugin.clear();
-    for (const c of enBarra) {
-      const b = createButton(this.#root.ownerDocument, this.#texto(c.label), this.#texto(c.icon));
-      b.dataset['control'] = c.id;
-      if (c.pressed) b.setAttribute('aria-pressed', String(c.pressed()));
-      b.addEventListener('click', () => { c.onActivate(); this.#pintarControles(); });
-      this.#zonaControles.appendChild(b);
-      this.#botonesPlugin.set(c.id, b);
-    }
-
-    this.#quitarDesborde?.();
-    this.#quitarDesborde = null;
-    if (desbordados.length > 0) {
-      this.#quitarDesborde = this.#menu.addPanel({
-        id: '__overflow',
-        label: this.#t('ui.more'),
-        priority: 900,
-        options: desbordados.map((c) => ({ value: c.id, label: this.#texto(c.label) })),
-        getValue: () => '',
-        onSelect: (id) => {
-          this.#controles.find((c) => c.id === id)?.onActivate();
-          this.#pintarControles();
-        },
-      });
-    }
-  }
-
-  #texto(v: string | (() => string)): string {
-    return typeof v === 'function' ? v() : v;
+    this.#controlesPlugins.render();
   }
 
   /**
@@ -439,7 +373,7 @@ export class ControlBar implements UiSlots {
 
     // Al cambiar el ancho cambia cuántos controles caben.
     if (typeof ResizeObserver !== 'undefined') {
-      this.#observador = new ResizeObserver(() => this.#pintarControles());
+      this.#observador = new ResizeObserver(() => this.#controlesPlugins.render());
       this.#observador.observe(this.#root);
     }
 
