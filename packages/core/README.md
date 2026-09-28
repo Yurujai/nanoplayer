@@ -316,8 +316,16 @@ se puede retroceder. En Wowza lo gobierna nDVR, con su coste en disco.
 
 Reproducir un directo siempre va unos segundos por detrás del borde —el búfer
 que evita los cortes—, así que `atLiveEdge` tiene una tolerancia de 12 s. Y
-`seekToLive()` deja un margen en lugar de ir al final exacto: ese instante aún
-no está en el búfer y saltar ahí provoca un corte.
+`seekToLive()` no va al final exacto: ese instante aún no está en el búfer y
+saltar ahí provoca un corte.
+
+**Cuánto se queda por detrás depende de los segmentos.** Con segmentos de 6 s,
+quedarse a 3 s del borde es quedarse sin datos hasta que se publica el
+siguiente: medido, 15 s entrecortados al volver al directo. Por eso, si el
+motor sabe dónde conviene estar (`liveSyncPosition()`, que hls.js calcula
+según los segmentos), `seekToLive()` va ahí, y la tolerancia de `atLiveEdge` se
+cuenta desde esa posición y no desde el borde. Sin esa información, 3 s de
+margen.
 
 Un recorte sobre un directo se rechaza: no tiene sentido.
 

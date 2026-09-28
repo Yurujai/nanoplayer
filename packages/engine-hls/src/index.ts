@@ -326,6 +326,12 @@ export class HlsEngine implements MediaEngine {
     return d instanceof Date && Number.isFinite(d.getTime()) ? d.getTime() : null;
   }
 
+  /** La que calcula hls.js a partir de la duración de los segmentos. */
+  liveSyncPosition(): number | null {
+    const p = this.#hls?.liveSyncPosition;
+    return typeof p === 'number' && Number.isFinite(p) && p > 0 ? p : null;
+  }
+
   getPlaybackRate(): number { return this.#el?.playbackRate ?? 1; }
 
   setPlaybackRate(rate: number): void {

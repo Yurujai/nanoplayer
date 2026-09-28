@@ -292,7 +292,19 @@ export class Player {
     // resta de dos ceros entra en la tolerancia, y así un directo que aún no
     // ha empezado se declaraba "en el borde" de nada.
     if (this.liveEdge <= 0) return false;
+    // Si el motor sabe dónde conviene estar, la tolerancia se cuenta desde
+    // ahí y no desde el borde. Con segmentos largos lo recomendado ya queda
+    // bastante atrás, y el borde avanza a saltos de un segmento: contado desde
+    // el borde, la marca decía "ir al directo" nada más volver al directo.
+    const recomendada = this.#posicionDirecto();
+    if (recomendada !== null) return recomendada - this.currentTime <= TOLERANCIA_BORDE;
     return this.behindLive <= TOLERANCIA_BORDE;
+  }
+
+  /** Dónde conviene ver el directo, según el motor del maestro, si lo sabe. */
+  #posicionDirecto(): number | null {
+    const p = this.master?.liveSyncPosition?.();
+    return typeof p === 'number' && Number.isFinite(p) && p > 0 ? p : null;
   }
 
   /**
@@ -304,7 +316,9 @@ export class Player {
    */
   seekToLive(): void {
     if (!this.#manifest?.live) return;
-    const destino = this.liveEdge - MARGEN_BORDE;
+    // La posición que recomienda el motor tiene en cuenta la duración de los
+    // segmentos; el margen fijo es para cuando no la sabe.
+    const destino = this.#posicionDirecto() ?? this.liveEdge - MARGEN_BORDE;
     if (destino <= 0) return;
     this.seek(destino);
   }

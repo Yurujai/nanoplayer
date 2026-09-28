@@ -107,6 +107,18 @@ export interface MediaEngine {
    */
   getProgramTime?(): number | null;
 
+  /**
+   * Posición recomendada para ver un directo sin cortes, o `null` si el motor
+   * no la sabe.
+   *
+   * Depende de la duración de los segmentos: el borde de la lista es el final
+   * del último segmento publicado, y quedarse a pocos segundos de él con
+   * segmentos de 6 s es quedarse sin datos hasta que salga el siguiente.
+   * Medido con un canal así: con 3 s de margen, 15 s entrecortados al volver
+   * al directo y cortes sueltos después.
+   */
+  liveSyncPosition?(): number | null;
+
   getPlaybackRate(): number;
   /** Cambiar la velocidad del stream con audio se oye: solo para los esclavos. */
   setPlaybackRate(rate: number): void;

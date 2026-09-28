@@ -457,6 +457,33 @@ describe('Player · borde de la emisión', () => {
     expect(p.atLiveEdge).toBe(true);
   });
 
+  it('con segmentos largos, va donde recomienda el motor y no al borde', async () => {
+    /*
+     * Con segmentos de 6 s, quedarse a 3 s del borde es quedarse sin datos
+     * hasta que se publica el siguiente: medido, 15 s entrecortados al volver
+     * al directo. hls.js sabe dónde conviene estar y el motor lo publica.
+     */
+    const { p, creados } = nuevo(DIRECTO);
+    await p.attach();
+    const motor = creados[0]! as Record<string, any>;
+    conVentana(motor, 40, 160);
+    motor['liveSyncPosition'] = () => 142;
+
+    motor._set(100);
+    p.seekToLive();
+    expect(p.currentTime).toBe(142);
+    // 18 s por detrás del borde, pero es donde se recomienda estar: es directo.
+    expect(p.atLiveEdge).toBe(true);
+
+    // Unos segundos por detrás de lo recomendado sigue siendo directo: el
+    // borde avanza a saltos de un segmento.
+    motor._set(135);
+    expect(p.atLiveEdge).toBe(true);
+
+    motor._set(120);
+    expect(p.atLiveEdge, 'bastante más atrás, ya no').toBe(false);
+  });
+
   it('bajo demanda nada de esto aplica', async () => {
     const { p, creados } = nuevo(MONO);
     await p.attach();
