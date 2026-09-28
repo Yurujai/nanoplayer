@@ -27,6 +27,7 @@ import { applyLayout, layoutsFor, type LayoutId } from './layouts.js';
 import { Poster } from './poster.js';
 import { SettingsMenu, type SettingsPanel } from './settings-menu.js';
 import { FullscreenButton } from './fullscreen-button.js';
+import { KeyboardShortcuts } from './keyboard-shortcuts.js';
 import { VolumeControl } from './volume-control.js';
 import { injectStyles } from './styles.js';
 
@@ -53,8 +54,6 @@ export interface ControlBarOptions {
   poster?: boolean;
 }
 
-const SALTO_CORTO = 5;
-const SALTO_LARGO = 10;
 const VELOCIDADES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
 /**
@@ -557,7 +556,15 @@ export class ControlBar implements UiSlots {
     this.#desatar.push(p.on('stall:start', () => this.#anunciar(this.#t('ui.status.buffering'))));
     this.#desatar.push(p.on('error', ({ error }) => this.#anunciar(this.#textoError(error))));
 
-    this.#on(this.#root, 'keydown', (ev: KeyboardEvent) => this.#atajos(ev));
+    const atajos = new KeyboardShortcuts(p, {
+      togglePlay: () => this.#alternarReproduccion(),
+      toggleMute: () => this.#volumen.toggleMute(),
+      stepVolume: (direction) => this.#volumen.step(direction),
+      toggleFullscreen: () => this.#pantallaCompleta.toggle(),
+      isMenuOpen: () => this.#menu.isOpen,
+      used: () => this.#despertar(),
+    });
+    this.#on(this.#root, 'keydown', (ev: KeyboardEvent) => atajos.handle(ev));
     this.#on(this.#root, 'pointermove', () => this.#despertar());
     this.#on(this.#root, 'pointerleave', () => this.#dormir());
     this.#on(this.#root, 'focusin', () => this.#despertar());
@@ -605,62 +612,6 @@ export class ControlBar implements UiSlots {
       return;
     }
     p.seek(Number(this.#progreso.value) * (p.duration || 0));
-  }
-
-  /* ------------------------------------------------------------------ teclado */
-
-  /**
-   * Atajos de teclado.
-   *
-   * Se ceden las teclas que el elemento enfocado ya usa: las flechas sobre un
-   * deslizador son suyas, y el espacio sobre un botón lo activa. Robárselas
-   * rompería el comportamiento nativo que precisamente se buscaba tener.
-   */
-  #atajos(ev: KeyboardEvent): void {
-    const destino = ev.target as HTMLElement | null;
-    const esControl = destino instanceof HTMLInputElement
-      || destino instanceof HTMLButtonElement
-      || destino instanceof HTMLSelectElement
-      || destino instanceof HTMLTextAreaElement;
-    const propiasDelControl = new Set([
-      'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
-      'Home', 'End', ' ', 'Enter', 'PageUp', 'PageDown',
-    ]);
-    if (esControl && propiasDelControl.has(ev.key)) return;
-    if (ev.altKey || ev.ctrlKey || ev.metaKey) return;
-    // Con el menú abierto, las teclas son suyas.
-    if (this.#menu.isOpen) return;
-
-    const p = this.#player;
-    const d = p.duration || 0;
-    /*
-     * Durante la cabecera no hay barra a la que referir un salto: mover el
-     * contenido a ciegas sería un efecto que nadie ve. Durante la cola sí se
-     * dejan pasar: hacia atrás vuelven al contenido, y hacia delante el
-     * reproductor los ignora, porque la cola no se salta.
-     */
-    const teclasDeSalto = /^([0-9]|ArrowLeft|ArrowRight|[jJlL]|Home|End)$/;
-    if (p.phase === 'intro' && teclasDeSalto.test(ev.key)) return;
-    const saltar = (delta: number) => p.seek(Math.min(d, Math.max(0, p.currentTime + delta)));
-
-    switch (ev.key) {
-      case ' ': case 'k': case 'K': this.#alternarReproduccion(); break;
-      case 'ArrowLeft': saltar(-SALTO_CORTO); break;
-      case 'ArrowRight': saltar(SALTO_CORTO); break;
-      case 'j': case 'J': saltar(-SALTO_LARGO); break;
-      case 'l': case 'L': saltar(SALTO_LARGO); break;
-      case 'ArrowUp': this.#volumen.step(1); break;
-      case 'ArrowDown': this.#volumen.step(-1); break;
-      case 'm': case 'M': this.#volumen.toggleMute(); break;
-      case 'f': case 'F': this.#pantallaCompleta.toggle(); break;
-      case 'Home': p.seek(0); break;
-      case 'End': p.seek(d); break;
-      default:
-        if (/^[0-9]$/.test(ev.key)) p.seek((Number(ev.key) / 10) * d);
-        else return;
-    }
-    ev.preventDefault();
-    this.#despertar();
   }
 
   /* ------------------------------------------------------------------ pintado */
