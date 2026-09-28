@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  masterStream, parseManifest, slaveStreams, trimOf, validateManifest,
-} from '../src/validate.js';
+import { masterStream, slaveStreams, trimOf } from '../src/manifest-queries.js';
+import { parseManifest, validateManifest } from '../src/validate.js';
 
 /** Manifiesto dual-stream válido, con sobrescrituras puntuales. */
 const dual = (over: Record<string, unknown> = {}) => ({

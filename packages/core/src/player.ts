@@ -26,8 +26,9 @@ import type { UiSlots } from './slots.js';
 import type { PlayerState } from './state.js';
 import { Synchronizer, type SyncProfile } from './sync.js';
 import {
-  isAudioOnlyManifest, masterStream, slaveStreams, trimOf, validateManifest,
-} from './validate.js';
+  isAudioOnlyManifest, masterStream, slaveStreams, trimOf,
+} from './manifest-queries.js';
+import { validateManifest } from './validate.js';
 
 /** Resuelve el origen del manifiesto. Reemplazable para agrupar peticiones. */
 export type ManifestResolver = (src: string) => Promise<unknown>;

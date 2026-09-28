@@ -3,10 +3,10 @@ export type {
   Annotation, Bumper, ChapterAnnotation, InteractiveAnnotation, Manifest,
   Source, Stream, StreamRole, TextTrackDef, TrimAnnotation,
 } from './manifest.js';
+export { parseManifest, validateManifest } from './validate.js';
 export {
-  isAudioOnly, isAudioOnlyManifest,
-  masterStream, parseManifest, slaveStreams, trimOf, validateManifest,
-} from './validate.js';
+  isAudioOnly, isAudioOnlyManifest, masterStream, slaveStreams, trimOf,
+} from './manifest-queries.js';
 export type { ValidationIssue, ValidationResult } from './validate.js';
 
 // --- cabecera y cola --------------------------------------------------------
