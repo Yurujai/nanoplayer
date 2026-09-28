@@ -281,14 +281,13 @@ export class ControlBar implements UiSlots {
   #tramos(): Array<{ start: number; end: number; label: string }> {
     const p = this.#player;
     const d = p.duration || Infinity;
-    const desplazamiento = p.trim?.start ?? 0;
     const tramos: Array<{ start: number; end: number; label: string }> = [];
     for (const lista of this.#marcas.values()) {
       const orden = [...lista].sort((a, b) => a.start - b.start);
       orden.forEach((m, i) => {
         const fin = m.end ?? orden[i + 1]?.start ?? Infinity;
-        const start = Math.max(0, m.start - desplazamiento);
-        const end = Math.min(d, fin - desplazamiento);
+        const start = p.toVisibleTime(m.start);
+        const end = Math.min(d, p.toVisibleTime(fin));
         if (end > start) tramos.push({ start, end, label: m.label });
       });
     }

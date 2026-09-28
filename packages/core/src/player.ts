@@ -359,15 +359,18 @@ export class Player {
     return this.#recorte;
   }
 
-  /** De tiempo del medio al que se enseña. */
-  #aVisible(medio: number): number {
+  /**
+   * De tiempo del medio al que se enseña. Público para que la interfaz y los
+   * plugins, que reciben tiempos del manifiesto, no repitan la cuenta.
+   */
+  toVisibleTime(medio: number): number {
     const r = this.#recorteActual();
     if (!r) return medio;
     return Math.max(0, medio - r.start);
   }
 
   /** Del tiempo que se enseña al del medio, acotado al recorte. */
-  #aMedio(visible: number): number {
+  toMediaTime(visible: number): number {
     const r = this.#recorteActual();
     if (!r) return visible;
     return Math.min(r.end, Math.max(r.start, r.start + visible));
@@ -389,7 +392,7 @@ export class Player {
     // parado unos milisegundos antes: el cambio se anticipa.
     if (this.#fase === 'outro') return this.duration;
     const m = this.master;
-    return m ? this.#aVisible(m.currentTime) : this.#lc.resumeAt;
+    return m ? this.toVisibleTime(m.currentTime) : this.#lc.resumeAt;
   }
 
   get duration(): number {
@@ -560,7 +563,7 @@ export class Player {
         // `resumeAt` está en tiempo visible; el motor quiere el del medio. Sin
         // recorte son lo mismo, y con él esto es lo que hace que un enganche
         // en frío empiece en `start` y no en el segundo cero del fichero.
-        startAt: this.#aMedio(this.#lc.resumeAt),
+        startAt: this.toMediaTime(this.#lc.resumeAt),
         // Con cabecera, el contenido espera detrás en silencio hasta descubrirse.
         muted: this.#mudo || !stream.audio || this.#fase === 'intro',
         playsInline: true,
@@ -884,9 +887,9 @@ export class Player {
     // Saltar hacia atrás vuelve a meter la reproducción dentro del recorte, así
     // que el final tiene que poder volver a anunciarse.
     if (this.#recorteActual() && destino < this.duration) this.#finRecorteAvisado = false;
-    const from = this.#aVisible(maestro.currentTime);
+    const from = this.toVisibleTime(maestro.currentTime);
     this.bus.emit('seek:start', { from, to: destino });
-    maestro.seek(this.#aMedio(destino));
+    maestro.seek(this.toMediaTime(destino));
     // Los esclavos van de golpe: perseguir un salto con corrección suave
     // tardaría segundos y se vería.
     this.#sync?.align();
@@ -1209,7 +1212,7 @@ export class Player {
           return;
         }
         this.bus.emit('time', {
-          current: this.#aVisible(current),
+          current: this.toVisibleTime(current),
           duration: this.duration || duration,
         });
       },
@@ -1249,7 +1252,7 @@ export class Player {
         if (cuenta()) this.bus.emit('ended', { at: this.currentTime });
       },
       onSeeked: (at: number) => {
-        if (esMaestro && cuenta()) this.bus.emit('seek:end', { at: this.#aVisible(at) });
+        if (esMaestro && cuenta()) this.bus.emit('seek:end', { at: this.toVisibleTime(at) });
       },
       onStallStart: () => {
         if (!cuenta()) return;

@@ -127,6 +127,17 @@ describe('recorte · el timeline que se enseña', () => {
     await p.attach();
     expect(p.trim).toEqual({ start: 100, end: 160 });
   });
+
+  it('convierte tiempos para quien los recibe del manifiesto', async () => {
+    // La interfaz y los plugins reciben tiempos del medio (capítulos) y
+    // tienen que pasarlos al que se enseña sin repetir la cuenta.
+    const { p } = nuevo(RECORTADO);
+    await p.attach();
+    expect(p.toVisibleTime(130)).toBe(30);
+    expect(p.toVisibleTime(50), 'antes del recorte, al principio').toBe(0);
+    expect(p.toMediaTime(30)).toBe(130);
+    expect(p.toMediaTime(999), 'acotado al final del recorte').toBe(160);
+  });
 });
 
 describe('recorte · el final lo hace cumplir el reproductor', () => {

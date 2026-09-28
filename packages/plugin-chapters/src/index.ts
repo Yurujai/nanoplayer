@@ -48,11 +48,10 @@ class Chapters implements PluginImpl {
       const fin = c.end ?? todos[i + 1]?.start ?? Infinity;
       return fin > recorte.start && c.start < recorte.end;
     });
-    const desplazamiento = recorte?.start ?? 0;
 
     /** El capítulo en curso: el último que ha empezado. */
     const actual = (): number => {
-      const medio = player.currentTime + desplazamiento;
+      const medio = player.toMediaTime(player.currentTime);
       let indice = 0;
       capitulos.forEach((c, i) => { if (c.start <= medio) indice = i; });
       return indice;
@@ -75,7 +74,7 @@ class Chapters implements PluginImpl {
         getValue: () => String(actual()),
         onSelect: (v) => {
           const c = capitulos[Number(v)];
-          if (c) player.seek(Math.max(0, c.start - desplazamiento));
+          if (c) player.seek(player.toVisibleTime(c.start));
         },
       }));
     });
