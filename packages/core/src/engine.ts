@@ -55,11 +55,12 @@ export interface MediaEngine {
   readonly attached: boolean;
 
   /**
-   * Crea el elemento, lo mete en `container` y espera a que sea utilizable.
+   * Crea el elemento, lo mete en `container` y resuelve cuando ya puede
+   * aceptar un `play()`.
    *
-   * Resuelve cuando `readyState >= 2` (`HAVE_CURRENT_DATA`) y **no** al llegar
-   * a `canplay`: S2 midió que en iOS esperar a `canplay` puede no llegar nunca,
-   * porque el sistema no bufferea hasta que se intenta reproducir.
+   * No cuando tenga datos: en iOS no llegan hasta el primer `play()`, y
+   * esperarlos dejaba el botón de play sin hacer nada (el motor nativo
+   * resuelve también con `suspend`). El de HLS resuelve al leer la lista.
    */
   attach(container: HTMLElement, stream: Stream, options?: AttachOptions): Promise<void>;
 
