@@ -278,6 +278,29 @@ export class HlsEngine implements MediaEngine {
     const el = this.#requerir();
     if (!Number.isFinite(seconds) || seconds < 0) return;
     el.currentTime = seconds;
+    /*
+     * Si el destino cae fuera de lo cargado, se le dice a hls.js que cargue
+     * desde ahí, en vez de fiarse de que se entere solo.
+     *
+     * En Chromium se entera: el elemento baja a `readyState` 1, avisa con
+     * `waiting` y hls.js pide los segmentos nuevos en una décima. En WebKit
+     * no: el elemento sigue diciendo `readyState` 4, hls.js se queda en reposo
+     * apuntando al final de lo que ya tenía, y el vídeo queda en `seeking`
+     * para siempre. Medido con un directo de 25 minutos de ventana: cualquier
+     * salto largo —retroceder, o volver al directo— congelaba los flujos.
+     * `startLoad` con la posición es la forma documentada de reubicarlo, y en
+     * Chromium solo adelanta lo que iba a hacer de todos modos.
+     */
+    if (!this.#cargado(el, seconds)) this.#hls?.startLoad(seconds);
+  }
+
+  /** Si `t` cae dentro de lo que el elemento ya tiene cargado. */
+  #cargado(el: HTMLVideoElement, t: number): boolean {
+    const b = el.buffered;
+    for (let i = 0; i < b.length; i++) {
+      if (t >= b.start(i) && t < b.end(i)) return true;
+    }
+    return false;
   }
 
   get currentTime(): number { return this.#el?.currentTime ?? 0; }
