@@ -200,6 +200,47 @@ describe('registro y activación', () => {
     expect(traza).toEqual(['activar:a']);
   });
 
+  // --- varios reproductores ----------------------------------------------
+
+  const otro = () => {
+    const c = document.createElement('div');
+    document.body.appendChild(c);
+    return new Player({ container: c, manifest: MANIFIESTO as never });
+  };
+
+  it('cada reproductor activa sus propios plugins', async () => {
+    /*
+     * El registro llevaba la cuenta por id de plugin, no por reproductor: en
+     * una página con dos, el segundo se quedaba sin subtítulos porque "ya
+     * estaban activos". Lo destapó la demo al recrear el reproductor.
+     */
+    const traza: string[] = [];
+    const r = new PluginRegistry();
+    r.register(plug('a', {}, traza));
+    const segundo = otro();
+    await r.activate(player, { a: true });
+    await r.activate(segundo, { a: true });
+    expect(traza).toEqual(['activar:a', 'activar:a']);
+    expect(r.activeFor(player)).toEqual(['a']);
+    expect(r.activeFor(segundo)).toEqual(['a']);
+  });
+
+  it('destruir un reproductor desactiva solo los suyos', async () => {
+    const traza: string[] = [];
+    const r = new PluginRegistry();
+    r.register(plug('a', {}, traza));
+    const segundo = otro();
+    await r.activate(player, { a: true });
+    await r.activate(segundo, { a: true });
+    traza.length = 0;
+
+    segundo.destroy();
+    await Promise.resolve();
+    expect(traza).toEqual(['desactivar:a']);
+    expect(r.activeFor(segundo)).toEqual([]);
+    expect(r.activeFor(player)).toEqual(['a']);
+  });
+
   // --- desactivación ------------------------------------------------------
 
   it('desactiva en orden inverso, por las dependencias', async () => {

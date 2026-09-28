@@ -47,7 +47,7 @@ La tesis, en una frase: **un reproductor que no te obliga a forkearlo.**
 | **Interfaz** | Barra de controles accesible, navegable entera con teclado, y menú de ajustes por paneles apilados con la ergonomía del de YouTube |
 | **Layouts** | Lado a lado, imagen en imagen, solo ponente y solo presentación |
 | **Multi-instancia** | Registro compartido con reproducción exclusiva y resolución de manifiestos en lote — 32 reproductores, una petición |
-| **Plugins** | Registro con orden topológico y anclajes de interfaz. Los plugins declaran su condición y se activan solos según el manifiesto |
+| **Plugins** | Registro con orden topológico y anclajes de interfaz. Los plugins declaran su condición y se activan solos según el manifiesto, cada reproductor con los suyos |
 | **Theming** | Variables CSS documentadas, sin Shadow DOM |
 | **Instalación** | Los paquetes sueltos por npm, o una etiqueta `<script>` y tres líneas con el bundle de 22 KB gzip. También UMD para cargadores AMD, y la hoja de estilos como fichero para entornos con CSP estricta |
 | **Errores** | `code` para decidir qué se le dice al usuario —traducible—, y `message` en inglés como diagnóstico para quien integra |

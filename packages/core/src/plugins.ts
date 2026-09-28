@@ -127,7 +127,13 @@ export function topoSort(manifests: readonly PluginManifest[]): PluginManifest[]
 
 export class PluginRegistry {
   readonly #manifests = new Map<string, PluginManifest>();
-  readonly #activos = new Map<string, { impl: PluginImpl; ctx: PluginContext }>();
+  /*
+   * Lo activo, **por reproductor**. Antes era un solo mapa por id de plugin, y
+   * en cuanto un plugin se activaba para el primer reproductor de la página ya
+   * no se activaba para ninguno más: con varios reproductores, solo el primero
+   * tenía subtítulos. Cada reproductor lleva su propia instancia de cada plugin.
+   */
+  readonly #activos = new Map<Player, Map<string, { impl: PluginImpl; ctx: PluginContext }>>();
 
   /** Auto-registro: lo llama el propio plugin, no el núcleo. */
   register(manifest: PluginManifest): void {
@@ -145,8 +151,16 @@ export class PluginRegistry {
     return [...this.#manifests.keys()];
   }
 
+  /** Los plugins activos en algún reproductor de la página. */
   get active(): string[] {
-    return [...this.#activos.keys()];
+    const ids = new Set<string>();
+    for (const porId of this.#activos.values()) for (const id of porId.keys()) ids.add(id);
+    return [...ids];
+  }
+
+  /** Los plugins activos en un reproductor concreto. */
+  activeFor(player: Player): string[] {
+    return [...(this.#activos.get(player)?.keys() ?? [])];
   }
 
   /**
@@ -205,8 +219,17 @@ export class PluginRegistry {
       if (!elegidos.has(id)) resultado.skipped.push(id);
     }
 
+    let activos = this.#activos.get(player);
+    if (!activos) {
+      activos = new Map();
+      this.#activos.set(player, activos);
+      // Al destruir el reproductor, sus plugins se van con él: si no, el
+      // registro los retendría para siempre, y al reproductor con ellos.
+      player.on('destroy', () => { void this.deactivate(player); });
+    }
+
     for (const m of orden) {
-      if (this.#activos.has(m.id)) continue;
+      if (activos.has(m.id)) continue;
       try {
         const cfg = config[m.id];
         const ctx: PluginContext = {
@@ -222,7 +245,7 @@ export class PluginRegistry {
         };
         const impl = await m.load();
         await impl.activate(ctx);
-        this.#activos.set(m.id, { impl, ctx });
+        activos.set(m.id, { impl, ctx });
         resultado.activated.push(m.id);
       } catch (error) {
         resultado.failed.push({ id: m.id, error });
@@ -231,17 +254,23 @@ export class PluginRegistry {
     return resultado;
   }
 
-  /** Desactiva en orden inverso al de activación, por las dependencias. */
-  async deactivateAll(): Promise<void> {
-    for (const id of [...this.#activos.keys()].reverse()) {
-      const entrada = this.#activos.get(id);
-      this.#activos.delete(id);
+  /** Desactiva los plugins de un reproductor, en orden inverso por las dependencias. */
+  async deactivate(player: Player): Promise<void> {
+    const activos = this.#activos.get(player);
+    if (!activos) return;
+    this.#activos.delete(player);
+    for (const [, entrada] of [...activos].reverse()) {
       try {
-        await entrada?.impl.deactivate?.(entrada.ctx);
+        await entrada.impl.deactivate?.(entrada.ctx);
       } catch {
         // Un fallo al desactivar no puede impedir desactivar el resto.
       }
     }
+  }
+
+  /** Desactiva los plugins de todos los reproductores. */
+  async deactivateAll(): Promise<void> {
+    for (const player of [...this.#activos.keys()]) await this.deactivate(player);
   }
 }
 
