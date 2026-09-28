@@ -109,12 +109,15 @@ export {
   createPlayer, createBatchResolver,
   // directo
   backoff, LiveTracker,
+  // cabecera y cola
+  ANTICIPACION_MS, firstFrame,
   // plugins
   topoSort,
 } from '@nanoplayer/core';
 
 export type {
-  Annotation, ChapterAnnotation, InteractiveAnnotation, Manifest, Source, Stream,
+  Annotation, Bumper, ChainPhase, ChapterAnnotation, InteractiveAnnotation, Manifest,
+  Source, Stream,
   StreamRole, TextTrackDef, TrimAnnotation, ValidationIssue, ValidationResult,
   Catalogue, Catalogues, Translate, ErrorCode, PlayerError,
   AnyListener, Empty, EventBusOptions, EventMap, Listener, ListenerErrorInfo,

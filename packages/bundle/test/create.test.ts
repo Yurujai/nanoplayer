@@ -90,3 +90,18 @@ describe('la global del caso <script>', () => {
     expect(host.querySelector('.np__bar')).not.toBeNull();
   });
 });
+
+describe('superficie del bundle', () => {
+  it('reexporta todo lo que el núcleo exporta en tiempo de ejecución', async () => {
+    /*
+     * La lista de reexportaciones está escrita a mano, y se quedó atrás: al
+     * añadir el encadenado, `firstFrame` y `ANTICIPACION_MS` estaban en el
+     * núcleo y no en el bundle, sin que nada avisara. Quien usa la etiqueta
+     * `<script>` no tiene otra forma de llegar a ellos.
+     */
+    const nucleo = await import('@nanoplayer/core');
+    const bundle = await import('../src/index.js');
+    const faltan = Object.keys(nucleo).filter((k) => !(k in bundle));
+    expect(faltan).toEqual([]);
+  });
+});
