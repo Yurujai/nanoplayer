@@ -122,8 +122,11 @@ export class Player {
   #sonando = false;
   /** Recorte activo, en tiempo del medio. `null` si el manifiesto no trae uno. */
   #recorte: { start: number; end: number } | null = null;
-  /** Si ya se buscó el recorte en el manifiesto que vino sin resolver. */
-  #recorteMirado = false;
+  /** De qué manifiesto salió `#recorte`: se recalcula solo si cambia. */
+  #recorteDe: Manifest | null = null;
+  /** El manifiesto que vino ya cargado, validado una sola vez. */
+  #provisional: Manifest | null = null;
+  #provisionalMirado = false;
   /** Ya se avisó del final del recorte. Evita repetir `ended` en cada `time`. */
   #finRecorteAvisado = false;
 
@@ -197,12 +200,26 @@ export class Player {
    * cargado, y por último el manifiesto resuelto.
    */
   get poster(): string | undefined {
-    if (this.#opts.poster) return this.#opts.poster;
-    const src = this.#opts.manifest;
-    if (typeof src === 'object' && typeof src['poster'] === 'string') {
-      return src['poster'] as string;
+    return this.#opts.poster || this.#conocido()?.poster;
+  }
+
+  /**
+   * El manifiesto resuelto o, si vino ya cargado, ese mismo validado.
+   *
+   * Es lo que permite saber póster, recorte o si es solo audio sin tocar la
+   * red. Se valida una vez: antes cada lectura de `audioOnly` volvía a validar.
+   */
+  #conocido(): Manifest | null {
+    if (this.#manifest) return this.#manifest;
+    if (!this.#provisionalMirado) {
+      this.#provisionalMirado = true;
+      const src = this.#opts.manifest;
+      if (typeof src === 'object') {
+        const r = validateManifest(src);
+        if (r.ok) this.#provisional = r.manifest;
+      }
     }
-    return this.#manifest?.poster;
+    return this.#provisional;
   }
   get resumeAt(): number { return this.#lc.resumeAt; }
 
@@ -224,14 +241,7 @@ export class Player {
 
   /** Imagen para la espera de un directo. Cae al póster si no hay una propia. */
   get liveWaitingImage(): string | undefined {
-    const m = this.#manifest;
-    const propia = m?.liveWaitingImage;
-    if (propia) return propia;
-    const src = this.#opts.manifest;
-    if (typeof src === 'object' && typeof src['liveWaitingImage'] === 'string') {
-      return src['liveWaitingImage'] as string;
-    }
-    return this.poster;
+    return this.#conocido()?.liveWaitingImage || this.poster;
   }
 
   /**
@@ -242,14 +252,8 @@ export class Player {
    * resolver si el manifiesto vino ya cargado.
    */
   get audioOnly(): boolean {
-    const m = this.#manifest;
-    if (m) return isAudioOnlyManifest(m);
-    const src = this.#opts.manifest;
-    if (typeof src === 'object') {
-      const r = validateManifest(src);
-      return r.ok ? isAudioOnlyManifest(r.manifest) : false;
-    }
-    return false;
+    const m = this.#conocido();
+    return m ? isAudioOnlyManifest(m) : false;
   }
 
   /* ------------------------------------------------------------- directo -- */
@@ -349,12 +353,10 @@ export class Player {
    * hasta el primer play.
    */
   #recorteActual(): { start: number; end: number } | null {
-    if (this.#recorteMirado) return this.#recorte;
-    this.#recorteMirado = true;
-    const src = this.#opts.manifest;
-    if (typeof src === 'object') {
-      const r = validateManifest(src);
-      if (r.ok) this.#recorte = trimOf(r.manifest);
+    const m = this.#conocido();
+    if (m !== this.#recorteDe) {
+      this.#recorteDe = m;
+      this.#recorte = m ? trimOf(m) : null;
     }
     return this.#recorte;
   }
@@ -438,8 +440,6 @@ export class Player {
         throw playerError('manifest/invalid', `Invalid manifest — ${detalle}`);
       }
       this.#manifest = r.manifest;
-      this.#recorte = trimOf(r.manifest);
-      this.#recorteMirado = true;
       if (r.manifest.intro) this.#ponerFase('intro');
       this.#lc.transition('resolved');
       this.bus.emit('manifest:resolve:ok', { manifest: r.manifest });
