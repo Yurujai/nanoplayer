@@ -7,7 +7,7 @@ en inglés**, que se publican en la raíz de GitHub Pages:
 |---|---|
 | [`index.html`](index.html) | **Portada.** Qué es el reproductor, por qué existe y qué casos resuelve. Solo texto y tres botones |
 | [`video/`](video/index.html) | **Demo de vídeo.** El reproductor completo con MP4, mono o dual, con o sin cabecera y cola |
-| [`live/`](live/index.html) | **Demo de directo.** Dual en directo. **Aún sin directo enlazado**: la página lo avisa |
+| [`live/`](live/index.html) | **Demo de directo.** Dual en directo sobre un canal público de pruebas |
 | [`bench/`](bench/index.html) | **Banco de pruebas** del núcleo, con el ciclo de vida en crudo |
 
 ```bash
@@ -45,13 +45,23 @@ Es la página que auditan en CI `e2e/a11y.mjs` y `e2e/teclado.mjs`.
 
 ## Demo de directo (`live/`)
 
-GitHub Pages solo sirve ficheros estáticos, así que **no hay un directo al que
-conectarse**. La página está montada y el reproductor configurado; al pulsar
-play enseña el aviso de «aún no ha empezado» y reintenta, que es lo que haría
-ante cualquier directo que no emite. Para enlazar uno basta con cambiar
-`FUENTES` en [`src/live.ts`](src/live.ts): las dos listas tienen que traer
-`EXT-X-PROGRAM-DATE-TIME`, o no se podrá medir la sincronización (spike
-[S5](../spikes/s5-live-dual/)).
+GitHub Pages solo sirve ficheros estáticos, así que el directo es de fuera: el
+**canal público de pruebas de [ireplay.tv](https://ireplay.tv/)**, que emite
+24/7 con unos 25 minutos de ventana DVR, CORS abierto y
+`EXT-X-PROGRAM-DATE-TIME`, el requisito para sincronizar dos directos (spike
+[S5](../spikes/s5-live-dual/)). Sus condiciones piden enlazarlo donde se use, y
+la página lo hace.
+
+- **Los dos flujos son el mismo canal:** la lista principal, con audio, hace de
+  cámara, y una variante de solo vídeo, de diapositivas. Por eso la
+  sincronización se ve a simple vista: las dos mitades enseñan el mismo
+  fotograma.
+- **Se abre en directo.** El canal declara `EXT-X-START:TIME-OFFSET=36`, que
+  pide empezar casi 25 minutos por detrás. El reproductor lo respeta porque es
+  el estándar; la demo salta al borde una vez, en cuanto se sabe dónde está.
+- **Si el canal cae, la demo también.** Es una dependencia de terceros, y la
+  página lo avisa. Para usar otro basta con cambiar `FUENTES` en
+  [`src/live.ts`](src/live.ts).
 
 ## Banco de pruebas (`bench/`)
 

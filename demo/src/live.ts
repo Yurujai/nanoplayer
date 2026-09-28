@@ -1,13 +1,16 @@
 /**
  * Demo de directo.
  *
- * **Todavía no hay un directo enlazado.** GitHub Pages solo sirve ficheros
- * estáticos, así que las URLs de abajo no existen: al pulsar play el
- * reproductor enseña la espera de «aún no ha empezado» y reintenta, que es lo
- * que haría ante un directo que no emite. La página lo avisa arriba.
+ * GitHub Pages solo sirve ficheros estáticos, así que el directo es de fuera:
+ * el canal público de pruebas de ireplay.tv, que emite 24/7 con ventana DVR de
+ * unos 25 minutos, CORS abierto y `EXT-X-PROGRAM-DATE-TIME`, que es lo que hace
+ * falta para sincronizar dos directos (S5). Sus condiciones piden enlazarlo
+ * donde se use, y la página lo hace.
  *
- * Para enlazar uno basta con cambiar `FUENTES`: las dos listas tienen que
- * traer `EXT-X-PROGRAM-DATE-TIME`, o no se podrá medir la sincronización (S5).
+ * Los dos flujos salen del mismo canal: la lista principal, con audio, hace de
+ * cámara, y una variante de solo vídeo, de diapositivas. No es realista, pero
+ * precisamente por eso la sincronización se ve a simple vista: las dos mitades
+ * tienen que enseñar el mismo fotograma.
  */
 import { create, nativeEngineFactory } from '@nanoplayer/core';
 import { enginesWithHls } from '@nanoplayer/engine-hls';
@@ -15,8 +18,8 @@ import { attachControls } from '@nanoplayer/ui';
 
 const HLS = 'application/vnd.apple.mpegurl';
 const FUENTES = {
-  camera: '../media/live/camera.m3u8',
-  slides: '../media/live/slides.m3u8',
+  camera: 'https://ireplay.tv/test/blender.m3u8',
+  slides: 'https://ireplay.tv/test/rate_2_28.m3u8',
 };
 const TITULO = 'Live lecture';
 
@@ -38,3 +41,17 @@ const player = create('#player', {
   },
 });
 attachControls(player, { label: TITULO });
+
+/*
+ * El canal declara `EXT-X-START:TIME-OFFSET=36`: empezar a los 36 s del
+ * principio de la ventana, casi 25 minutos por detrás del directo. El
+ * reproductor lo respeta, porque es lo que dice el estándar, pero una demo de
+ * directo tiene que abrir en directo. Se salta al borde una sola vez, en
+ * cuanto se sabe dónde está; después, retroceder es cosa de quien mira.
+ */
+let enBorde = false;
+player.on('time', () => {
+  if (enBorde || player.liveEdge <= 0) return;
+  enBorde = true;
+  player.seekToLive();
+});

@@ -21,20 +21,28 @@
   </p>
 
   <p class="aviso" role="note">
-    <strong>This demo doesn't work yet.</strong> There is no live stream connected
-    to this page, so pressing play will only show the notice that the broadcast
-    hasn't started. The player itself supports live streams; what's missing is a
-    stream to point it at.
+    <strong>A public test channel stands in for a real lecture.</strong> Both
+    streams come from the same 24/7 channel kindly provided by
+    <a href="https://ireplay.tv/blog/hls-ejemplos-flujos-continuo-discontinuidad-vod2live-prueba-video-reproductores-aplicacion-sitios-web/">ireplay.tv</a>,
+    so the two halves should always show the same frame: that is what being in
+    sync looks like. If the channel is down, the demo is too.
   </p>
 
   <div id="player" class="reproductor"></div>
 
-  <h2>What it will show</h2>
+  <h2>What to try</h2>
   <ul class="probar">
     <li><strong>Two synced live streams.</strong> Kept together by their broadcast
-        time (<code>EXT-X-PROGRAM-DATE-TIME</code>), not by when each one started loading.</li>
-    <li><strong>Rewind and return.</strong> Go back within the live window, then
-        use the <strong>LIVE</strong> button to jump back to the latest moment.</li>
+        time (<code>EXT-X-PROGRAM-DATE-TIME</code>), not by when each one started
+        loading. Both halves show the same frame.</li>
+    <li><strong>Rewind and return.</strong> Drag the bar back — the channel keeps
+        about 25 minutes — then press <strong>Go to live</strong> to jump back to
+        the latest moment.</li>
+  </ul>
+
+  <h2>Also handled</h2>
+  <p>This channel is always on air, so it can't show these, but the player covers them:</p>
+  <ul class="probar">
     <li><strong>Before it starts.</strong> A clear notice that the broadcast hasn't
         started yet, retrying on its own until it does.</li>
     <li><strong>When one drops out.</strong> If the slides stop, the camera keeps
