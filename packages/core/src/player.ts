@@ -21,6 +21,7 @@ import { EventBus, type Unsubscribe } from './events.js';
 import { Lifecycle } from './lifecycle.js';
 import { LiveTracker, type LiveStatus, type RetryPolicy } from './live.js';
 import type { Bumper, Manifest, Stream } from './manifest.js';
+import { StallCoordinator } from './stall-coordinator.js';
 import { TrimTimeline, type TrimRange } from './trim-timeline.js';
 import { nativeEngineFactory } from './native-engine.js';
 import type { UiSlots } from './slots.js';
@@ -117,11 +118,8 @@ export class Player {
   #ui: UiSlots | null = null;
   readonly #vivo = new LiveTracker();
   #reintentos = new Map<string, ReturnType<typeof setTimeout>>();
-  #pausadoPorStall = false;
   readonly #t: Translate;
-  /** Flujos sin datos ahora mismo. Atascarse es de cada flujo, no del conjunto. */
-  readonly #atascados = new Set<string>();
-  #sonando = false;
+  readonly #atascos = new StallCoordinator(() => this.#instancias.entries());
   /** El timeline del recorte, y de qué manifiesto salió: se rehace solo si cambia. */
   #linea = new TrimTimeline(null);
   #lineaDe: Manifest | null = null;
@@ -660,7 +658,7 @@ export class Player {
         this.#lc.transition('attached');
       }
       this.#montarSync(this.#manifest);
-      if (this.#lc.state === 'active' || this.#sonando) {
+      if (this.#lc.state === 'active' || this.#atascos.playing) {
         await this.#instancias.get(stream.id)?.play().catch(() => {});
       }
     } catch {
@@ -743,8 +741,7 @@ export class Player {
     this.#piezas.clear();
     // Sin esto, un flujo que estaba atascado al soltar el motor dejaría el
     // conjunto marcado como atascado para siempre y nadie volvería a reanudar.
-    this.#atascados.clear();
-    this.#pausadoPorStall = false;
+    this.#atascos.reset();
     this.#finRecorteAvisado = false;
     for (const caja of this.#cajas) caja.remove();
     this.#cajas = [];
@@ -816,8 +813,7 @@ export class Player {
     this.#cancelarCambio();
     clearInterval(this.#vigilante);
     this.#sync?.stop();
-    this.#pausadoPorStall = false;
-    this.#sonando = false;
+    this.#atascos.userPaused();
     for (const e of this.#instancias.values()) e.pause();
     for (const { engine } of this.#piezas.values()) engine.pause();
   }
@@ -1220,10 +1216,10 @@ export class Player {
        * pedido. Es lo que separa el buffering inicial —normal— de un corte a
        * mitad de reproducción, que son dos cosas con respuestas opuestas.
        */
-      onPlaying: () => { if (esMaestro) this.#sonando = true; },
+      onPlaying: () => { if (esMaestro) this.#atascos.markPlaying(); },
       onPause: () => {
         if (!esMaestro || !cuenta()) return;
-        this.#sonando = false;
+        this.#atascos.markNotPlaying();
         this.#reflejarPausa();
       },
       onEnded: () => {
@@ -1241,53 +1237,12 @@ export class Player {
       onStallStart: () => {
         if (!cuenta()) return;
         this.bus.emit('stall:start', { stream: stream.id });
-        /*
-         * Que uno se quede sin buffer y los demás sigan destroza la
-         * sincronización: S1 midió que frenarlos deja el pico de deriva en
-         * 7 ms, frente a dejar correr al maestro.
-         *
-         * Tres condiciones, todas aprendidas a base de fallos:
-         *
-         * 1. **Solo si ya sonaba de verdad.** El evento `play` significa que se
-         *    ha pedido, no que suene; con HLS enganchar termina al parsear la
-         *    lista, antes de tener un solo segmento, así que el `waiting`
-         *    inicial es inevitable. Por eso mira `#sonando` y no el estado.
-         *
-         * 2. **A quien está atascado no se le pausa.** Ya está parado por falta
-         *    de datos, así que pausarlo no frena nada — y en cambio aborta su
-         *    propio `play()` en vuelo con un `AbortError`. Lo que hay que
-         *    frenar son los demás, para que no se escapen mientras recupera.
-         *
-         * 3. **Atascarse es de cada flujo, no del reproductor.** Un salto los
-         *    deja a los dos rellenando búfer a la vez, así que hace falta
-         *    llevar la cuenta de quién sigue atascado.
-         */
-        this.#atascados.add(stream.id);
-        if (!this.#sonando) return;
-        for (const [id, e] of this.#instancias) {
-          if (!this.#atascados.has(id)) { this.#pausadoPorStall = true; e.pause(); }
-        }
+        this.#atascos.stallStarted(stream.id);
       },
       onStallEnd: (durationMs: number) => {
-        if (!cuenta() && !this.#atascados.has(stream.id)) return;
+        if (!cuenta() && !this.#atascos.isStalled(stream.id)) return;
         this.bus.emit('stall:end', { stream: stream.id, durationMs });
-        this.#atascados.delete(stream.id);
-        /*
-         * No se reanuda hasta que **nadie** queda atascado.
-         *
-         * Con un solo indicador para todos, dos flujos atascándose a la vez
-         * dejaban a uno parado para siempre: el primero en recuperarse lo
-         * bajaba, y el segundo se encontraba con que ya no había nada que
-         * reanudar. Medido tras retroceder en un directo dual: el esclavo se
-         * quedaba en pausa y el lazo lo arrastraba a saltos, con la deriva
-         * clavada en 733 ms indefinidamente.
-         */
-        if (this.#atascados.size > 0) return;
-        // Solo se reanuda lo que se pausó aquí. Reanudar por sistema
-        // resucitaría un vídeo que el usuario había pausado a propósito.
-        if (!this.#pausadoPorStall) return;
-        this.#pausadoPorStall = false;
-        for (const e of this.#instancias.values()) void e.play().catch(() => {});
+        this.#atascos.stallEnded(stream.id);
       },
       onError: (error: PlayerError) => {
         this.bus.emit('error', { error });
