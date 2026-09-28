@@ -21,11 +21,12 @@ import type {
   BarControlDecl, Catalogues, OverlayDecl, OverlayHandle, Player, PlayerError,
   SettingsPanelDecl, TimelineMarkerDecl, TimelineMarkersDecl, Translate, UiSlots,
 } from '@nanoplayer/core';
-import { formatPercent, formatTime, spokenTime } from './format.js';
+import { formatTime, spokenTime } from './format.js';
 import { ICONS } from './icons.js';
 import { applyLayout, layoutsFor, type LayoutId } from './layouts.js';
 import { Poster } from './poster.js';
 import { SettingsMenu, type SettingsPanel } from './settings-menu.js';
+import { VolumeControl } from './volume-control.js';
 import { injectStyles } from './styles.js';
 
 export interface ControlBarOptions {
@@ -53,7 +54,6 @@ export interface ControlBarOptions {
 
 const SALTO_CORTO = 5;
 const SALTO_LARGO = 10;
-const PASO_VOLUMEN = 0.05;
 const VELOCIDADES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
 /**
@@ -75,7 +75,6 @@ export class ControlBar implements UiSlots {
   #bar!: HTMLElement;
   #escenario!: HTMLElement;
   #btnPlay!: HTMLButtonElement;
-  #btnMute!: HTMLButtonElement;
   #btnFs!: HTMLButtonElement;
   #btnSaltar!: HTMLButtonElement;
   #menu!: SettingsMenu;
@@ -86,7 +85,7 @@ export class ControlBar implements UiSlots {
   #quitarDesborde: (() => void) | null = null;
   #observador: ResizeObserver | null = null;
   #progreso!: HTMLInputElement;
-  #volumen!: HTMLInputElement;
+  #volumen!: VolumeControl;
   #tiempo!: HTMLElement;
   #tramoActual!: HTMLElement;
   #capaMarcas!: HTMLElement;
@@ -102,7 +101,6 @@ export class ControlBar implements UiSlots {
   #restantePieza: number | null = null;
   #layout: LayoutId = 'side-by-side';
   #arrastrando = false;
-  #volumenPrevio = 1;
   #temporizador: ReturnType<typeof setTimeout> | null = null;
   #desatar: Array<() => void> = [];
   #destruido = false;
@@ -188,14 +186,9 @@ export class ControlBar implements UiSlots {
     filaBotones.className = 'np__row';
 
     this.#btnPlay = this.#boton(this.#t('ui.play'), ICONS.play);
-    this.#btnMute = this.#boton(this.#t('ui.mute'), ICONS.volumeHigh);
     this.#btnFs = this.#boton(this.#t('ui.fullscreenEnter'), ICONS.fullscreenEnter);
 
-    const volumen = doc.createElement('div');
-    volumen.className = 'np__volume';
-    this.#volumen = this.#rango(this.#t('ui.volume'), 0, 1, 0.01);
-    this.#volumen.value = '1';
-    volumen.append(this.#btnMute, this.#volumen);
+    this.#volumen = new VolumeControl(doc, this.#player, this.#t);
 
     this.#tiempo = doc.createElement('span');
     this.#tiempo.className = 'np__time';
@@ -217,7 +210,7 @@ export class ControlBar implements UiSlots {
     this.#zonaControles = doc.createElement('span');
     this.#zonaControles.className = 'np__plugins';
 
-    filaBotones.append(this.#btnPlay, volumen, this.#tiempo, this.#tramoActual, espaciador,
+    filaBotones.append(this.#btnPlay, this.#volumen.element, this.#tiempo, this.#tramoActual, espaciador,
       this.#zonaControles);
     this.#menu = new SettingsMenu(filaBotones, this.#t);
     filaBotones.append(this.#btnFs);
@@ -524,7 +517,6 @@ export class ControlBar implements UiSlots {
     const p = this.#player;
 
     this.#on(this.#btnPlay, 'click', () => this.#alternarReproduccion());
-    this.#on(this.#btnMute, 'click', () => this.#alternarSilencio());
     this.#on(this.#btnFs, 'click', () => this.#alternarPantallaCompleta());
     this.#on(this.#btnSaltar, 'click', () => this.#saltarCabecera());
 
@@ -536,14 +528,6 @@ export class ControlBar implements UiSlots {
     this.#on(this.#progreso, 'keydown', () => { this.#arrastrando = false; });
     this.#on(this.#progreso, 'pointermove', (ev: PointerEvent) => this.#pintarEtiquetaBarra(ev));
     this.#on(this.#progreso, 'pointerleave', () => { this.#etiquetaBarra.hidden = true; });
-
-    this.#on(this.#volumen, 'input', () => {
-      const v = Number(this.#volumen.value);
-      p.setVolume(v);
-      if (v > 0) this.#volumenPrevio = v;
-      p.setMuted(v === 0);
-      this.#pintarVolumen(v, v === 0);
-    });
 
     // El Player monta los streams en el contenedor, y puede hacerlo después de
     // que exista la barra: con el ciclo perezoso, `attach()` llega más tarde.
@@ -603,16 +587,6 @@ export class ControlBar implements UiSlots {
     // navega con teclado tendría que volver a entrar en el reproductor.
     if (this.#root.ownerDocument.activeElement === this.#btnSaltar) this.#root.focus();
     this.#player.skipIntro();
-  }
-
-  #alternarSilencio(): void {
-    const silenciado = Number(this.#volumen.value) === 0;
-    const v = silenciado ? (this.#volumenPrevio || 1) : 0;
-    if (!silenciado) this.#volumenPrevio = Number(this.#volumen.value) || 1;
-    this.#volumen.value = String(v);
-    this.#player.setVolume(v);
-    this.#player.setMuted(v === 0);
-    this.#pintarVolumen(v, v === 0);
   }
 
   /**
@@ -702,11 +676,6 @@ export class ControlBar implements UiSlots {
     const teclasDeSalto = /^([0-9]|ArrowLeft|ArrowRight|[jJlL]|Home|End)$/;
     if (p.phase === 'intro' && teclasDeSalto.test(ev.key)) return;
     const saltar = (delta: number) => p.seek(Math.min(d, Math.max(0, p.currentTime + delta)));
-    const volumen = (delta: number) => {
-      const v = Math.min(1, Math.max(0, Number(this.#volumen.value) + delta));
-      this.#volumen.value = String(v);
-      this.#volumen.dispatchEvent(new Event('input'));
-    };
 
     switch (ev.key) {
       case ' ': case 'k': case 'K': this.#alternarReproduccion(); break;
@@ -714,9 +683,9 @@ export class ControlBar implements UiSlots {
       case 'ArrowRight': saltar(SALTO_CORTO); break;
       case 'j': case 'J': saltar(-SALTO_LARGO); break;
       case 'l': case 'L': saltar(SALTO_LARGO); break;
-      case 'ArrowUp': volumen(PASO_VOLUMEN); break;
-      case 'ArrowDown': volumen(-PASO_VOLUMEN); break;
-      case 'm': case 'M': this.#alternarSilencio(); break;
+      case 'ArrowUp': this.#volumen.step(1); break;
+      case 'ArrowDown': this.#volumen.step(-1); break;
+      case 'm': case 'M': this.#volumen.toggleMute(); break;
       case 'f': case 'F': this.#alternarPantallaCompleta(); break;
       case 'Home': p.seek(0); break;
       case 'End': p.seek(d); break;
@@ -841,15 +810,6 @@ export class ControlBar implements UiSlots {
     this.#tiempo.textContent = !emitiendo || p.atLiveEdge
       ? '' : `−${formatTime(p.behindLive)}`;
     this.#marcaDirecto(emitiendo);
-  }
-
-  #pintarVolumen(v: number, silenciado: boolean): void {
-    const icono = silenciado || v === 0 ? ICONS.volumeMuted
-      : v < 0.5 ? ICONS.volumeLow : ICONS.volumeHigh;
-    this.#btnMute.innerHTML = icono;
-    this.#btnMute.setAttribute('aria-label', silenciado ? this.#t('ui.unmute') : this.#t('ui.mute'));
-    this.#volumen.setAttribute('aria-valuetext', formatPercent(v, this.#lang));
-    this.#volumen.style.setProperty('--np-progress', `${v * 100}%`);
   }
 
   /**
@@ -1004,6 +964,7 @@ export class ControlBar implements UiSlots {
     this.#observador = null;
     this.#player.setUi(null);
     this.#menu.destroy();
+    this.#volumen.destroy();
     this.#bar.remove();
     this.#btnSaltar.remove();
     this.#vivo.remove();
