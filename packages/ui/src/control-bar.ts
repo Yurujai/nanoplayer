@@ -28,6 +28,7 @@ import { SettingsMenu, type SettingsPanel } from './settings-menu.js';
 import { createButton } from './dom.js';
 import { FullscreenButton } from './fullscreen-button.js';
 import { KeyboardShortcuts } from './keyboard-shortcuts.js';
+import { AutoHide } from './auto-hide.js';
 import { LiveNotices } from './live-notices.js';
 import { PluginControls } from './plugin-controls.js';
 import { ProgressBar } from './progress-bar.js';
@@ -64,7 +65,6 @@ export class ControlBar implements UiSlots {
   readonly #root: HTMLElement;
   readonly #t: Translate;
   readonly #lang: string;
-  readonly #hideAfterMs: number;
 
   #bar!: HTMLElement;
   #escenario!: HTMLElement;
@@ -80,7 +80,7 @@ export class ControlBar implements UiSlots {
   #vivo!: HTMLElement;
   #velocidad = 1;
   #layout: LayoutId = 'side-by-side';
-  #temporizador: ReturnType<typeof setTimeout> | null = null;
+  #ocultado!: AutoHide;
   #desatar: Array<() => void> = [];
   #destruido = false;
 
@@ -96,7 +96,8 @@ export class ControlBar implements UiSlots {
       ? strings.translator(options.lang ?? player.lang, options.strings)
       : player.t;
     this.#lang = this.#t.lang;
-    this.#hideAfterMs = options.hideAfterMs ?? 2500;
+    this.#ocultado = new AutoHide(this.#root, options.hideAfterMs ?? 2500,
+      () => !this.#player.paused && !this.#menu.isOpen);
 
     if (options.injectStyles !== false) injectStyles(this.#root.ownerDocument);
     this.#construir(options.label);
@@ -368,7 +369,7 @@ export class ControlBar implements UiSlots {
     });
     this.#on(this.#root, 'keydown', (ev: KeyboardEvent) => atajos.handle(ev));
     this.#on(this.#root, 'pointermove', () => this.#despertar());
-    this.#on(this.#root, 'pointerleave', () => this.#dormir());
+    this.#on(this.#root, 'pointerleave', () => this.#ocultado.sleep());
     this.#on(this.#root, 'focusin', () => this.#despertar());
 
     // Al cambiar el ancho cambia cuántos controles caben.
@@ -404,7 +405,7 @@ export class ControlBar implements UiSlots {
     this.#progreso.render();
     this.#pantallaCompleta.render();
     this.#pintarCadena();
-    if (reproduciendo) this.#programarOcultado();
+    if (reproduciendo) this.#ocultado.schedule();
     else this.#despertar();
   }
 
@@ -419,35 +420,14 @@ export class ControlBar implements UiSlots {
     this.#vivo.textContent = mensaje;
   }
 
-  /* -------------------------------------------------------- ocultado por inactividad */
-
   #despertar(): void {
-    this.#root.classList.remove('np--inactive');
-    if (this.#temporizador) clearTimeout(this.#temporizador);
-    this.#temporizador = null;
-    if (!this.#player.paused) this.#programarOcultado();
-  }
-
-  #programarOcultado(): void {
-    if (this.#hideAfterMs <= 0) return;
-    if (this.#temporizador) clearTimeout(this.#temporizador);
-    this.#temporizador = setTimeout(() => this.#dormir(), this.#hideAfterMs);
-  }
-
-  #dormir(): void {
-    // Nunca esconder la barra con el reproductor parado ni con el foco dentro:
-    // en el primer caso no hay nada que ver detrás, en el segundo se perdería
-    // de vista el control que se está usando.
-    if (this.#player.paused) return;
-    if (this.#menu.isOpen) return;
-    if (this.#root.contains(this.#root.ownerDocument.activeElement)) return;
-    this.#root.classList.add('np--inactive');
+    this.#ocultado.wake(!this.#player.paused);
   }
 
   destroy(): void {
     if (this.#destruido) return;
     this.#destruido = true;
-    if (this.#temporizador) clearTimeout(this.#temporizador);
+    this.#ocultado.destroy();
     for (const off of this.#desatar) off();
     this.#desatar = [];
     this.#poster?.destroy();
@@ -462,7 +442,7 @@ export class ControlBar implements UiSlots {
     this.#bar.remove();
     this.#btnSaltar.remove();
     this.#vivo.remove();
-    this.#root.classList.remove('np', 'np--inactive');
+    this.#root.classList.remove('np');
     this.#root.removeAttribute('role');
     this.#root.removeAttribute('aria-label');
   }
