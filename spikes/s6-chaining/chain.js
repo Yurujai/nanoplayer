@@ -304,7 +304,7 @@ class Cadena {
    * está decodificando y el cambio es solo un `opacity`. La otra mitad es no
    * hacer el cambio hasta que haya presentado un fotograma de verdad.
    */
-  #preparar(anticipada = false) {
+  #preparar(anticipada = false, silenciada = anticipada) {
     if (this.preparacion) return this.preparacion;
     if (this.variante.unElemento || !this.haySiguiente) return Promise.resolve(null);
 
@@ -312,28 +312,29 @@ class Cadena {
     const marca = this.marcas.get(entrante);
 
     /*
-     * Silenciada **solo** cuando se arranca por anticipación, que es cuando la
-     * saliente todavía suena: durante unos cientos de milisegundos coexisten,
-     * y dos audios a la vez se oyen.
+     * Silenciada cuando la saliente todavía suena: en la anticipación y en el
+     * salto. Durante unos cientos de milisegundos coexisten, y dos audios a la
+     * vez se oyen.
      *
-     * En el camino normal —y en el salto, que viene de un botón— arranca con
-     * sonido. El salto además ocurre dentro del gesto del usuario, así que
-     * silenciarlo ahí sería regalar la única prueba que da gratis.
+     * El salto arrancaba antes con sonido, y en iPhone eso **detiene la
+     * saliente** en cuanto se pide el `play()`: 321 ms de hueco (README §5),
+     * porque iOS no reproduce dos audios a la vez. Ahora arranca muda, como lo
+     * hace el reproductor, para medir lo que de verdad se va a usar.
      *
-     * Fuera de ese caso arranca CON sonido, y eso no es un detalle: un
-     * `play()` silenciado lo concede siempre la política de autoplay, así que
-     * si la entrante arrancara siempre muda la variante B pasaría sin probar
-     * nada. El informe publica `conSonido` para que se pueda comprobar que la
-     * medición era válida en vez de tener que fiarse.
+     * En el camino normal sin anticipación arranca CON sonido, y eso no es un
+     * detalle: un `play()` silenciado lo concede siempre la política de
+     * autoplay, así que si la entrante arrancara siempre muda la variante B
+     * pasaría sin probar nada. El informe publica `conSonido` para que se pueda
+     * comprobar que la medición era válida en vez de tener que fiarse.
      */
-    entrante.muted = anticipada;
+    entrante.muted = silenciada;
 
     const registro = {
       tPeticion: ahora(),
       readyState: entrante.readyState,
       buffered: entrante.buffered.length ? entrante.buffered.end(0) : 0,
       anticipada,
-      conSonido: !anticipada,
+      conSonido: !silenciada,
       bloqueado: false,
       error: null,
     };
@@ -395,9 +396,10 @@ class Cadena {
     const marcaEntrante = this.marcas.get(entrante);
     const marcaSaliente = this.marcas.get(saliente);
 
-    // Sin anticipación: aquí se conmuta ya, así que la entrante arranca con
-    // sonido y la medida de política vale.
-    const preparacion = this.#preparar(false);
+    // Sin anticipación se conmuta ya: al final natural la entrante arranca
+    // con sonido y la medida de política vale; al saltar arranca muda, porque
+    // la saliente sigue sonando hasta que la entrante tiene imagen.
+    const preparacion = this.#preparar(false, costura.motivo === 'salto');
     const registro = await preparacion;
     if (registro) {
       costura.tPeticion = registro.tPeticion;
@@ -431,12 +433,13 @@ class Cadena {
     costura.hueco = this.#hueco(costura);
 
     /*
-     * Si arrancó muda por la anticipación, quitarle el silencio es otra
-     * operación sin gesto detrás, y algunos navegadores responden pausando el
-     * elemento en vez de rechazar nada. Se comprueba un instante después en
-     * lugar de darlo por bueno: un fallo así es invisible salvo que se mire.
+     * Si arrancó muda —por la anticipación o por el salto—, quitarle el
+     * silencio es otra operación sin gesto detrás, y algunos navegadores
+     * responden pausando el elemento en vez de rechazar nada. Se comprueba un
+     * instante después en lugar de darlo por bueno: un fallo así es invisible
+     * salvo que se mire.
      */
-    if (costura.anticipada && !costura.bloqueado) {
+    if (costura.conSonido === false && !costura.bloqueado) {
       await new Promise((r) => setTimeout(r, 250));
       if (entrante.paused) {
         costura.pausadaTrasSonido = true;
