@@ -118,7 +118,7 @@ export {
 } from '@nanoplayer/core';
 
 export type {
-  Annotation, Bumper, BumperPhase, ChainPhase, ChapterAnnotation, InteractiveAnnotation, Manifest,
+  Annotation, Bumper, BumperPhase, ChainPhase, TrimRange, ChapterAnnotation, InteractiveAnnotation, Manifest,
   Source, Stream,
   StreamRole, TextTrackDef, TrimAnnotation, ValidationIssue, ValidationResult,
   Catalogue, Catalogues, Translate, ErrorCode, PlayerError,

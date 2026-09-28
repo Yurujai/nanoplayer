@@ -8,6 +8,7 @@ export {
   isAudioOnly, isAudioOnlyManifest, masterStream, slaveStreams, trimOf,
 } from './manifest-queries.js';
 export type { ValidationIssue, ValidationResult } from './validate.js';
+export type { TrimRange } from './trim-timeline.js';
 
 // --- cabecera y cola --------------------------------------------------------
 export { ANTICIPACION_MS, firstFrame } from './chain.js';

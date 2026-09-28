@@ -21,6 +21,7 @@ import { EventBus, type Unsubscribe } from './events.js';
 import { Lifecycle } from './lifecycle.js';
 import { LiveTracker, type LiveStatus, type RetryPolicy } from './live.js';
 import type { Bumper, Manifest, Stream } from './manifest.js';
+import { TrimTimeline, type TrimRange } from './trim-timeline.js';
 import { nativeEngineFactory } from './native-engine.js';
 import type { UiSlots } from './slots.js';
 import type { PlayerState } from './state.js';
@@ -121,10 +122,9 @@ export class Player {
   /** Flujos sin datos ahora mismo. Atascarse es de cada flujo, no del conjunto. */
   readonly #atascados = new Set<string>();
   #sonando = false;
-  /** Recorte activo, en tiempo del medio. `null` si el manifiesto no trae uno. */
-  #recorte: { start: number; end: number } | null = null;
-  /** De qué manifiesto salió `#recorte`: se recalcula solo si cambia. */
-  #recorteDe: Manifest | null = null;
+  /** El timeline del recorte, y de qué manifiesto salió: se rehace solo si cambia. */
+  #linea = new TrimTimeline(null);
+  #lineaDe: Manifest | null = null;
   /** El manifiesto que vino ya cargado, validado una sola vez. */
   #provisional: Manifest | null = null;
   #provisionalMirado = false;
@@ -333,33 +333,20 @@ export class Player {
 
   /* ------------------------------------------------------------- recorte -- */
 
-  /*
-   * El recorte no toca el medio: **remapea el tiempo que se enseña**. Para el
-   * motor y para el sincronizador nada cambia —siguen en tiempo del medio—, y
-   * la traducción ocurre solo en esta frontera, que es la que ve todo el mundo
-   * de fuera.
-   *
-   * Tenerlo en un único sitio importa: con la conversión repartida por la
-   * interfaz y los plugins, cada consumidor tendría que acordarse de restar, y
-   * el primero que se olvidara dejaría una barra de progreso mintiendo.
-   */
-
   /**
    * El recorte, buscándolo en el manifiesto sin resolver si hace falta.
    *
    * Igual que con el póster: cuando el manifiesto viene ya cargado no hay por
-   * qué esperar a `resolve()` para saber cuánto dura el recorte. Con recorte la
-   * duración sale del manifiesto y no del motor, así que la barra puede pintar
-   * `0:15` antes de que se descargue un solo byte. Sin esto marcaría `0:00`
-   * hasta el primer play.
+   * qué esperar a `resolve()` para saber cuánto dura el recorte. Así la barra
+   * puede pintar `0:15` antes de que se descargue un solo byte.
    */
-  #recorteActual(): { start: number; end: number } | null {
+  #timeline(): TrimTimeline {
     const m = this.#conocido();
-    if (m !== this.#recorteDe) {
-      this.#recorteDe = m;
-      this.#recorte = m ? trimOf(m) : null;
+    if (m !== this.#lineaDe) {
+      this.#lineaDe = m;
+      this.#linea = new TrimTimeline(m ? trimOf(m) : null);
     }
-    return this.#recorte;
+    return this.#linea;
   }
 
   /**
@@ -367,26 +354,17 @@ export class Player {
    * plugins, que reciben tiempos del manifiesto, no repitan la cuenta.
    */
   toVisibleTime(medio: number): number {
-    const r = this.#recorteActual();
-    if (!r) return medio;
-    return Math.max(0, medio - r.start);
+    return this.#timeline().toVisible(medio);
   }
 
   /** Del tiempo que se enseña al del medio, acotado al recorte. */
   toMediaTime(visible: number): number {
-    const r = this.#recorteActual();
-    if (!r) return visible;
-    return Math.min(r.end, Math.max(r.start, r.start + visible));
+    return this.#timeline().toMedia(visible);
   }
 
-  /**
-   * El recorte en vigor, o `null`.
-   *
-   * Se publica porque la interfaz necesita saber que lo hay: sin esto, una
-   * miniatura o un capítulo colocados en tiempo del medio quedarían corridos.
-   */
-  get trim(): { start: number; end: number } | null {
-    const r = this.#recorteActual();
+  /** El recorte en vigor, o `null`. La interfaz lo usa para colocar marcas. */
+  get trim(): TrimRange | null {
+    const r = this.#timeline().range;
     return r ? { ...r } : null;
   }
 
@@ -399,8 +377,8 @@ export class Player {
   }
 
   get duration(): number {
-    const r = this.#recorteActual();
-    if (r) return Math.max(0, r.end - r.start);
+    const recortada = this.#timeline().duration;
+    if (recortada !== null) return recortada;
     // El motor dice 0 mientras no tiene metadatos, que en iOS es hasta el
     // primer play: mientras tanto vale más la duración que trae el manifiesto.
     const delMotor = this.master?.duration ?? 0;
@@ -887,7 +865,7 @@ export class Player {
     const destino = Math.max(0, seconds);
     // Saltar hacia atrás vuelve a meter la reproducción dentro del recorte, así
     // que el final tiene que poder volver a anunciarse.
-    if (this.#recorteActual() && destino < this.duration) this.#finRecorteAvisado = false;
+    if (this.#timeline().range && destino < this.duration) this.#finRecorteAvisado = false;
     const from = this.toVisibleTime(maestro.currentTime);
     this.bus.emit('seek:start', { from, to: destino });
     maestro.seek(this.toMediaTime(destino));
@@ -1034,7 +1012,7 @@ export class Player {
     }
     const m = this.master;
     if (!m) return NaN;
-    const fin = this.#recorteActual()?.end ?? m.duration;
+    const fin = this.#timeline().range?.end ?? m.duration;
     return (fin - m.currentTime) / (m.getPlaybackRate() || 1);
   }
 
@@ -1131,7 +1109,7 @@ export class Player {
     if (this.#fase === 'outro') {
       this.#finCadena = true;
     } else {
-      this.#finRecorteAvisado = !!this.#recorteActual();
+      this.#finRecorteAvisado = !!this.#timeline().range;
       this.pause();
     }
     this.bus.emit('time', { current: this.duration, duration: this.duration });
@@ -1201,7 +1179,7 @@ export class Player {
          * puede saltar, cambiar de velocidad o quedarse sin búfer, y la única
          * señal fiable de dónde está la reproducción es esta.
          */
-        const recorte = this.#recorteActual();
+        const recorte = this.#timeline().range;
         if (recorte && current >= recorte.end) {
           // Con cola, el final del recorte no es el final: se para aquí, con
           // el último fotograma a la vista, y la cola entra encima.
