@@ -69,7 +69,15 @@ export interface CoreEvents {
    * Se publica porque es la señal que permitirá diagnosticar en producción lo
    * que S2 detectó en iPhone: buena mediana con excursiones puntuales severas.
    */
-  'sync:drift': { stream: string; drift: number; action: 'ok' | 'correcting' | 'hard-seek' };
+  /**
+   * `waiting`: ahora no se puede medir —el esclavo salta o no tiene hora— y no
+   * se corrige. `recover`: llevaba demasiado así y se le ha obligado a
+   * recolocarse. Separarlos de `ok` es lo que permite ver un esclavo atascado.
+   */
+  'sync:drift': {
+    stream: string; drift: number;
+    action: 'ok' | 'correcting' | 'hard-seek' | 'waiting' | 'recover';
+  };
   'layout:change': { layout: string };
   /**
    * La sincronización entre flujos no se puede medir, así que no se corrige.

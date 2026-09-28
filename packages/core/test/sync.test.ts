@@ -414,3 +414,67 @@ describe('Synchronizer · enfriamiento tras un salto', () => {
     expect(s.tick()[0]!.action).toBe('correcting');
   });
 });
+
+describe('Synchronizer · esclavo atascado', () => {
+  const conReloj = (t: { valor: number }, bus?: EventBus<CoreEvents>) => new Synchronizer({
+    master: { id: 'cam', engine: maestro },
+    slaves: [{ id: 'slides', engine: esclavo }],
+    profile: P,
+    now: () => t.valor,
+    ...(bus ? { bus } : {}),
+  });
+
+  it('publica la espera como espera, no como ok', () => {
+    /*
+     * En WebKit un salto largo en directo dejó al esclavo en `seeking` para
+     * siempre, y el bus dijo "ok" más de 200 veces en 12 segundos. Nada
+     * podía detectar que las diapositivas estaban congeladas.
+     */
+    const bus = new EventBus<CoreEvents>();
+    const acciones: string[] = [];
+    bus.on('sync:drift', ({ action }) => acciones.push(action));
+    const s = conReloj({ valor: 1000 }, bus);
+    esclavo._seeking(true);
+    s.tick();
+    expect(acciones).toEqual(['waiting']);
+  });
+
+  it('pasado el margen, obliga al esclavo a recolocarse', () => {
+    const t = { valor: 1000 };
+    const s = conReloj(t);
+    esclavo._seeking(true);
+    expect(s.tick()[0]!.action).toBe('seeking');
+    t.valor += 3000;
+    expect(s.tick()[0]!.action, 'aún dentro del margen').toBe('seeking');
+    expect(esclavo._seeks).toEqual([]);
+
+    t.valor += 1500;
+    expect(s.tick()[0]!.action).toBe('recover');
+    // A su propia posición: es lo que reactiva la carga en el motor.
+    expect(esclavo._seeks).toEqual([10]);
+  });
+
+  it('si el maestro también está saltando, esperar es lo normal', () => {
+    const t = { valor: 1000 };
+    const s = conReloj(t);
+    esclavo._seeking(true);
+    maestro._seeking(true);
+    s.tick();
+    t.valor += 10_000;
+    expect(s.tick()[0]!.action).toBe('seeking');
+    expect(esclavo._seeks).toEqual([]);
+  });
+
+  it('una medida buena reinicia la cuenta', () => {
+    const t = { valor: 1000 };
+    const s = conReloj(t);
+    esclavo._seeking(true);
+    s.tick();
+    t.valor += 3000;
+    esclavo._seeking(false);
+    s.tick();
+    esclavo._seeking(true);
+    t.valor += 3000;
+    expect(s.tick()[0]!.action, 'la cuenta empezó de nuevo').toBe('seeking');
+  });
+});

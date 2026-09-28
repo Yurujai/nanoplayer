@@ -92,7 +92,22 @@ const ENFRIAMIENTO_SALTO = 700;
 /** Igual tras cuadrar todos a la vez, que mueve más piezas. */
 const ENFRIAMIENTO_ALINEADO = 1200;
 
-export type SyncAction = 'ok' | 'correcting' | 'hard-seek' | 'seeking';
+/**
+ * Cuánto puede un esclavo seguir sin poder medirse, con el maestro avanzando,
+ * antes de darlo por atascado, en ms.
+ *
+ * Esperar mientras un esclavo salta o recarga su lista es lo correcto, pero
+ * esperar para siempre no: en WebKit un salto largo en directo dejaba al
+ * esclavo en `seeking` indefinidamente, y el lazo lo daba por bueno sin fin.
+ * Holgado a propósito, porque un salto normal con red lenta tarda segundos.
+ */
+const ATASCO_MS = 4000;
+
+/**
+ * `seeking` — el esclavo no se puede medir ahora (salta, o no tiene hora).
+ * `recover` — llevaba demasiado así y se le ha obligado a recolocarse.
+ */
+export type SyncAction = 'ok' | 'correcting' | 'hard-seek' | 'seeking' | 'recover';
 
 export interface SyncSample {
   stream: string;
@@ -105,6 +120,8 @@ interface Slave {
   id: string;
   engine: MediaEngine;
   correcting: boolean;
+  /** Desde cuándo no se puede medir, con el maestro avanzando. */
+  sinMedirDesde: number | null;
 }
 
 export interface SynchronizerOptions {
@@ -183,7 +200,7 @@ export class Synchronizer {
 
   constructor(options: SynchronizerOptions) {
     this.#master = options.master;
-    this.#slaves = options.slaves.map((s) => ({ ...s, correcting: false }));
+    this.#slaves = options.slaves.map((s) => ({ ...s, correcting: false, sinMedirDesde: null }));
     this.#profile = options.profile ?? SYNC_PROFILES[detectProfile()];
     this.#bus = options.bus;
     this.#live = options.live === true;
@@ -290,9 +307,10 @@ export class Synchronizer {
       this.#bus?.emit('sync:drift', {
         stream: muestra.stream,
         drift: muestra.drift,
-        // El bus no distingue 'seeking': para quien observa es un momento
-        // en el que no se está corrigiendo nada.
-        action: muestra.action === 'seeking' ? 'ok' : muestra.action,
+        // Antes se publicaba como 'ok', y un esclavo congelado parecía estar
+        // perfectamente sincronizado: el lazo decía "ok" cientos de veces por
+        // minuto con las diapositivas paradas. Esperar no es estar bien.
+        action: muestra.action === 'seeking' ? 'waiting' : muestra.action,
       });
     }
     return muestras;
@@ -321,7 +339,7 @@ export class Synchronizer {
     const medida = this.#deriva(s, tiempoMaestro);
     if (medida === null) {
       // Un esclavo puede quedarse sin hora un instante al recargar la lista.
-      return { stream: s.id, drift: 0, action: 'seeking', rate: s.engine.getPlaybackRate() };
+      return this.#esperar(s, 0);
     }
     const drift = medida;
     const a = Math.abs(drift);
@@ -329,8 +347,9 @@ export class Synchronizer {
     // Durante un salto la medida no significa nada: el navegador está entre
     // dos posiciones y corregir sobre eso amplifica el error.
     if (this.#master.engine.element?.seeking || s.engine.element?.seeking) {
-      return { stream: s.id, drift, action: 'seeking', rate: s.engine.getPlaybackRate() };
+      return this.#esperar(s, drift);
     }
+    s.sinMedirDesde = null;
 
     if (a > p.hardSeek) {
       /*
@@ -368,6 +387,33 @@ export class Synchronizer {
   }
 
   /**
+   * El esclavo no se puede medir ahora: se espera, pero no para siempre.
+   *
+   * Solo cuenta el tiempo con el maestro avanzando: si el maestro está parado
+   * o saltando, que el esclavo espere es lo normal. Pasado `ATASCO_MS`, se le
+   * pide que salte a su propia posición. Parece no hacer nada, y es lo que
+   * reactiva la carga en un motor que se había quedado sin enterarse del
+   * salto anterior.
+   */
+  #esperar(s: Slave, drift: number): SyncSample {
+    const rate = s.engine.getPlaybackRate();
+    const maestro = this.#master.engine;
+    if (maestro.paused || maestro.element?.seeking) {
+      s.sinMedirDesde = null;
+      return { stream: s.id, drift, action: 'seeking', rate };
+    }
+    const ahora = this.#ahora();
+    s.sinMedirDesde ??= ahora;
+    if (ahora - s.sinMedirDesde < ATASCO_MS) {
+      return { stream: s.id, drift, action: 'seeking', rate };
+    }
+    s.sinMedirDesde = null;
+    s.engine.seek(s.engine.currentTime);
+    this.#enfriarHasta = ahora + ENFRIAMIENTO_SALTO;
+    return { stream: s.id, drift, action: 'recover', rate };
+  }
+
+  /**
    * Alinea los esclavos con el maestro de golpe, sin corrección suave.
    *
    * Se usa cuando la corrección gradual no tiene sentido: tras un salto del
@@ -388,6 +434,7 @@ export class Synchronizer {
       s.engine.seek(d === null ? t : s.engine.currentTime - d);
       s.engine.setPlaybackRate(base);
       s.correcting = false;
+      s.sinMedirDesde = null;
     }
   }
 }
