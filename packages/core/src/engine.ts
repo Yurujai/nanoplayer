@@ -137,6 +137,29 @@ export interface EngineFactory {
   create(): MediaEngine;
 }
 
+const HLS_TYPES = new Set([
+  'application/vnd.apple.mpegurl',
+  'application/x-mpegurl',
+  'audio/mpegurl',
+  'audio/x-mpegurl',
+  'video/x-mpegurl',
+]);
+
+/** Si un tipo MIME es HLS, con los alias que circulan y sin parámetros. */
+export function isHlsType(type: string): boolean {
+  return HLS_TYPES.has(type.split(';')[0]!.trim().toLowerCase());
+}
+
+/**
+ * Si hay Media Source Extensions, que es lo que hls.js necesita para existir.
+ * `ManagedMediaSource` cuenta: es la variante de Safari 17 en adelante.
+ */
+export function hasMse(): boolean {
+  if (typeof globalThis === 'undefined') return false;
+  const g = globalThis as { MediaSource?: unknown; ManagedMediaSource?: unknown };
+  return g.MediaSource !== undefined || g.ManagedMediaSource !== undefined;
+}
+
 const ORDEN: Record<Confidence, number> = { probably: 2, maybe: 1, no: 0 };
 
 /** La mejor confianza del motor sobre cualquiera de las fuentes del stream. */

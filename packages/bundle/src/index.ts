@@ -103,7 +103,8 @@ export {
   // ciclo de vida
   Lifecycle, assertTransition, canTransition, hasEngine, TRANSITIONS, WITH_ENGINE, WITH_MANIFEST,
   // motores
-  confidenceFor, selectEngine, NativeEngine, nativeEngineFactory,
+  confidenceFor, hasMse, isHlsType, selectEngine,
+  MediaElementEngine, mediaElementError, NativeEngine, nativeEngineFactory,
   // sincronización
   defaultScheduler, detectProfile, SYNC_PROFILES, Synchronizer,
   // reproductor y registro
@@ -124,6 +125,7 @@ export type {
   AnyListener, Empty, EventBusOptions, EventMap, Listener, ListenerErrorInfo,
   Unsubscribe, CoreEvents, PlayerState,
   AttachOptions, Confidence, EngineCallbacks, EngineFactory, MediaEngine,
+  MediaElementEngineOptions,
   Scheduler, SyncAction, SyncProfile, SyncProfileName, SyncSample, SynchronizerOptions,
   ManifestResolver, PlayerOptions, BatchResolverOptions, RegistryOptions,
   LiveStatus, RetryPolicy,

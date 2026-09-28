@@ -22,33 +22,13 @@
  * que no lo reproduce.
  */
 import {
-  playerError,
-  type AttachOptions, type Confidence, type EngineCallbacks,
-  type EngineFactory, type MediaEngine, type PlayerError,
-  type Source, type Stream,
+  hasMse, isHlsType, MediaElementEngine, playerError,
+  type AttachOptions, type Confidence, type EngineFactory, type MediaEngine,
+  type PlayerError, type Source, type Stream,
 } from '@nanoplayer/core';
 import type HlsType from 'hls.js';
 
 type Hls = HlsType;
-
-const HLS_TYPES = new Set([
-  'application/vnd.apple.mpegurl', 'application/x-mpegurl',
-  'audio/mpegurl', 'audio/x-mpegurl', 'video/x-mpegurl',
-]);
-
-const esHls = (type: string) => HLS_TYPES.has(type.split(';')[0]!.trim().toLowerCase());
-
-/**
- * ¿Hay Media Source Extensions?
- *
- * `ManagedMediaSource` cuenta: es la variante que Safari 17 introdujo y que S2
- * encontró disponible en iOS 26. Sin ella, en iPhone no habría forma de usar
- * hls.js en absoluto.
- */
-function hayMse(): boolean {
-  const g = globalThis as { MediaSource?: unknown; ManagedMediaSource?: unknown };
-  return g.MediaSource !== undefined || g.ManagedMediaSource !== undefined;
-}
 
 /** Carga hls.js una sola vez y la reutiliza. */
 let cargando: Promise<typeof HlsType> | null = null;
@@ -57,50 +37,16 @@ function cargarHls(): Promise<typeof HlsType> {
   return cargando;
 }
 
-export class HlsEngine implements MediaEngine {
+export class HlsEngine extends MediaElementEngine {
   readonly name = 'hls.js';
 
-  #el: HTMLVideoElement | null = null;
   #hls: Hls | null = null;
-  #cb: EngineCallbacks = {};
-  #desatar: Array<() => void> = [];
-  #stallDesde: number | null = null;
-  #destruido = false;
-  readonly #ahora: () => number;
 
-  constructor(options: { now?: () => number } = {}) {
-    this.#ahora = options.now ?? (() => performance.now());
-  }
-
-  get element(): HTMLVideoElement | null { return this.#el; }
-  get attached(): boolean { return this.#el !== null; }
-
-  async attach(
-    container: HTMLElement,
-    stream: Stream,
-    options: AttachOptions = {},
-  ): Promise<void> {
-    if (this.#destruido) throw new Error('El motor fue destruido');
-    if (this.#el) throw new Error('The engine is already attached: call detach() first');
-
-    const fuente = stream.sources.find((s) => esHls(s.type));
+  protected async prepare(el: HTMLVideoElement, stream: Stream, _options: AttachOptions): Promise<void> {
+    const fuente = stream.sources.find((s) => isHlsType(s.type));
     if (!fuente) {
-      throw playerError('engine/unsupported',
-        `El stream "${stream.id}" no tiene ninguna fuente HLS`);
+      throw playerError('engine/unsupported', `Stream "${stream.id}" has no HLS source`);
     }
-
-    const el = document.createElement('video');
-    this.#el = el;
-    this.#cb = options.callbacks ?? {};
-    // Obligatorio en iPhone: sin esto, reproducir arrebata la pantalla completa
-    // al sistema y el segundo stream desaparece.
-    if (options.playsInline !== false) {
-      el.playsInline = true;
-      el.setAttribute('playsinline', '');
-    }
-    if (options.muted) el.muted = true;
-    this.#escuchar(el);
-    container.appendChild(el);
 
     const Hls = await cargarHls();
     if (!Hls.isSupported()) {
@@ -120,11 +66,25 @@ export class HlsEngine implements MediaEngine {
     this.#hls.loadSource(fuente.src);
 
     await this.#esperarManifiesto(this.#hls, Hls);
-
-    if (options.startAt !== undefined && options.startAt > 0) {
-      try { el.currentTime = options.startAt; } catch { /* fuera de rango */ }
-    }
   }
+
+  /**
+   * `hls.destroy()` es obligatorio y no opcional: sin él la instancia sigue
+   * pidiendo segmentos por la red aunque el elemento haya desaparecido del DOM.
+   * Es la misma lección que S2 dejó con los decodificadores, agravada porque
+   * aquí además se consume ancho de banda. Va antes de soltar el elemento.
+   */
+  protected override release(): void {
+    this.#hls?.destroy();
+    this.#hls = null;
+  }
+
+  /**
+   * Los errores del elemento no se notifican: con MSE los detecta hls.js, que
+   * además los intenta recuperar (`recoverMediaError`). Avisar aquí haría que
+   * la interfaz enseñara un error del que el motor se estaba recuperando.
+   */
+  protected override onElementError(): void {}
 
   /**
    * Espera a que hls.js haya parseado la lista.
@@ -140,7 +100,7 @@ export class HlsEngine implements MediaEngine {
         if (!data?.fatal) return;
         limpiar();
         reject(playerError('media/network',
-          `hls.js no pudo cargar la lista: ${data.details ?? 'error desconocido'}`));
+          `hls.js could not load the playlist: ${data.details ?? 'unknown error'}`));
       };
       const limpiar = () => {
         hls.off(Hls.Events.MANIFEST_PARSED, ok);
@@ -177,15 +137,15 @@ export class HlsEngine implements MediaEngine {
           hls.recoverMediaError();
           return;
         default:
-          this.#cb.onError?.(this.#traducir(data));
+          this.callbacks.onError?.(this.#traducir(data));
       }
     };
     hls.on(Hls.Events.ERROR, onError as never);
-    this.#desatar.push(() => hls.off(Hls.Events.ERROR, onError as never));
+    this.onDetach(() => hls.off(Hls.Events.ERROR, onError as never));
   }
 
   #traducir(data: { type?: string; details?: string }): PlayerError {
-    const detalle = data.details ?? 'error desconocido';
+    const detalle = data.details ?? 'unknown error';
     if (data.type === 'networkError') {
       return playerError('media/network', `HLS network error: ${detalle}`);
     }
@@ -195,89 +155,10 @@ export class HlsEngine implements MediaEngine {
     return playerError('engine/failed', `hls.js failure: ${detalle}`);
   }
 
-  #escuchar(el: HTMLVideoElement): void {
-    const on = <K extends keyof HTMLMediaElementEventMap>(
-      type: K, fn: (ev: HTMLMediaElementEventMap[K]) => void,
-    ) => {
-      el.addEventListener(type, fn as EventListener);
-      this.#desatar.push(() => el.removeEventListener(type, fn as EventListener));
-    };
-
-    on('timeupdate', () => {
-      this.#cb.onTime?.(el.currentTime, Number.isFinite(el.duration) ? el.duration : 0);
-    });
-    on('play', () => this.#cb.onPlay?.());
-    on('pause', () => this.#cb.onPause?.());
-    on('ended', () => this.#cb.onEnded?.());
-    on('seeked', () => this.#cb.onSeeked?.(el.currentTime));
-
-    on('waiting', () => {
-      if (this.#stallDesde !== null) return;
-      this.#stallDesde = this.#ahora();
-      this.#cb.onStallStart?.();
-    });
-    on('playing', () => this.#cb.onPlaying?.());
-    const finStall = () => {
-      if (this.#stallDesde === null) return;
-      const dur = this.#ahora() - this.#stallDesde;
-      this.#stallDesde = null;
-      this.#cb.onStallEnd?.(dur);
-    };
-    on('playing', finStall);
-    on('canplay', finStall);
-  }
-
-  /**
-   * Suelta el motor.
-   *
-   * `hls.destroy()` es obligatorio y no opcional: sin él la instancia sigue
-   * pidiendo segmentos por la red aunque el elemento haya desaparecido del DOM.
-   * Es la misma lección que S2 dejó con los decodificadores, agravada porque
-   * aquí además se consume ancho de banda.
-   */
-  detach(): void {
-    const el = this.#el;
-    if (!el) return;
-
-    for (const off of this.#desatar) off();
-    this.#desatar = [];
-    this.#stallDesde = null;
-
-    try { this.#hls?.destroy(); } catch { /* ya podía estar destruida */ }
-    this.#hls = null;
-
-    try {
-      el.pause();
-      el.removeAttribute('src');
-      el.load();
-    } catch { /* el elemento ya podía estar inservible */ }
-    el.remove();
-
-    this.#el = null;
-    this.#cb = {};
-  }
-
-  async play(): Promise<void> {
-    const el = this.#requerir();
-    try {
-      await el.play();
-    } catch (error) {
-      const err = error as { name?: string; message?: string };
-      const pe = err.name === 'NotAllowedError'
-        ? playerError('media/blocked',
-            'The browser blocked playback: a user interaction is required', error)
-        : playerError('media/decode', err.message ?? 'Playback could not be started', error);
-      this.#cb.onError?.(pe);
-      throw pe;
-    }
-  }
-
-  pause(): void { this.#el?.pause(); }
-
-  seek(seconds: number): void {
-    const el = this.#requerir();
-    if (!Number.isFinite(seconds) || seconds < 0) return;
-    el.currentTime = seconds;
+  override seek(seconds: number): void {
+    super.seek(seconds);
+    const el = this.element;
+    if (!el || !Number.isFinite(seconds) || seconds < 0) return;
     /*
      * Si el destino cae fuera de lo cargado, se le dice a hls.js que cargue
      * desde ahí, en vez de fiarse de que se entere solo.
@@ -303,17 +184,6 @@ export class HlsEngine implements MediaEngine {
     return false;
   }
 
-  get currentTime(): number { return this.#el?.currentTime ?? 0; }
-
-  get duration(): number {
-    const d = this.#el?.duration;
-    return d !== undefined && Number.isFinite(d) ? d : 0;
-  }
-
-  get paused(): boolean { return this.#el?.paused ?? true; }
-  get ended(): boolean { return this.#el?.ended ?? false; }
-  get buffered(): TimeRanges | null { return this.#el?.buffered ?? null; }
-  get seekable(): TimeRanges | null { return this.#el?.seekable ?? null; }
   /**
    * Hora absoluta de la posición actual, según `EXT-X-PROGRAM-DATE-TIME`.
    *
@@ -331,34 +201,6 @@ export class HlsEngine implements MediaEngine {
     const p = this.#hls?.liveSyncPosition;
     return typeof p === 'number' && Number.isFinite(p) && p > 0 ? p : null;
   }
-
-  getPlaybackRate(): number { return this.#el?.playbackRate ?? 1; }
-
-  setPlaybackRate(rate: number): void {
-    const el = this.#el;
-    if (!el || !Number.isFinite(rate) || rate <= 0) return;
-    el.playbackRate = rate;
-  }
-
-  setVolume(volume: number): void {
-    const el = this.#el;
-    if (!el || !Number.isFinite(volume)) return;
-    el.volume = Math.min(1, Math.max(0, volume));
-  }
-
-  setMuted(muted: boolean): void {
-    if (this.#el) this.#el.muted = muted;
-  }
-
-  destroy(): void {
-    this.detach();
-    this.#destruido = true;
-  }
-
-  #requerir(): HTMLVideoElement {
-    if (!this.#el) throw new Error('The engine is not attached');
-    return this.#el;
-  }
 }
 
 export const hlsEngineFactory: EngineFactory = {
@@ -372,8 +214,8 @@ export const hlsEngineFactory: EngineFactory = {
    * programar esa excepción en ningún sitio.
    */
   canPlay(source: Source): Confidence {
-    if (!source.type || !esHls(source.type)) return 'no';
-    return hayMse() ? 'probably' : 'no';
+    if (!source.type || !isHlsType(source.type)) return 'no';
+    return hasMse() ? 'probably' : 'no';
   },
 
   create(): MediaEngine {

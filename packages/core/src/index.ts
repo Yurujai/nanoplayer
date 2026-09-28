@@ -37,10 +37,12 @@ export {
 export type { PlayerState } from './state.js';
 
 // --- motor ------------------------------------------------------------------
-export { confidenceFor, selectEngine } from './engine.js';
+export { confidenceFor, hasMse, isHlsType, selectEngine } from './engine.js';
 export type {
   AttachOptions, Confidence, EngineCallbacks, EngineFactory, MediaEngine,
 } from './engine.js';
+export { MediaElementEngine, mediaElementError } from './media-element-engine.js';
+export type { MediaElementEngineOptions } from './media-element-engine.js';
 export { NativeEngine, nativeEngineFactory } from './native-engine.js';
 
 // --- sincronización ---------------------------------------------------------
