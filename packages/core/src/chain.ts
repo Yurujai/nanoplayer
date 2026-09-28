@@ -20,6 +20,9 @@ import type { MediaEngine } from './engine.js';
 /** En qué pieza de la cadena está el reproductor. */
 export type ChainPhase = 'intro' | 'main' | 'outro';
 
+/** Las piezas que no son el contenido: la cabecera y la cola. */
+export type BumperPhase = Exclude<ChainPhase, 'main'>;
+
 /**
  * Cuánto antes del final de una pieza se arranca la siguiente, en ms.
  *

@@ -11,7 +11,7 @@ export type { ValidationIssue, ValidationResult } from './validate.js';
 
 // --- cabecera y cola --------------------------------------------------------
 export { ANTICIPACION_MS, firstFrame } from './chain.js';
-export type { ChainPhase } from './chain.js';
+export type { BumperPhase, ChainPhase } from './chain.js';
 
 // --- textos -----------------------------------------------------------------
 export { IDIOMA_BASE, StringRegistry, strings } from './i18n.js';
@@ -32,7 +32,7 @@ export type { CoreEvents } from './core-events.js';
 // --- ciclo de vida ----------------------------------------------------------
 export { Lifecycle } from './lifecycle.js';
 export {
-  assertTransition, canTransition, TRANSITIONS, WITH_ENGINE, WITH_MANIFEST,
+  assertTransition, canTransition, hasEngine, TRANSITIONS, WITH_ENGINE, WITH_MANIFEST,
 } from './state.js';
 export type { PlayerState } from './state.js';
 

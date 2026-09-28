@@ -16,7 +16,7 @@
  *   - **Región en vivo** para lo que solo se percibe visualmente: buffering,
  *     errores, cambios de estado.
  */
-import { strings } from '@nanoplayer/core';
+import { hasEngine, strings } from '@nanoplayer/core';
 import type {
   BarControlDecl, Catalogues, OverlayDecl, OverlayHandle, Player, PlayerError,
   SettingsPanelDecl, TimelineMarkerDecl, TimelineMarkersDecl, Translate, UiSlots,
@@ -745,7 +745,7 @@ export class ControlBar implements UiSlots {
   /** El botón de saltar: solo con la cabecera en pantalla. */
   #pintarCadena(): void {
     const p = this.#player;
-    const conMedios = p.state === 'attached' || p.state === 'active';
+    const conMedios = hasEngine(p.state);
     this.#btnSaltar.hidden = !(conMedios && p.canSkip);
   }
 

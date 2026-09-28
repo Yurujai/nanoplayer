@@ -12,7 +12,7 @@
  * sonido. El botón grande no es una concesión estética, es el gesto que hace
  * falta de todas formas.
  */
-import type { Player, Translate } from '@nanoplayer/core';
+import { hasEngine, type Player, type Translate } from '@nanoplayer/core';
 import { ICONS } from './icons.js';
 
 export class Poster {
@@ -100,7 +100,7 @@ export class Poster {
      */
     const esperandoDirecto = !!this.#player.manifest?.live
       && this.#player.liveStatus !== 'unknown';
-    const conMedios = this.#player.state === 'attached' || this.#player.state === 'active'
+    const conMedios = hasEngine(this.#player.state)
       || esperandoDirecto;
     /*
      * Con solo audio la capa **se queda**: no hay imagen detrás que enseñar, y

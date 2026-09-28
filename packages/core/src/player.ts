@@ -9,7 +9,7 @@
  * construir un `Player` no descarga absolutamente nada. Ni el manifiesto.
  */
 import {
-  ANTICIPACION_MS, VIGILANCIA_MS, firstFrame, type ChainPhase,
+  ANTICIPACION_MS, VIGILANCIA_MS, firstFrame, type BumperPhase, type ChainPhase,
 } from './chain.js';
 import type { CoreEvents } from './core-events.js';
 import {
@@ -133,7 +133,7 @@ export class Player {
   /** Pieza que se ve. Sin cabecera, se empieza directamente en el contenido. */
   #fase: ChainPhase = 'main';
   /** Motores de la cabecera y la cola, que van aparte de los del contenido. */
-  #piezas = new Map<'intro' | 'outro', { engine: MediaEngine; caja: HTMLElement }>();
+  #piezas = new Map<BumperPhase, { engine: MediaEngine; caja: HTMLElement }>();
   /** Hacia dónde se está cambiando, o `null`. Mientras dura, nadie manda. */
   #conmutando: ChainPhase | null = null;
   /** Se incrementa para dar por cancelado un cambio en curso. */
@@ -593,7 +593,7 @@ export class Player {
    * impedir ver la clase. Se avisa por `chain:unavailable`, no por `error`,
    * porque la interfaz trata `error` como algo que para la reproducción.
    */
-  async #engancharPieza(fase: 'intro' | 'outro', pieza: Bumper): Promise<void> {
+  async #engancharPieza(fase: BumperPhase, pieza: Bumper): Promise<void> {
     const stream: Stream = { id: fase, role: fase, audio: true, sources: pieza.sources };
     const caja = document.createElement('div');
     caja.dataset['bumper'] = fase;
@@ -622,7 +622,7 @@ export class Player {
   }
 
   /** Quita una pieza que no se puede reproducir y sigue sin ella. */
-  #omitirPieza(fase: 'intro' | 'outro', error: unknown): void {
+  #omitirPieza(fase: BumperPhase, error: unknown): void {
     const p = this.#piezas.get(fase);
     if (p) {
       p.engine.destroy();
@@ -1149,7 +1149,7 @@ export class Player {
     this.bus.emit('pause', { at: this.currentTime });
   }
 
-  #callbacksPieza(fase: 'intro' | 'outro') {
+  #callbacksPieza(fase: BumperPhase) {
     // Solo cuenta lo que dice la pieza que se ve, y no durante un cambio.
     const cuenta = () => this.#fase === fase && this.#conmutando === null;
     return {

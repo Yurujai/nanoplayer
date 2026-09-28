@@ -61,6 +61,11 @@ export const WITH_MANIFEST: readonly PlayerState[] = [
 /** Estados en los que existe un motor consumiendo recursos del navegador. */
 export const WITH_ENGINE: readonly PlayerState[] = ['attached', 'active'];
 
+/** Si en ese estado hay un motor consumiendo recursos del navegador. */
+export function hasEngine(state: PlayerState): boolean {
+  return WITH_ENGINE.includes(state);
+}
+
 export function canTransition(from: PlayerState, to: PlayerState): boolean {
   return (TRANSITIONS[from] as readonly PlayerState[]).includes(to);
 }

@@ -104,10 +104,10 @@ const ENFRIAMIENTO_ALINEADO = 1200;
 const ATASCO_MS = 4000;
 
 /**
- * `seeking` — el esclavo no se puede medir ahora (salta, o no tiene hora).
+ * `waiting` — el esclavo no se puede medir ahora (salta, o no tiene hora).
  * `recover` — llevaba demasiado así y se le ha obligado a recolocarse.
  */
-export type SyncAction = 'ok' | 'correcting' | 'hard-seek' | 'seeking' | 'recover';
+export type SyncAction = 'ok' | 'correcting' | 'hard-seek' | 'waiting' | 'recover';
 
 export interface SyncSample {
   stream: string;
@@ -296,7 +296,7 @@ export class Synchronizer {
      */
     if (this.#ahora() < this.#enfriarHasta) {
       return this.#slaves.map((s) => ({
-        stream: s.id, drift: 0, action: 'seeking' as const,
+        stream: s.id, drift: 0, action: 'waiting' as const,
         rate: s.engine.getPlaybackRate(),
       }));
     }
@@ -307,10 +307,7 @@ export class Synchronizer {
       this.#bus?.emit('sync:drift', {
         stream: muestra.stream,
         drift: muestra.drift,
-        // Antes se publicaba como 'ok', y un esclavo congelado parecía estar
-        // perfectamente sincronizado: el lazo decía "ok" cientos de veces por
-        // minuto con las diapositivas paradas. Esperar no es estar bien.
-        action: muestra.action === 'seeking' ? 'waiting' : muestra.action,
+        action: muestra.action,
       });
     }
     return muestras;
@@ -400,12 +397,12 @@ export class Synchronizer {
     const maestro = this.#master.engine;
     if (maestro.paused || maestro.element?.seeking) {
       s.sinMedirDesde = null;
-      return { stream: s.id, drift, action: 'seeking', rate };
+      return { stream: s.id, drift, action: 'waiting', rate };
     }
     const ahora = this.#ahora();
     s.sinMedirDesde ??= ahora;
     if (ahora - s.sinMedirDesde < ATASCO_MS) {
-      return { stream: s.id, drift, action: 'seeking', rate };
+      return { stream: s.id, drift, action: 'waiting', rate };
     }
     s.sinMedirDesde = null;
     s.engine.seek(s.engine.currentTime);

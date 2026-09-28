@@ -101,7 +101,7 @@ export {
   // errores y eventos
   playerError, EventBus,
   // ciclo de vida
-  Lifecycle, assertTransition, canTransition, TRANSITIONS, WITH_ENGINE, WITH_MANIFEST,
+  Lifecycle, assertTransition, canTransition, hasEngine, TRANSITIONS, WITH_ENGINE, WITH_MANIFEST,
   // motores
   confidenceFor, selectEngine, NativeEngine, nativeEngineFactory,
   // sincronización
@@ -117,7 +117,7 @@ export {
 } from '@nanoplayer/core';
 
 export type {
-  Annotation, Bumper, ChainPhase, ChapterAnnotation, InteractiveAnnotation, Manifest,
+  Annotation, Bumper, BumperPhase, ChainPhase, ChapterAnnotation, InteractiveAnnotation, Manifest,
   Source, Stream,
   StreamRole, TextTrackDef, TrimAnnotation, ValidationIssue, ValidationResult,
   Catalogue, Catalogues, Translate, ErrorCode, PlayerError,

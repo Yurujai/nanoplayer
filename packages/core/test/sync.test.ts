@@ -123,7 +123,7 @@ describe('Synchronizer · corrección', () => {
     esclavo._set(9.5);
     esclavo._seeking(true);
     const [m] = sinc().tick();
-    expect(m!.action).toBe('seeking');
+    expect(m!.action).toBe('waiting');
     expect(esclavo._seeks).toHaveLength(0);
   });
 
@@ -359,7 +359,7 @@ describe('Synchronizer · directo', () => {
       live: true, profile: P,
     });
     const [m] = s.tick();
-    expect(m!.action).toBe('seeking');
+    expect(m!.action).toBe('waiting');
     expect(esclavo._seeks).toHaveLength(0);
   });
 });
@@ -384,11 +384,11 @@ describe('Synchronizer · enfriamiento tras un salto', () => {
     s.align();
 
     esclavo._set(9.5);                       // media segundo de desfase
-    expect(s.tick()[0]!.action, 'no debe reaccionar todavía').toBe('seeking');
+    expect(s.tick()[0]!.action, 'no debe reaccionar todavía').toBe('waiting');
     expect(esclavo._seeks.length, 'ni saltar').toBeLessThanOrEqual(1);
 
     t.valor += 2000;                          // pasado el enfriamiento
-    expect(s.tick()[0]!.action).not.toBe('seeking');
+    expect(s.tick()[0]!.action).not.toBe('waiting');
   });
 
   it('un salto duro también enfría, para no encadenarlos', () => {
@@ -400,7 +400,7 @@ describe('Synchronizer · enfriamiento tras un salto', () => {
 
     // Inmediatamente después, aunque siga desviado, no encadena otro salto.
     esclavo._set(10 + P.hardSeek + 0.5);
-    expect(s.tick()[0]!.action).toBe('seeking');
+    expect(s.tick()[0]!.action).toBe('waiting');
     expect(s.hardSeeks, 'sigue habiendo uno solo').toBe(1);
 
     t.valor += 1000;
@@ -443,9 +443,9 @@ describe('Synchronizer · esclavo atascado', () => {
     const t = { valor: 1000 };
     const s = conReloj(t);
     esclavo._seeking(true);
-    expect(s.tick()[0]!.action).toBe('seeking');
+    expect(s.tick()[0]!.action).toBe('waiting');
     t.valor += 3000;
-    expect(s.tick()[0]!.action, 'aún dentro del margen').toBe('seeking');
+    expect(s.tick()[0]!.action, 'aún dentro del margen').toBe('waiting');
     expect(esclavo._seeks).toEqual([]);
 
     t.valor += 1500;
@@ -461,7 +461,7 @@ describe('Synchronizer · esclavo atascado', () => {
     maestro._seeking(true);
     s.tick();
     t.valor += 10_000;
-    expect(s.tick()[0]!.action).toBe('seeking');
+    expect(s.tick()[0]!.action).toBe('waiting');
     expect(esclavo._seeks).toEqual([]);
   });
 
@@ -475,6 +475,6 @@ describe('Synchronizer · esclavo atascado', () => {
     s.tick();
     esclavo._seeking(true);
     t.valor += 3000;
-    expect(s.tick()[0]!.action, 'la cuenta empezó de nuevo').toBe('seeking');
+    expect(s.tick()[0]!.action, 'la cuenta empezó de nuevo').toBe('waiting');
   });
 });

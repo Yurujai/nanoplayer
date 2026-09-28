@@ -19,6 +19,7 @@
  */
 import type { Player } from './player.js';
 import type { Unsubscribe } from './events.js';
+import { hasEngine } from './state.js';
 
 export interface RegistryOptions {
   /** Al reproducir uno, pausar los demás. Activado por defecto. */
@@ -86,7 +87,7 @@ export class PlayerRegistry {
   get attachedCount(): number {
     let n = 0;
     for (const { player } of this.#entradas.values()) {
-      if (player.state === 'attached' || player.state === 'active') n++;
+      if (hasEngine(player.state)) n++;
     }
     return n;
   }
@@ -177,7 +178,7 @@ export class PlayerRegistry {
 
     const candidatos = [...this.#entradas.values()]
       .filter((e) => e.player !== recienUsado
-        && (e.player.state === 'attached' || e.player.state === 'active'))
+        && hasEngine(e.player.state))
       .sort((a, b) => a.ultimoUso - b.ultimoUso);
 
     // Primero los que no están reproduciendo; solo si no hay más remedio, los

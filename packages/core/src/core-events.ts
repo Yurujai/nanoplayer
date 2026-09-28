@@ -10,11 +10,12 @@
  * parten en `:start` / `:ok` / `:fail`. Así la analítica puede medir duraciones
  * y tasas de error sin instrumentación adicional.
  */
-import type { ChainPhase } from './chain.js';
+import type { BumperPhase, ChainPhase } from './chain.js';
 import type { Empty } from './events.js';
 import type { PlayerError } from './errors.js';
 import type { Manifest } from './manifest.js';
 import type { PlayerState } from './state.js';
+import type { SyncAction } from './sync.js';
 
 export interface CoreEvents {
   // --- ciclo de vida ------------------------------------------------------
@@ -56,12 +57,12 @@ export interface CoreEvents {
    * Progreso de la cabecera o la cola. Va aparte de `time` porque la barra de
    * progreso solo enseña el contenido: mezclarlos la haría saltar.
    */
-  'chain:time': { phase: 'intro' | 'outro'; current: number; duration: number };
+  'chain:time': { phase: BumperPhase; current: number; duration: number };
   /**
    * Una cabecera o cola no se pudo reproducir y se ha omitido. No es un
    * `error`: el contenido sigue, y una cabecera rota no debe impedir verlo.
    */
-  'chain:unavailable': { phase: 'intro' | 'outro'; error: PlayerError };
+  'chain:unavailable': { phase: BumperPhase; error: PlayerError };
 
   // --- multi-stream -------------------------------------------------------
   /**
@@ -74,10 +75,7 @@ export interface CoreEvents {
    * se corrige. `recover`: llevaba demasiado así y se le ha obligado a
    * recolocarse. Separarlos de `ok` es lo que permite ver un esclavo atascado.
    */
-  'sync:drift': {
-    stream: string; drift: number;
-    action: 'ok' | 'correcting' | 'hard-seek' | 'waiting' | 'recover';
-  };
+  'sync:drift': { stream: string; drift: number; action: SyncAction };
   'layout:change': { layout: string };
   /**
    * La sincronización entre flujos no se puede medir, así que no se corrige.
