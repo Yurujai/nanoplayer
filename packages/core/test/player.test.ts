@@ -162,6 +162,35 @@ describe('Player · duración', () => {
   });
 });
 
+describe('Player · volumen', () => {
+  it('volumechange cuenta el estado real, no valores fijos', async () => {
+    // Antes `setMuted` publicaba siempre volumen 1 y `setVolume` siempre
+    // "sin silenciar", fuera cual fuera el estado.
+    const { p } = nuevo(MONO);
+    const vistos: Array<{ volume: number; muted: boolean }> = [];
+    p.on('volumechange', (e) => vistos.push(e));
+    p.setVolume(0.4);
+    p.setMuted(true);
+    p.setVolume(0.6);
+    expect(vistos).toEqual([
+      { volume: 0.4, muted: false },
+      { volume: 0.4, muted: true },
+      { volume: 0.6, muted: true },
+    ]);
+    expect(p.volume).toBe(0.6);
+    expect(p.muted).toBe(true);
+  });
+
+  it('el volumen elegido sobrevive a un desalojo', async () => {
+    const { p, creados } = nuevo(MONO);
+    await p.attach();
+    p.setVolume(0.3);
+    p.detach();
+    await p.attach();
+    expect(creados.at(-1)!._volume()).toBe(0.3);
+  });
+});
+
 describe('Player · audio y maestro', () => {
   it('solo suena el stream con audio', async () => {
     const { p, creados } = nuevo(DUAL);

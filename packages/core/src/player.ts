@@ -142,10 +142,13 @@ export class Player {
   #finCadena = false;
   /** Lo que el usuario pidió, para aplicarlo a cada pieza al descubrirla. */
   #mudo: boolean;
+  /** El volumen elegido. Sobrevive a un desalojo: se reaplica al enganchar. */
+  #volumen: number;
 
   constructor(options: PlayerOptions) {
     this.#opts = options;
     this.#mudo = options.muted === true;
+    this.#volumen = options.volume ?? 1;
     this.#engines = options.engines ?? [nativeEngineFactory];
     // Del documento del contenedor y no del global `document`: dentro de un
     // iframe el idioma que manda es el del iframe.
@@ -574,8 +577,8 @@ export class Player {
       }
       throw error;
     }
-    if (stream.audio && this.#opts.volume !== undefined) {
-      engine.setVolume(this.#opts.volume);
+    if (stream.audio) {
+      engine.setVolume(this.#volumen);
     }
     return factory.name;
   }
@@ -605,7 +608,7 @@ export class Player {
         playsInline: true,
         callbacks: this.#callbacksPieza(fase),
       });
-      if (this.#opts.volume !== undefined) engine.setVolume(this.#opts.volume);
+      engine.setVolume(this.#volumen);
       this.#piezas.set(fase, { engine, caja });
     } catch (error) {
       engine?.destroy();
@@ -890,10 +893,15 @@ export class Player {
     this.bus.emit('seek:end', { at: destino });
   }
 
+  get volume(): number { return this.#volumen; }
+  get muted(): boolean { return this.#mudo; }
+
   setVolume(volume: number): void {
-    this.master?.setVolume(volume);
-    for (const { engine } of this.#piezas.values()) engine.setVolume(volume);
-    this.bus.emit('volumechange', { volume, muted: false });
+    if (!Number.isFinite(volume)) return;
+    this.#volumen = Math.min(1, Math.max(0, volume));
+    this.master?.setVolume(this.#volumen);
+    for (const { engine } of this.#piezas.values()) engine.setVolume(this.#volumen);
+    this.bus.emit('volumechange', { volume: this.#volumen, muted: this.#mudo });
   }
 
   setMuted(muted: boolean): void {
@@ -901,7 +909,7 @@ export class Player {
     // detrás van mudas hasta entonces, se haya pedido o no.
     this.#mudo = muted;
     if (!this.#conmutando) this.#motorActual()?.setMuted(muted);
-    this.bus.emit('volumechange', { volume: 1, muted });
+    this.bus.emit('volumechange', { volume: this.#volumen, muted });
   }
 
   setPlaybackRate(rate: number): void {
