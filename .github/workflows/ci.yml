@@ -87,6 +87,12 @@ jobs:
         run: node teclado.mjs --serve ../demo/dist
         working-directory: e2e
 
+      # The unit tests chain with fake engines that never reject a play(), so
+      # only a real browser shows whether the outro survives start-up.
+      - name: Intro and outro chaining
+        run: node chaining.mjs --serve ../demo/dist
+        working-directory: e2e
+
       # El build completo, no solo el del bundle: para emitir sus tipos, tsc
       # resuelve los paquetes hermanos contra lo construido —igual que hará
       # quien los instale— y en este job todavía no hay ningún `dist`.
