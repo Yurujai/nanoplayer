@@ -1,4 +1,4 @@
-// --- manifiesto -------------------------------------------------------------
+// --- manifest ---------------------------------------------------------------
 export type {
   Annotation, Bumper, ChapterAnnotation, InteractiveAnnotation, Manifest,
   Source, Stream, StreamRole, TextTrackDef, TrimAnnotation,
@@ -10,19 +10,19 @@ export {
 export type { ValidationIssue, ValidationResult } from './validate.js';
 export type { TrimRange } from './trim-timeline.js';
 
-// --- cabecera y cola --------------------------------------------------------
-export { ANTICIPACION_MS, firstFrame } from './chain.js';
+// --- intro and outro --------------------------------------------------------
+export { CHAIN_LEAD_MS, CHAIN_WATCH_MS, FIRST_FRAME_TIMEOUT_MS, firstFrame } from './chain.js';
 export type { BumperPhase, ChainPhase } from './chain.js';
 
-// --- textos -----------------------------------------------------------------
-export { IDIOMA_BASE, StringRegistry, strings } from './i18n.js';
+// --- strings ----------------------------------------------------------------
+export { BASE_LANGUAGE, StringRegistry, strings } from './i18n.js';
 export type { Catalogue, Catalogues, Translate } from './i18n.js';
 
-// --- errores ----------------------------------------------------------------
+// --- errors -----------------------------------------------------------------
 export { playerError } from './errors.js';
 export type { ErrorCode, PlayerError } from './errors.js';
 
-// --- eventos ----------------------------------------------------------------
+// --- events -----------------------------------------------------------------
 export { EventBus } from './events.js';
 export type {
   AnyListener, Empty, EventBusOptions, EventMap, Listener,
@@ -30,14 +30,14 @@ export type {
 } from './events.js';
 export type { CoreEvents } from './core-events.js';
 
-// --- ciclo de vida ----------------------------------------------------------
+// --- lifecycle --------------------------------------------------------------
 export { Lifecycle } from './lifecycle.js';
 export {
   assertTransition, canTransition, hasEngine, TRANSITIONS, WITH_ENGINE, WITH_MANIFEST,
 } from './state.js';
 export type { PlayerState } from './state.js';
 
-// --- motor ------------------------------------------------------------------
+// --- engines ----------------------------------------------------------------
 export { confidenceFor, hasMse, isHlsType, selectEngine } from './engine.js';
 export type {
   AttachOptions, Confidence, EngineCallbacks, EngineFactory, MediaEngine,
@@ -46,25 +46,25 @@ export { MediaElementEngine, mediaElementError } from './media-element-engine.js
 export type { MediaElementEngineOptions } from './media-element-engine.js';
 export { NativeEngine, nativeEngineFactory } from './native-engine.js';
 
-// --- sincronización ---------------------------------------------------------
+// --- sync -------------------------------------------------------------------
 export { defaultScheduler, detectProfile, SYNC_PROFILES, Synchronizer } from './sync.js';
 export type {
   Scheduler, SyncAction, SyncProfile, SyncProfileName, SyncSample, SynchronizerOptions,
 } from './sync.js';
 
-// --- reproductor ------------------------------------------------------------
+// --- player -----------------------------------------------------------------
 export { createPlayer, Player } from './player.js';
 export type { ManifestResolver, PlayerOptions } from './player.js';
 
-// --- multi-instancia --------------------------------------------------------
+// --- many players -----------------------------------------------------------
 export { createBatchResolver, PlayerRegistry } from './registry.js';
 export type { BatchResolverOptions, RegistryOptions } from './registry.js';
 
-// --- directo ----------------------------------------------------------------
+// --- live -------------------------------------------------------------------
 export { backoff, LiveTracker } from './live.js';
 export type { LiveStatus, RetryPolicy } from './live.js';
 
-// --- anclajes de interfaz ---------------------------------------------------
+// --- UI slots ---------------------------------------------------------------
 export type {
   BarControlDecl, OverlayDecl, OverlayHandle,
   SettingsOptionDecl, SettingsPanelDecl, TimelineMarkerDecl, TimelineMarkersDecl, UiSlots,
@@ -76,6 +76,6 @@ export type {
   ActivationResult, PluginConfig, PluginContext, PluginImpl, PluginManifest,
 } from './plugins.js';
 
-// --- punto de entrada -------------------------------------------------------
+// --- entry point ------------------------------------------------------------
 export { create, NanoPlayer, registry, VERSION } from './nanoplayer.js';
 export type { CreateConfig } from './nanoplayer.js';

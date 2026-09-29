@@ -1,18 +1,16 @@
 /**
- * El encadenado de cabecera, contenido y cola.
- *
- * Decide qué pieza se ve, cuándo arranca la siguiente y cómo se cambia sin
- * que se note. Lo que es del contenido —reproducirlo, pausarlo, saltar en
- * él— lo pide al reproductor por `ChainHost`.
+ * Chains intro, content and outro: which piece is shown, when the next one
+ * starts and how to switch without it showing. Anything about the content
+ * itself goes to the player through `ChainHost`.
  */
-import { ANTICIPACION_MS, VIGILANCIA_MS, firstFrame, type BumperPhase, type ChainPhase } from './chain.js';
+import { CHAIN_LEAD_MS, CHAIN_WATCH_MS, firstFrame, type BumperPhase, type ChainPhase } from './chain.js';
 import type { CoreEvents } from './core-events.js';
 import { selectEngine, type EngineFactory, type MediaEngine } from './engine.js';
 import { playerError, type PlayerError } from './errors.js';
 import type { EventBus } from './events.js';
 import type { Bumper, Manifest, Stream } from './manifest.js';
 
-/** Lo que el encadenado necesita del reproductor. */
+/** What the chain needs from the player. */
 export interface ChainHost {
   readonly bus: EventBus<CoreEvents>;
   readonly container: HTMLElement;
@@ -28,9 +26,9 @@ export interface ChainHost {
   playContent(): Promise<void>;
   pauseContent(): void;
   seekContent(seconds: number): void;
-  /** Segundos que le quedan al contenido, a la velocidad actual. */
+  /** Seconds left in the content, at the current rate. */
   contentRemaining(): number;
-  /** El contenido termina sin cola que lo siga: parar y recordar el final. */
+  /** The content ends with no outro after it: stop and remember the end. */
   contentEnded(): void;
   announceEnded(): void;
   reflectPlay(): void;
@@ -39,323 +37,270 @@ export interface ChainHost {
 }
 
 export class ChainController {
-  /** Pieza que se ve. Sin cabecera, se empieza directamente en el contenido. */
-  #fase: ChainPhase = 'main';
-  /** Motores de la cabecera y la cola, que van aparte de los del contenido. */
-  #piezas = new Map<BumperPhase, { engine: MediaEngine; caja: HTMLElement }>();
-  /** Hacia dónde se está cambiando, o `null`. Mientras dura, nadie manda. */
-  #conmutando: ChainPhase | null = null;
-  /** Se incrementa para dar por cancelado un cambio en curso. */
-  #turno = 0;
-  #vigilante: ReturnType<typeof setInterval> | undefined;
-  /** Si ya se desbloquearon las piezas posteriores en este enganche. */
-  #desbloqueado = false;
-  /** La cola terminó: la cadena entera está vista. */
-  #finCadena = false;
+  #phase: ChainPhase = 'main';
+  #bumpers = new Map<BumperPhase, { engine: MediaEngine; box: HTMLElement }>();
+  /** Where a switch is heading, or `null`. While it lasts, no engine is in charge. */
+  #switching: ChainPhase | null = null;
+  /** Bumped to cancel a switch in flight. */
+  #turn = 0;
+  #watcher: ReturnType<typeof setInterval> | undefined;
+  #unlocked = false;
+  #chainEnded = false;
 
   constructor(private readonly host: ChainHost) {}
 
   get phase(): ChainPhase {
-    return this.#fase;
+    return this.#phase;
   }
 
-  /** Si ahora mismo se puede saltar algo. Solo la cabecera; la cola, nunca. */
+  /** Only the intro can be skipped; the outro never. */
   get canSkip(): boolean {
-    return this.#fase === 'intro' && this.#conmutando === null;
+    return this.#phase === 'intro' && this.#switching === null;
   }
 
   get hasOutro(): boolean {
-    return this.#piezas.has('outro');
+    return this.#bumpers.has('outro');
   }
 
   /**
-   * Si lo que dice el contenido cuenta. Solo manda cuando es lo que se ve:
-   * mientras suena la cabecera está parado o arrancando detrás, y durante un
-   * cambio sus avisos describen una transición, no algo que pidió el usuario.
+   * Whether what the content reports counts: during the intro it is stopped
+   * or starting behind, and during a switch its events describe a transition.
    */
   get contentCounts(): boolean {
-    return this.#fase === 'main' && this.#conmutando === null;
+    return this.#phase === 'main' && this.#switching === null;
   }
 
-  /** Si el progreso del contenido está oculto: detrás de una pieza o apareciendo. */
   get contentHidden(): boolean {
-    return this.#fase !== 'main' || this.#conmutando === 'main';
+    return this.#phase !== 'main' || this.#switching === 'main';
   }
 
-  /** El motor de la pieza que se ve: la cabecera, la cola o el maestro. */
   currentEngine(): MediaEngine | null {
-    if (this.#fase === 'main') return this.host.master();
-    return this.#piezas.get(this.#fase)?.engine ?? null;
+    if (this.#phase === 'main') return this.host.master();
+    return this.#bumpers.get(this.#phase)?.engine ?? null;
   }
 
-  /** Con el manifiesto resuelto: si hay cabecera, se empieza por ella. */
   start(manifest: Manifest): void {
-    if (manifest.intro) this.#ponerFase('intro');
+    if (manifest.intro) this.#setPhase('intro');
   }
 
-  /** La cabecera primero, porque es lo que se va a ver antes. Si ya se vio o se saltó, no. */
   async attachIntro(manifest: Manifest): Promise<void> {
-    if (manifest.intro && this.#fase === 'intro') await this.#engancharPieza('intro', manifest.intro);
+    if (manifest.intro && this.#phase === 'intro') await this.#attachBumper('intro', manifest.intro);
   }
 
   /**
-   * La cola se engancha al arrancar, aunque falte una hora para usarla. Es el
-   * precio de poder desbloquearla en el gesto del usuario (variante A de S6).
+   * Attached at start-up even if it is an hour away: the price of unlocking it
+   * within the user's gesture. see docs/browser-quirks.md#ios-per-element-autoplay
    */
   async attachOutro(manifest: Manifest): Promise<void> {
-    if (manifest.outro) await this.#engancharPieza('outro', manifest.outro);
+    if (manifest.outro) await this.#attachBumper('outro', manifest.outro);
   }
 
   /**
-   * Lo que toca al pedir play. Devuelve `true` si ya lo ha resuelto el
-   * encadenado —una pieza, o un cambio en curso— y `false` si hay que
-   * reproducir el contenido.
+   * Returns `true` if the chain has handled play —a bumper, or a switch in
+   * flight— and `false` if the content should play.
    */
   async play(): Promise<boolean> {
-    if (this.#conmutando) return true;
-    this.#desbloquear();
+    if (this.#switching) return true;
+    this.#unlock();
 
-    // Dar al play con la cadena terminada vuelve al contenido, sin repetir la
-    // cabecera: ya se vio, y se podía saltar.
-    if (this.#finCadena) {
-      this.#finCadena = false;
-      this.#piezas.get('outro')?.engine.seek(0);
-      this.#ponerFaseYAvisar('main', false);
+    // Replaying a finished chain goes back to the content, without the intro.
+    if (this.#chainEnded) {
+      this.#chainEnded = false;
+      this.#bumpers.get('outro')?.engine.seek(0);
+      this.#setPhaseAndEmit('main', false);
       this.host.seekContent(0);
     }
 
-    if (this.#fase !== 'main') {
-      const pieza = this.#piezas.get(this.#fase);
-      if (pieza) {
-        pieza.engine.setMuted(this.host.muted);
-        await pieza.engine.play();
+    if (this.#phase !== 'main') {
+      const bumper = this.#bumpers.get(this.#phase);
+      if (bumper) {
+        bumper.engine.setMuted(this.host.muted);
+        await bumper.engine.play();
         this.watch();
         return true;
       }
-      // La pieza se perdió por el camino: se sigue con el contenido.
-      this.#ponerFaseYAvisar('main', false);
+      this.#setPhaseAndEmit('main', false);
     }
     return false;
   }
 
-  /**
-   * Pausar en pleno cambio lo cancela: se queda en la pieza de antes, y al
-   * reanudar la vigilancia vuelve a disparar el cambio.
-   */
+  /** Pausing mid-switch cancels it; resuming lets the watcher fire it again. */
   pause(): void {
-    this.#cancelarCambio();
-    clearInterval(this.#vigilante);
-    for (const { engine } of this.#piezas.values()) engine.pause();
+    this.#cancelSwitch();
+    clearInterval(this.#watcher);
+    for (const { engine } of this.#bumpers.values()) engine.pause();
   }
 
-  /**
-   * Salta la cabecera, por el mismo camino que el cambio anticipado: la
-   * cabecera sigue a la vista hasta que el contenido tiene imagen (S6).
-   */
+  /** Same path as the early switch: the intro stays visible until the content has a frame. */
   skipIntro(): void {
     if (!this.canSkip) return;
     if (!this.host.hasEngine) {
-      // Aún no hay nada enganchado: basta con no empezar por ella.
-      this.#ponerFaseYAvisar('main', true);
+      this.#setPhaseAndEmit('main', true);
       return;
     }
-    void this.#pasarA('main', true);
+    void this.#switchTo('main', true);
   }
 
-  /**
-   * Lo que el encadenado tiene que decir de un salto. Devuelve `true` si ya lo
-   * ha resuelto y el contenido no debe saltar.
-   */
+  /** Returns `true` if the chain has handled the seek and the content must not seek. */
   seek(seconds: number): boolean {
-    if (this.#fase === 'outro') {
-      // Hacia delante no hay nada: la cola no se salta. Hacia atrás se vuelve
-      // al contenido, y al llegar otra vez al final la cola suena de nuevo.
-      if (seconds < this.host.duration) this.#volverDeLaCola(seconds);
+    if (this.#phase === 'outro') {
+      // The outro cannot be skipped forward; seeking back returns to the content.
+      if (seconds < this.host.duration) this.#backFromOutro(seconds);
       return true;
     }
-    // Retroceder mientras se preparaba la cola la deja para más adelante.
-    if (this.#conmutando === 'outro') {
-      const sonaba = this.host.isActive;
-      this.#cancelarCambio();
-      if (sonaba) void this.host.playContent().then(() => this.watch());
+    if (this.#switching === 'outro') {
+      const wasPlaying = this.host.isActive;
+      this.#cancelSwitch();
+      if (wasPlaying) void this.host.playContent().then(() => this.watch());
     }
     return false;
   }
 
-  /**
-   * El contenido llega a su final. Con cola no es el final: entra la cola.
-   * Devuelve `true` si el encadenado se ocupa.
-   */
+  /** Returns `true` if the chain takes over the content's end. */
   onContentEnd(): boolean {
     if (!this.hasOutro) return false;
-    if (!this.#conmutando) void this.#pasarA('outro', false);
+    if (!this.#switching) void this.#switchTo('outro', false);
     return true;
   }
 
-  /**
-   * El contenido llega al final del recorte. Con cola, se para ahí con el
-   * último fotograma a la vista y la cola entra encima.
-   */
+  /** At the trim's end, the content stops on its last frame and the outro enters over it. */
   onTrimEnd(): boolean {
     if (!this.onContentEnd()) return false;
     this.host.pauseContent();
     return true;
   }
 
-  /** Las piezas que esperan detrás van mudas hasta descubrirse. */
   setMuted(muted: boolean): void {
-    if (!this.#conmutando) this.currentEngine()?.setMuted(muted);
+    if (!this.#switching) this.currentEngine()?.setMuted(muted);
   }
 
   setVolume(volume: number): void {
-    for (const { engine } of this.#piezas.values()) engine.setVolume(volume);
+    for (const { engine } of this.#bumpers.values()) engine.setVolume(volume);
   }
 
-  /**
-   * Las piezas no conservan posición: duran segundos, y retomar una cabecera
-   * a la mitad no tiene sentido. La fase sí se conserva, así que al volver se
-   * empieza la misma pieza desde el principio.
-   */
+  /** Bumpers keep no position, but the phase is kept: the same bumper restarts. */
   release(): void {
-    clearInterval(this.#vigilante);
-    this.#turno++;
-    this.#conmutando = null;
-    this.#desbloqueado = false;
-    for (const { engine, caja } of this.#piezas.values()) {
+    clearInterval(this.#watcher);
+    this.#turn++;
+    this.#switching = null;
+    this.#unlocked = false;
+    for (const { engine, box } of this.#bumpers.values()) {
       engine.destroy();
-      caja.remove();
+      box.remove();
     }
-    this.#piezas.clear();
+    this.#bumpers.clear();
   }
 
   /**
-   * Vigila el final de la pieza actual para arrancar la siguiente a tiempo.
-   *
-   * Con temporizador y no con `timeupdate`: ese evento llega a unos 4 Hz, y
-   * con 250 ms entre avisos la anticipación de 600 ms fallaría a menudo.
+   * A timer, not `timeupdate`: that fires at ~4 Hz, and 250 ms between events
+   * would often miss the 600 ms lead (test: chain.test.ts).
    */
   watch(): void {
-    clearInterval(this.#vigilante);
-    if (!this.#siguiente()) return;
-    this.#vigilante = setInterval(() => {
-      const sig = this.#siguiente();
-      if (!sig || this.#conmutando || this.currentEngine()?.paused !== false) return;
-      const r = this.#restante();
-      if (Number.isFinite(r) && r * 1000 <= ANTICIPACION_MS) void this.#pasarA(sig, false);
-    }, VIGILANCIA_MS);
+    clearInterval(this.#watcher);
+    if (!this.#next()) return;
+    this.#watcher = setInterval(() => {
+      const next = this.#next();
+      if (!next || this.#switching || this.currentEngine()?.paused !== false) return;
+      const r = this.#remaining();
+      if (Number.isFinite(r) && r * 1000 <= CHAIN_LEAD_MS) void this.#switchTo(next, false);
+    }, CHAIN_WATCH_MS);
   }
 
   /**
-   * Si falla, **se omite y el contenido sigue**: una cabecera rota no puede
-   * impedir ver la clase. Se avisa por `chain:unavailable`, no por `error`,
-   * porque la interfaz trata `error` como algo que para la reproducción.
+   * A broken bumper is skipped and the content goes on. Reported through
+   * `chain:unavailable`, not `error`, which the UI treats as fatal.
    */
-  async #engancharPieza(fase: BumperPhase, pieza: Bumper): Promise<void> {
-    const stream: Stream = { id: fase, role: fase, audio: true, sources: pieza.sources };
-    const caja = document.createElement('div');
-    caja.dataset['bumper'] = fase;
+  async #attachBumper(phase: BumperPhase, bumper: Bumper): Promise<void> {
+    const stream: Stream = { id: phase, role: phase, audio: true, sources: bumper.sources };
+    const box = document.createElement('div');
+    box.dataset['bumper'] = phase;
     let engine: MediaEngine | null = null;
     try {
       const factory = selectEngine(this.host.engines, stream);
       if (!factory) {
-        throw playerError('engine/unsupported', `No engine can play the ${fase}`);
+        throw playerError('engine/unsupported', `No engine can play the ${phase}`);
       }
-      this.host.container.appendChild(caja);
+      this.host.container.appendChild(box);
       engine = factory.create();
-      await engine.attach(caja, stream, {
-        // La cola suena después de mucho rato: hasta descubrirla va muda.
-        muted: fase === 'outro' || this.host.muted,
+      await engine.attach(box, stream, {
+        // Muted until revealed. see docs/browser-quirks.md#ios-single-audio
+        muted: phase === 'outro' || this.host.muted,
         playsInline: true,
-        callbacks: this.#callbacksPieza(fase),
+        callbacks: this.#bumperCallbacks(phase),
       });
       engine.setVolume(this.host.volume);
-      this.#piezas.set(fase, { engine, caja });
+      this.#bumpers.set(phase, { engine, box });
     } catch (error) {
       engine?.destroy();
-      caja.remove();
-      this.#omitirPieza(fase, error);
-      if (fase === 'intro') this.#ponerFaseYAvisar('main', false);
+      box.remove();
+      this.#dropBumper(phase, error);
+      if (phase === 'intro') this.#setPhaseAndEmit('main', false);
     }
   }
 
-  /** Quita una pieza que no se puede reproducir y sigue sin ella. */
-  #omitirPieza(fase: BumperPhase, error: unknown): void {
-    const p = this.#piezas.get(fase);
-    if (p) {
-      p.engine.destroy();
-      p.caja.remove();
-      this.#piezas.delete(fase);
+  #dropBumper(phase: BumperPhase, error: unknown): void {
+    const b = this.#bumpers.get(phase);
+    if (b) {
+      b.engine.destroy();
+      b.box.remove();
+      this.#bumpers.delete(phase);
     }
-    this.host.bus.emit('chain:unavailable', { phase: fase, error: this.host.toPlayerError(error) });
+    this.host.bus.emit('chain:unavailable', { phase, error: this.host.toPlayerError(error) });
   }
 
-  /**
-   * Cambia la pieza visible. **Un solo atributo**: la interfaz decide con él
-   * qué se ve, y cambiarlo de golpe es lo que hace el cambio instantáneo.
-   */
-  #ponerFase(fase: ChainPhase): void {
-    this.#fase = fase;
-    this.host.container.dataset['phase'] = fase;
+  /** A single attribute: the UI shows pieces off it, so flipping it is the instant switch. */
+  #setPhase(phase: ChainPhase): void {
+    this.#phase = phase;
+    this.host.container.dataset['phase'] = phase;
   }
 
-  #ponerFaseYAvisar(fase: ChainPhase, skipped: boolean): void {
-    const from = this.#fase;
-    if (from === fase) return;
-    this.#ponerFase(fase);
-    this.host.bus.emit('chain:phase', { from, to: fase, skipped });
+  #setPhaseAndEmit(phase: ChainPhase, skipped: boolean): void {
+    const from = this.#phase;
+    if (from === phase) return;
+    this.#setPhase(phase);
+    this.host.bus.emit('chain:phase', { from, to: phase, skipped });
   }
 
-  /** Da por cancelado el cambio en curso y deja la pieza entrante parada. */
-  #cancelarCambio(): void {
-    const destino = this.#conmutando;
-    if (!destino) return;
-    this.#turno++;
-    this.#conmutando = null;
-    if (destino === 'main') {
+  #cancelSwitch(): void {
+    const target = this.#switching;
+    if (!target) return;
+    this.#turn++;
+    this.#switching = null;
+    if (target === 'main') {
       this.host.pauseContent();
     } else {
-      const e = this.#piezas.get(destino)?.engine;
+      const e = this.#bumpers.get(target)?.engine;
       e?.pause();
       e?.seek(0);
     }
   }
 
-  /** Retroceder desde la cola: vuelve al contenido sin anticipación. */
-  #volverDeLaCola(seconds: number): void {
-    const cola = this.#piezas.get('outro')?.engine;
-    const sonaba = !!cola && !cola.paused;
-    this.#finCadena = false;
-    // La fase cambia antes de pausar la cola para que su pausa no cuente como
-    // una pausa del usuario.
-    this.#ponerFaseYAvisar('main', false);
-    cola?.pause();
-    cola?.seek(0);
+  #backFromOutro(seconds: number): void {
+    const outro = this.#bumpers.get('outro')?.engine;
+    const wasPlaying = !!outro && !outro.paused;
+    this.#chainEnded = false;
+    // Phase first, so the outro's pause does not count as a user pause.
+    this.#setPhaseAndEmit('main', false);
+    outro?.pause();
+    outro?.seek(0);
     this.host.master()?.setMuted(this.host.muted);
     this.host.seekContent(seconds);
-    if (sonaba) void this.host.playContent().then(() => this.watch());
+    if (wasPlaying) void this.host.playContent().then(() => this.watch());
   }
 
   /**
-   * Desbloquea las piezas que vendrán después, en el mismo arranque que pidió
-   * el usuario (variante A de S6).
-   *
-   * En iOS el permiso de reproducir con sonido es **de cada elemento**. La
-   * pieza siguiente arranca desde un temporizador, sin gesto detrás, y al
-   * quitarle el silencio el navegador podría pausarla. Un `play()` seguido de
-   * `pause()` dentro del gesto la deja autorizada.
-   *
-   * En un iPhone con Safari 26.5 **no hizo falta** (S6 §5): sin desbloquear, el
-   * cambio tampoco se rechazó ni se pausó. Se mantiene hasta medirlo en un iOS
-   * anterior, donde la política por elemento podría seguir aplicándose.
+   * A `play()` + `pause()` inside the user's gesture authorises the later
+   * pieces, which start from a timer. Not needed on Safari 26.5 (S6 §5); kept
+   * until measured on older iOS. see docs/browser-quirks.md#ios-per-element-autoplay
    */
-  #desbloquear(): void {
-    if (this.#desbloqueado) return;
-    this.#desbloqueado = true;
-    const despues: MediaEngine[] = [];
-    if (this.#fase === 'intro') despues.push(...this.host.contentEngines());
-    const cola = this.#piezas.get('outro')?.engine;
-    if (cola && this.#fase !== 'outro') despues.push(cola);
-    for (const e of despues) {
+  #unlock(): void {
+    if (this.#unlocked) return;
+    this.#unlocked = true;
+    const later: MediaEngine[] = [];
+    if (this.#phase === 'intro') later.push(...this.host.contentEngines());
+    const outro = this.#bumpers.get('outro')?.engine;
+    if (outro && this.#phase !== 'outro') later.push(outro);
+    for (const e of later) {
       if (!e.paused) continue;
       const t = e.currentTime;
       e.setMuted(true);
@@ -366,116 +311,101 @@ export class ChainController {
     }
   }
 
-  /** Qué pieza va después de la actual, si hay alguna. */
-  #siguiente(): ChainPhase | null {
-    if (this.#fase === 'intro') return 'main';
-    if (this.#fase === 'main' && this.#piezas.has('outro')) return 'outro';
+  #next(): ChainPhase | null {
+    if (this.#phase === 'intro') return 'main';
+    if (this.#phase === 'main' && this.#bumpers.has('outro')) return 'outro';
     return null;
   }
 
-  /** Segundos que le quedan a la pieza actual, a la velocidad actual. */
-  #restante(): number {
-    if (this.#fase === 'main') return this.host.contentRemaining();
-    const e = this.#piezas.get(this.#fase)?.engine;
+  #remaining(): number {
+    if (this.#phase === 'main') return this.host.contentRemaining();
+    const e = this.#bumpers.get(this.#phase)?.engine;
     return e ? e.duration - e.currentTime : NaN;
   }
 
   /**
-   * Cambia a la pieza siguiente sin que se vea el salto.
-   *
-   * 1. Arranca la entrante **en silencio**, con la saliente todavía a la vista.
-   * 2. Espera a su primer fotograma, no a que acepte el `play()`.
-   * 3. Conmuta de golpe: la hace visible, le da el sonido y para la saliente.
-   *
-   * Mientras dura, los avisos de los dos motores no cuentan: la entrante aún
-   * no es la que se ve, y la saliente va a pararse por diseño.
+   * The incoming piece starts muted behind the outgoing one, and the switch
+   * waits for its first frame, not for `play()` to resolve.
+   * see docs/browser-quirks.md#first-frame-latency and #ios-single-audio
    */
-  async #pasarA(destino: ChainPhase, saltada: boolean): Promise<void> {
-    if (this.#conmutando || destino === this.#fase || !this.host.manifest) return;
-    const origen = this.#fase;
-    const turno = ++this.#turno;
-    this.#conmutando = destino;
-    clearInterval(this.#vigilante);
+  async #switchTo(target: ChainPhase, skipped: boolean): Promise<void> {
+    if (this.#switching || target === this.#phase || !this.host.manifest) return;
+    const origin = this.#phase;
+    const turn = ++this.#turn;
+    this.#switching = target;
+    clearInterval(this.#watcher);
 
-    let entrante: MediaEngine | null;
+    let incoming: MediaEngine | null;
     try {
-      if (destino === 'main') {
+      if (target === 'main') {
         this.host.master()?.setMuted(true);
         await this.host.playContent();
-        entrante = this.host.master();
+        incoming = this.host.master();
       } else {
-        entrante = this.#piezas.get(destino)?.engine ?? null;
-        if (entrante) {
-          entrante.setMuted(true);
-          entrante.seek(0);
-          await entrante.play();
+        incoming = this.#bumpers.get(target)?.engine ?? null;
+        if (incoming) {
+          incoming.setMuted(true);
+          incoming.seek(0);
+          await incoming.play();
         }
       }
-      if (entrante) await firstFrame(entrante);
+      if (incoming) await firstFrame(incoming);
     } catch (error) {
-      if (turno !== this.#turno) return;
-      this.#conmutando = null;
-      if (destino === 'main') {
+      if (turn !== this.#turn) return;
+      this.#switching = null;
+      if (target === 'main') {
         this.host.bus.emit('error', { error: this.host.toPlayerError(error) });
         return;
       }
-      // La cola no arranca: se omite y la cadena termina aquí.
-      this.#omitirPieza('outro', error);
-      this.#terminarContenido();
+      this.#dropBumper('outro', error);
+      this.#endContent();
       return;
     }
-    if (turno !== this.#turno) return;
+    if (turn !== this.#turn) return;
 
-    // --- el cambio visible ------------------------------------------------
-    this.#conmutando = null;
-    this.#ponerFaseYAvisar(destino, saltada);
-    entrante?.setMuted(this.host.muted);
-    if (origen === 'main') {
+    this.#switching = null;
+    this.#setPhaseAndEmit(target, skipped);
+    incoming?.setMuted(this.host.muted);
+    if (origin === 'main') {
       this.host.pauseContent();
     } else {
-      this.#piezas.get(origen)?.engine.pause();
+      this.#bumpers.get(origin)?.engine.pause();
     }
-    // Si se saltó con la cabecera en pausa, el contenido acaba de arrancar y
-    // el estado tiene que decirlo: su `onPlay` llegó mientras no contaba.
-    if (entrante && !entrante.paused && !this.host.isActive) this.host.reflectPlay();
-    if (!entrante) {
-      if (destino === 'outro') this.#terminarContenido();
+    // Skipping a paused intro starts the content, whose `onPlay` arrived while it did not count.
+    if (incoming && !incoming.paused && !this.host.isActive) this.host.reflectPlay();
+    if (!incoming) {
+      if (target === 'outro') this.#endContent();
       return;
     }
     this.watch();
   }
 
-  /**
-   * El contenido ha llegado a su final y no hay cola que lo siga (o la que
-   * había se ha perdido). Es el `ended` del contenido tal cual.
-   */
-  #terminarContenido(): void {
-    if (this.#fase === 'outro') this.#finCadena = true;
+  /** The content's own `ended`: no outro follows, or it was lost. */
+  #endContent(): void {
+    if (this.#phase === 'outro') this.#chainEnded = true;
     else this.host.contentEnded();
     this.host.announceEnded();
   }
 
-  #callbacksPieza(fase: BumperPhase) {
-    // Solo cuenta lo que dice la pieza que se ve, y no durante un cambio.
-    const cuenta = () => this.#fase === fase && this.#conmutando === null;
+  #bumperCallbacks(phase: BumperPhase) {
+    const counts = () => this.#phase === phase && this.#switching === null;
     return {
       onTime: (current: number, duration: number) => {
-        if (cuenta()) this.host.bus.emit('chain:time', { phase: fase, current, duration });
+        if (counts()) this.host.bus.emit('chain:time', { phase, current, duration });
       },
-      onPlay: () => { if (cuenta()) this.host.reflectPlay(); },
-      onPause: () => { if (cuenta()) this.host.reflectPause(); },
+      onPlay: () => { if (counts()) this.host.reflectPlay(); },
+      onPause: () => { if (counts()) this.host.reflectPause(); },
       onEnded: () => {
-        if (this.#fase !== fase) return;
-        // Red de seguridad: si la vigilancia no llegó a tiempo —una cabecera
-        // más corta que la anticipación—, se cambia al terminar.
-        if (fase === 'intro') void this.#pasarA('main', false);
-        else if (!this.#conmutando) this.#terminarContenido();
+        if (this.#phase !== phase) return;
+        // Safety net for an intro shorter than the lead.
+        if (phase === 'intro') void this.#switchTo('main', false);
+        else if (!this.#switching) this.#endContent();
       },
       onError: (error: PlayerError) => {
-        this.#omitirPieza(fase, error);
-        if (this.#fase !== fase) return;
-        if (fase === 'intro') void this.#pasarA('main', false);
-        else this.#terminarContenido();
+        this.#dropBumper(phase, error);
+        if (this.#phase !== phase) return;
+        if (phase === 'intro') void this.#switchTo('main', false);
+        else this.#endContent();
       },
     };
   }

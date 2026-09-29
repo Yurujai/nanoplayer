@@ -1,26 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { backoff, LiveTracker } from '../src/live.js';
 
-describe('LiveTracker · la distinción que importa', () => {
-  it('lo que nunca emitió está "esperando"', () => {
+describe('LiveTracker · the distinction that matters', () => {
+  it('what never broadcast is "waiting"', () => {
     const t = new LiveTracker();
     t.markUnavailable('cam');
     expect(t.status('cam')).toBe('waiting');
   });
 
-  it('lo que emitió y se cayó está "interrumpido"', () => {
-    /*
-     * Es la razón de ser de esta clase. Decirle "el evento aún no ha empezado"
-     * a quien llevaba veinte minutos viéndolo sería desconcertante, así que
-     * hay que recordar si llegó a emitir.
-     */
+  it('what broadcast and dropped is "interrupted"', () => {
+    // "The event has not started yet" would baffle someone who had been
+    // watching for twenty minutes.
     const t = new LiveTracker();
     t.markLive('cam');
     t.markUnavailable('cam');
     expect(t.status('cam')).toBe('interrupted');
   });
 
-  it('una vez que emitió, ya nunca vuelve a "esperando"', () => {
+  it('once it broadcast, it never goes back to "waiting"', () => {
     const t = new LiveTracker();
     t.markLive('cam');
     t.markUnavailable('cam');
@@ -29,7 +26,7 @@ describe('LiveTracker · la distinción que importa', () => {
     expect(t.status('cam')).toBe('interrupted');
   });
 
-  it('reset borra también el recuerdo de haber emitido', () => {
+  it('reset also forgets having broadcast', () => {
     const t = new LiveTracker();
     t.markLive('cam');
     t.reset();
@@ -38,68 +35,67 @@ describe('LiveTracker · la distinción que importa', () => {
   });
 });
 
-describe('LiveTracker · estado del conjunto', () => {
-  it('emite si alguno emite, aunque falte el otro', () => {
-    // Bloquear los dos porque falta uno sería peor que enseñar el que hay.
+describe('LiveTracker · overall status', () => {
+  it('is live if any stream is, even with another missing', () => {
     const t = new LiveTracker();
     t.markLive('cam');
     t.markUnavailable('slides');
     expect(t.overall).toBe('live');
   });
 
-  it('con ninguno emitiendo, una interrupción manda sobre una espera', () => {
+  it('with none live, an interruption wins over waiting', () => {
     const t = new LiveTracker();
-    t.markLive('cam'); t.markUnavailable('cam');   // interrumpido
-    t.markUnavailable('slides');                    // esperando
+    t.markLive('cam'); t.markUnavailable('cam');   // interrupted
+    t.markUnavailable('slides');                    // waiting
     expect(t.overall).toBe('interrupted');
   });
 
-  it('sin flujos registrados no dice nada', () => {
+  it('with no registered streams it says nothing', () => {
     expect(new LiveTracker().overall).toBe('unknown');
   });
 
-  it('lista los que faltan por emitir', () => {
+  it('lists the streams still pending', () => {
     const t = new LiveTracker();
     t.markLive('cam');
     t.markUnavailable('slides');
     expect(t.pending).toEqual(['slides']);
   });
 
-  it('solo informa de cambios reales', () => {
+  it('reports only real changes', () => {
     const t = new LiveTracker();
     expect(t.markUnavailable('cam')).toBe(true);
-    expect(t.markUnavailable('cam'), 'sigue igual').toBe(false);
+    expect(t.markUnavailable('cam'), 'unchanged').toBe(false);
     expect(t.markLive('cam')).toBe(true);
   });
 });
 
 describe('backoff', () => {
-  it('crece entre intentos', () => {
-    // Un evento que empieza dos horas tarde serían miles de peticiones
-    // inútiles por espectador si la espera fuera fija.
-    const esperas = [0, 1, 2, 3].map((i) => backoff(i));
-    for (let i = 1; i < esperas.length; i++) {
-      expect(esperas[i]!).toBeGreaterThan(esperas[i - 1]!);
+  it('grows between attempts', () => {
+    // A fixed delay would mean thousands of useless requests per viewer for
+    // an event starting two hours late.
+    const delays = [0, 1, 2, 3].map((i) => backoff(i));
+    for (let i = 1; i < delays.length; i++) {
+      expect(delays[i]!).toBeGreaterThan(delays[i - 1]!);
     }
   });
 
-  it('tiene tope: si no, tardaría minutos en enterarse de que ya empezó', () => {
+  it('is capped: otherwise it would take minutes to notice the start', () => {
     expect(backoff(50)).toBe(backoff(60));
     expect(backoff(50)).toBeLessThanOrEqual(30000);
   });
 
-  it('el primer intento no espera de más', () => {
+  it('the first attempt does not wait too long', () => {
     expect(backoff(0)).toBe(2000);
   });
 
-  it('se puede ajustar', () => {
+  it('can be tuned', () => {
     expect(backoff(0, { initialMs: 500 })).toBe(500);
     expect(backoff(99, { maxMs: 5000 })).toBe(5000);
   });
 });
 
-describe('reintentos por flujo', () => {
-  it('cada flujo lleva su propia cuenta', () => {
+describe('per-stream retries', () => {
+  it('each stream keeps its own count', () => {
     const t = new LiveTracker();
     t.markUnavailable('cam');
     t.markUnavailable('cam');
@@ -107,7 +103,7 @@ describe('reintentos por flujo', () => {
     expect(t.nextDelay('cam')).toBeGreaterThan(t.nextDelay('slides'));
   });
 
-  it('conseguir emitir reinicia la cuenta', () => {
+  it('going live resets the count', () => {
     const t = new LiveTracker();
     t.markUnavailable('cam');
     t.markUnavailable('cam');

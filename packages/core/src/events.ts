@@ -1,39 +1,19 @@
 /**
- * Bus de eventos tipado.
- *
- * Es el sistema nervioso del reproductor y el cimiento de tres cosas a la vez:
- * la UI reacciona a él, los plugins se enganchan a él, y la analítica futura se
- * conecta sin tocar el núcleo. Por eso `onAny` existe desde el primer día: si
- * el bus no es observable por completo, enchufar un destino de analítica más
- * adelante obliga a rediseñar.
- *
- * Dos decisiones que parecen detalles y no lo son:
- *
- *   - **Un oyente que lanza no puede tumbar al reproductor.** Los plugins son
- *     código de terceros; si uno revienta, el resto debe seguir recibiendo
- *     eventos. Se aísla cada llamada y el error se reporta aparte.
- *   - **Modificar los oyentes durante un `emit` no altera esa emisión.** Sin
- *     esto, desuscribirse dentro de un manejador se salta a los siguientes, y
- *     es un fallo que aparece una vez cada mil y no hay quien lo reproduzca.
+ * Typed event bus: the UI reacts to it, plugins hook into it, and analytics
+ * plugs in through `onAny` without touching the core. A throwing listener is
+ * isolated so it cannot take the player down, and listeners added or removed
+ * during an `emit` do not change that emission.
  */
 
 export type Unsubscribe = () => void;
 
-/** Carga útil de un evento que no lleva datos. */
+/** Payload of an event that carries no data. */
 export type Empty = Record<string, never>;
 
 /**
- * Contrato de eventos: nombre → forma de su carga útil.
- *
- * Es `object` y no `Record<string, unknown>` a propósito. Las interfaces de
- * TypeScript no tienen firma de índice implícita, así que un
- * `interface MisEventos { ... }` no satisface un `Record<string, unknown>` y
- * habría que declarar los contratos como `type`.
- *
- * Y eso importa: al ser interfaces, un plugin puede **añadir sus propios
- * eventos por fusión de declaraciones** y recibirlos tipados sin que el núcleo
- * sepa que existe. Cerrar esa puerta por un detalle de la restricción genérica
- * sería un mal cambio.
+ * Event name → payload shape. `object`, not `Record<string, unknown>`, so event
+ * maps can be interfaces and plugins can add their own events by declaration
+ * merging.
  */
 export type EventMap = object;
 
@@ -43,17 +23,14 @@ export type AnyListener<E extends EventMap> = <K extends keyof E & string>(
   payload: E[K],
 ) => void;
 
-/** Contexto de un fallo de un oyente, para poder señalar al culpable. */
+/** Context of a failing listener, to point at the culprit. */
 export interface ListenerErrorInfo {
   type: string;
   error: unknown;
 }
 
 export interface EventBusOptions {
-  /**
-   * Qué hacer cuando un oyente lanza. Por defecto va a `console.error`: nunca
-   * en silencio, porque un plugin que falla sin ruido es indepurable.
-   */
+  /** What to do when a listener throws. Defaults to `console.error`, never silence. */
   onListenerError?: (info: ListenerErrorInfo) => void;
 }
 
@@ -66,11 +43,11 @@ export class EventBus<E extends EventMap> {
     this.#onListenerError =
       options.onListenerError ??
       ((info) => {
-        console.error(`[nanoplayer] un oyente de "${info.type}" ha lanzado:`, info.error);
+        console.error(`[nanoplayer] a "${info.type}" listener threw:`, info.error);
       });
   }
 
-  /** Suscribe. Devuelve la función para darse de baja. */
+  /** Returns the function that unsubscribes. */
   on<K extends keyof E & string>(type: K, fn: Listener<E[K]>): Unsubscribe {
     let set = this.#listeners.get(type);
     if (!set) {
@@ -81,7 +58,6 @@ export class EventBus<E extends EventMap> {
     return () => this.off(type, fn);
   }
 
-  /** Como `on`, pero se da de baja tras la primera emisión. */
   once<K extends keyof E & string>(type: K, fn: Listener<E[K]>): Unsubscribe {
     const un = this.on(type, ((payload: E[K]) => {
       un();
@@ -97,10 +73,7 @@ export class EventBus<E extends EventMap> {
     if (set.size === 0) this.#listeners.delete(type);
   }
 
-  /**
-   * Observa **todos** los eventos. Es la vía por la que un destino de analítica
-   * se conecta sin que el núcleo sepa que existe.
-   */
+  /** Observes every event: how an analytics sink plugs in. */
   onAny(fn: AnyListener<E>): Unsubscribe {
     this.#any.add(fn);
     return () => {
@@ -109,8 +82,7 @@ export class EventBus<E extends EventMap> {
   }
 
   emit<K extends keyof E & string>(type: K, payload: E[K]): void {
-    // Copias: suscribirse o desuscribirse dentro de un manejador no debe
-    // afectar a la emisión en curso.
+    // Copies, so unsubscribing inside a handler does not skip the next ones.
     const set = this.#listeners.get(type);
     if (set) {
       for (const fn of [...set]) {
@@ -130,7 +102,7 @@ export class EventBus<E extends EventMap> {
     }
   }
 
-  /** Número de oyentes; de un tipo concreto o de todos, incluidos los `onAny`. */
+  /** Listener count for a type, or of all, `onAny` included. */
   listenerCount(type?: keyof E & string): number {
     if (type !== undefined) return this.#listeners.get(type)?.size ?? 0;
     let n = this.#any.size;
@@ -138,7 +110,6 @@ export class EventBus<E extends EventMap> {
     return n;
   }
 
-  /** Suelta todas las suscripciones. Se llama al destruir el reproductor. */
   clear(): void {
     this.#listeners.clear();
     this.#any.clear();

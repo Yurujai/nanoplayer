@@ -1,36 +1,28 @@
 /**
- * Errores con código.
- *
- * El código importa más que el mensaje: la UI decide con él si ofrece
- * reintentar, el registro decide si desaloja la instancia, y la analítica futura
- * agrupa por él. Un `Error` con solo texto obliga a cada consumidor a hacer
- * coincidencias de cadenas, que es como se rompen las cosas al traducir.
+ * Coded errors. The code is what consumers branch on (retry, evict, analytics);
+ * the message is a diagnostic for integrators, always in English.
  */
-
 export type ErrorCode =
-  /** No se pudo obtener el manifiesto (red, 404, CORS). Reintentable. */
+  /** The manifest could not be fetched (network, 404, CORS). Retryable. */
   | 'manifest/fetch'
-  /** El manifiesto llegó pero no pasa la validación. No reintentable. */
+  /** The manifest arrived but failed validation. */
   | 'manifest/invalid'
-  /** Ningún motor disponible sabe reproducir estas fuentes. */
+  /** No available engine can play these sources. */
   | 'engine/unsupported'
-  /** El motor falló al arrancar. */
   | 'engine/failed'
-  /** El medio falló al decodificar. */
   | 'media/decode'
-  /** El medio se cortó por red. Reintentable. */
+  /** Retryable. */
   | 'media/network'
-  /** El navegador bloqueó la reproducción por política de autoplay. */
+  /** Blocked by the browser's autoplay policy: a user gesture is needed. */
   | 'media/blocked'
-  /** Fallo de programación: transición inválida, invariante roto. */
+  /** A programming error: invalid transition, broken invariant. */
   | 'internal';
 
 export interface PlayerError {
   code: ErrorCode;
   message: string;
-  /** Error original, si lo hubo. */
   cause?: unknown;
-  /** Si tiene sentido ofrecer un reintento al usuario. */
+  /** Whether offering the user a retry makes sense. */
   retryable: boolean;
 }
 

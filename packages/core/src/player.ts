@@ -1,12 +1,7 @@
 /**
- * El reproductor: orquesta manifiesto, ciclo de vida, motores y sincronización.
- *
- * Es la primera pieza que se puede llamar "reproductor", aunque todavía no
- * tenga interfaz. Deliberadamente **sin UI**: los controles son la Fase 2 y se
- * construyen encima de esta API, no dentro.
- *
- * El principio 2 —cero red hasta que el usuario lo pida— se hace cumplir aquí:
- * construir un `Player` no descarga absolutamente nada. Ni el manifiesto.
+ * The player: orchestrates manifest, lifecycle, engines and sync. Headless on
+ * purpose; the controls are built on top of this API. Constructing a `Player`
+ * downloads nothing, not even the manifest.
  */
 import type { ChainPhase } from './chain.js';
 import { ChainController, type ChainHost } from './chain-controller.js';
@@ -32,55 +27,42 @@ import {
 } from './manifest-queries.js';
 import { validateManifest } from './validate.js';
 
-/** Resuelve el origen del manifiesto. Reemplazable para agrupar peticiones. */
+/** Fetches the manifest. Replaceable to batch requests. */
 export type ManifestResolver = (src: string) => Promise<unknown>;
 
 export interface PlayerOptions {
-  /** Dónde se montan los elementos multimedia. */
+  /** Where the media elements are mounted. */
   container: HTMLElement;
-  /** Manifiesto ya cargado, o una URL de la que traerlo. */
+  /** A loaded manifest, or a URL to fetch it from. */
   manifest: Manifest | Record<string, unknown> | string;
-  /**
-   * Motores disponibles, por orden de preferencia. A igualdad de confianza
-   * gana el primero, así que registrar uno con hls.js delante bastaría para
-   * anteponerlo sin tocar nada más.
-   */
+  /** Available engines, in order of preference: on equal confidence the first wins. */
   engines?: readonly EngineFactory[];
   /**
-   * Cómo traer un manifiesto por URL. El punto de extensión que permite
-   * resolver varios de golpe en una sola petición: en una página con 32
-   * reproductores, convierte 32 llamadas en una.
+   * How to fetch a manifest by URL. The extension point for resolving many in
+   * one request: 32 players on a page become one call instead of 32.
    */
   manifestResolver?: ManifestResolver;
   /**
-   * Imagen previa, disponible **sin resolver el manifiesto**.
-   *
-   * Hay un círculo vicioso si el póster solo vive dentro del manifiesto: para
-   * enseñarlo habría que pedirlo, que es justo la petición que el estado `idle`
-   * existe para evitar. En la práctica quien integra ya tiene la miniatura a
-   * mano —viene en el listado que pinta la página—, así que se pasa aquí.
+   * Poster, available **without resolving the manifest**: showing one that
+   * lives only inside the manifest would need the very request `idle` avoids.
    */
   poster?: string;
   muted?: boolean;
   volume?: number;
-  /** Perfil de sincronización. Por defecto se detecta el del motor. */
+  /** Sync profile. Detected from the engine by default. */
   syncProfile?: SyncProfile;
-  /** Espera entre reintentos cuando un directo aún no emite. */
+  /** Delay between retries while a live stream is not broadcasting yet. */
   liveRetry?: RetryPolicy;
   /**
-   * Idioma de la interfaz. Por defecto, el del documento que contiene al
-   * reproductor; `es` si tampoco lo declara.
-   *
-   * Vive aquí y no en la barra de controles porque los plugins también lo
-   * necesitan, y antes cada uno lo deducía por su cuenta: dos formas distintas
-   * de mirar `document.documentElement.lang` acaban discrepando.
+   * UI language. Defaults to the container document's `lang`, then `es`.
+   * Resolved here, not in the controls, so plugins do not each work it out.
    */
   lang?: string;
-  /** Cadenas propias, que mandan sobre las registradas por cada paquete. */
+  /** Own strings, which override those registered by each package. */
   strings?: Catalogues;
 }
 
-const resolverPorDefecto: ManifestResolver = async (src) => {
+const defaultResolver: ManifestResolver = async (src) => {
   const res = await fetch(src);
   if (!res.ok) {
     throw playerError('manifest/fetch', `${res.status} ${res.statusText} requesting ${src}`);
@@ -95,109 +77,97 @@ export class Player {
   readonly #engines: readonly EngineFactory[];
 
   #manifest: Manifest | null = null;
-  readonly #contenido: ContentSet;
+  readonly #content: ContentSet;
   #ui: UiSlots | null = null;
-  readonly #emision: LiveBroadcast;
-  readonly #borde = new LiveEdge(() => this.master);
+  readonly #broadcast: LiveBroadcast;
+  readonly #edge = new LiveEdge(() => this.master);
   readonly #t: Translate;
-  readonly #atascos = new StallCoordinator(() => this.#contenido.entries());
-  /** El timeline del recorte, y de qué manifiesto salió: se rehace solo si cambia. */
-  #linea = new TrimTimeline(null);
-  #lineaDe: Manifest | null = null;
-  /** El manifiesto que vino ya cargado, validado una sola vez. */
+  readonly #stalls = new StallCoordinator(() => this.#content.entries());
+  #timelineCache = new TrimTimeline(null);
+  #timelineFor: Manifest | null = null;
+  /** A preloaded manifest, validated only once. */
   #provisional: Manifest | null = null;
-  #provisionalMirado = false;
-  /** Ya se avisó del final del recorte. Evita repetir `ended` en cada `time`. */
-  #finRecorteAvisado = false;
+  #provisionalChecked = false;
+  /** Avoids repeating `ended` on every `time` past the trim's end. */
+  #trimEndAnnounced = false;
 
-  readonly #cadena: ChainController;
-  /** Lo que el usuario pidió, para aplicarlo a cada pieza al descubrirla. */
-  #mudo: boolean;
-  /** El volumen elegido. Sobrevive a un desalojo: se reaplica al enganchar. */
-  #volumen: number;
+  readonly #chain: ChainController;
+  /** What the user asked for, applied to each piece when it is revealed. */
+  #muted: boolean;
+  /** Survives an eviction: reapplied on attach. */
+  #volume: number;
 
   constructor(options: PlayerOptions) {
     this.#opts = options;
-    this.#mudo = options.muted === true;
-    this.#volumen = options.volume ?? 1;
+    this.#muted = options.muted === true;
+    this.#volume = options.volume ?? 1;
     this.#engines = options.engines ?? [nativeEngineFactory];
-    this.#contenido = new ContentSet({
+    this.#content = new ContentSet({
       container: options.container,
       engines: this.#engines,
       bus: this.bus,
       ...(options.syncProfile ? { syncProfile: options.syncProfile } : {}),
     });
-    this.#emision = new LiveBroadcast({
+    this.#broadcast = new LiveBroadcast({
       bus: this.bus,
       ...(options.liveRetry ? { retry: options.liveRetry } : {}),
-      reconnect: (id) => { void this.#reintentar(id); },
+      reconnect: (id) => { void this.#retry(id); },
     });
-    // Del documento del contenedor y no del global `document`: dentro de un
-    // iframe el idioma que manda es el del iframe.
-    const idioma = options.lang
+    // The container's document, not the global one: inside an iframe its own lang rules.
+    const lang = options.lang
       ?? options.container.ownerDocument.documentElement.lang;
-    this.#t = strings.translator(idioma || '', options.strings);
-    this.#cadena = new ChainController(this.#anfitrionCadena());
+    this.#t = strings.translator(lang || '', options.strings);
+    this.#chain = new ChainController(this.#chainHost());
   }
 
-  /** Lo que el encadenado necesita del reproductor, sin darle el reproductor entero. */
-  #anfitrionCadena(): ChainHost {
+  #chainHost(): ChainHost {
     const player = this;
     return {
       bus: this.bus,
       container: this.#opts.container,
       engines: this.#engines,
       get manifest() { return player.#manifest; },
-      get muted() { return player.#mudo; },
-      get volume() { return player.#volumen; },
+      get muted() { return player.#muted; },
+      get volume() { return player.#volume; },
       get duration() { return player.duration; },
       get hasEngine() { return player.#lc.hasEngine; },
       get isActive() { return player.#lc.state === 'active'; },
       master: () => this.master,
-      contentEngines: () => this.#contenido.engines(),
-      playContent: () => (this.#manifest ? this.#reproducirContenido(this.#manifest) : Promise.resolve()),
-      pauseContent: () => this.#contenido.pause(),
-      seekContent: (seconds) => this.#saltarContenido(seconds),
-      contentRemaining: () => this.#restanteContenido(),
+      contentEngines: () => this.#content.engines(),
+      playContent: () => (this.#manifest ? this.#playContent(this.#manifest) : Promise.resolve()),
+      pauseContent: () => this.#content.pause(),
+      seekContent: (seconds) => this.#seekContent(seconds),
+      contentRemaining: () => this.#contentRemaining(),
       contentEnded: () => {
-        this.#finRecorteAvisado = !!this.#timeline().range;
+        this.#trimEndAnnounced = !!this.#timeline().range;
         this.pause();
       },
       announceEnded: () => {
         this.bus.emit('time', { current: this.duration, duration: this.duration });
         this.bus.emit('ended', { at: this.duration });
       },
-      reflectPlay: () => this.#reflejarPlay(),
-      reflectPause: () => this.#reflejarPausa(),
-      toPlayerError: (error) => this.#comoPlayerError(error, 'engine/failed'),
+      reflectPlay: () => this.#reflectPlay(),
+      reflectPause: () => this.#reflectPause(),
+      toPlayerError: (error) => this.#toPlayerError(error, 'engine/failed'),
     };
   }
 
-  /**
-   * Traduce una clave del catálogo compartido.
-   *
-   * Lo usan la interfaz y los plugins, para que todos digan lo mismo en el
-   * mismo idioma sin tener que ponerse de acuerdo entre ellos.
-   */
+  /** Translates a key from the shared catalogue, for the UI and plugins alike. */
   get t(): Translate { return this.#t; }
 
-  /** Idioma resuelto. Es el que hay que pasarle a `Intl`. */
+  /** Resolved language; the one to pass to `Intl`. */
   get lang(): string { return this.#t.lang; }
 
-  /** El elemento donde se montan los medios. Lo necesita el registro para
-   *  observar visibilidad sin que el integrador tenga que repetírselo. */
+  /** Where the media are mounted; the registry observes its visibility. */
   get container(): HTMLElement { return this.#opts.container; }
 
   /**
-   * Los anclajes de interfaz, si hay una montada.
-   *
-   * El núcleo no depende de la capa de interfaz: solo guarda quien se anuncie
-   * y avisa por el bus. Un plugin usa `whenUi()` para no tener que preocuparse
-   * de si llegó antes o después.
+   * UI slots, if a UI is mounted. The core does not depend on the UI layer;
+   * plugins use `whenUi()` so arrival order does not matter.
    */
   get ui(): UiSlots | null { return this.#ui; }
 
-  /** Lo llama la capa de interfaz al montarse. */
+  /** Called by the UI layer when it mounts. */
   setUi(slots: UiSlots | null): void {
     this.#ui = slots;
     if (slots) this.bus.emit('ui:ready', {});
@@ -206,26 +176,16 @@ export class Player {
   get state(): PlayerState { return this.#lc.state; }
   get manifest(): Manifest | null { return this.#manifest; }
 
-  /**
-   * URL del póster, si se conoce, sin obligar a resolver nada.
-   *
-   * Por orden: lo que dijo el integrador, lo que trae el manifiesto si vino ya
-   * cargado, y por último el manifiesto resuelto.
-   */
+  /** Poster URL, if known, without resolving anything. */
   get poster(): string | undefined {
-    return this.#opts.poster || this.#conocido()?.poster;
+    return this.#opts.poster || this.#known()?.poster;
   }
 
-  /**
-   * El manifiesto resuelto o, si vino ya cargado, ese mismo validado.
-   *
-   * Es lo que permite saber póster, recorte o si es solo audio sin tocar la
-   * red. Se valida una vez: antes cada lectura de `audioOnly` volvía a validar.
-   */
-  #conocido(): Manifest | null {
+  /** The resolved manifest or, if it came preloaded, that one validated once. */
+  #known(): Manifest | null {
     if (this.#manifest) return this.#manifest;
-    if (!this.#provisionalMirado) {
-      this.#provisionalMirado = true;
+    if (!this.#provisionalChecked) {
+      this.#provisionalChecked = true;
       const src = this.#opts.manifest;
       if (typeof src === 'object') {
         const r = validateManifest(src);
@@ -236,129 +196,106 @@ export class Player {
   }
   get resumeAt(): number { return this.#lc.resumeAt; }
 
-  /** Motor del stream que lleva el audio: el que gobierna el reloj. */
+  /** Engine of the stream carrying the audio: the one that drives the clock. */
   get master(): MediaEngine | null {
     if (!this.#manifest) return null;
-    return this.#contenido.engine(masterStream(this.#manifest).id);
+    return this.#content.engine(masterStream(this.#manifest).id);
   }
 
-  /** Estado de emisión del conjunto. `unknown` si no es un directo. */
+  /** Broadcast status of the whole set. `unknown` if not live. */
   get liveStatus(): LiveStatus {
-    return this.#emision.overall;
+    return this.#broadcast.overall;
   }
 
-  /** Estado de emisión de un flujo concreto. */
   liveStatusOf(streamId: string): LiveStatus {
-    return this.#emision.status(streamId);
+    return this.#broadcast.status(streamId);
   }
 
-  /** Imagen para la espera de un directo. Cae al póster si no hay una propia. */
+  /** Image while waiting for a live stream. Falls back to the poster. */
   get liveWaitingImage(): string | undefined {
-    return this.#conocido()?.liveWaitingImage || this.poster;
+    return this.#known()?.liveWaitingImage || this.poster;
   }
 
-  /**
-   * Si no hay ninguna imagen que enseñar.
-   *
-   * Lo consulta la interfaz para mantener el póster puesto durante la
-   * reproducción, en vez de dejar un rectángulo negro. Se puede saber sin
-   * resolver si el manifiesto vino ya cargado.
-   */
+  /** Whether there is no picture: the UI keeps the poster up instead of a black box. */
   get audioOnly(): boolean {
-    const m = this.#conocido();
+    const m = this.#known();
     return m ? isAudioOnlyManifest(m) : false;
   }
 
-  /* ------------------------------------------------------------- directo -- */
+  /* ---------------------------------------------------------------- live -- */
 
-  /** Cuánto se puede retroceder en un directo, en segundos. */
+  /** How far back a live stream can go, in seconds. */
   get dvrWindow(): number {
-    return this.#borde.window;
+    return this.#edge.window;
   }
 
-  /** Posición más reciente disponible. */
   get liveEdge(): number {
-    return this.#borde.edge;
+    return this.#edge.edge;
   }
 
-  /** Cuántos segundos por detrás del borde se está reproduciendo. */
   get behindLive(): number {
-    return this.#manifest?.live ? this.#borde.behind(this.currentTime) : 0;
+    return this.#manifest?.live ? this.#edge.behind(this.currentTime) : 0;
   }
 
-  /** Si se está viendo el directo, con la tolerancia del búfer normal. */
   get atLiveEdge(): boolean {
-    return !!this.#manifest?.live && this.#borde.isAtEdge(this.currentTime);
+    return !!this.#manifest?.live && this.#edge.isAtEdge(this.currentTime);
   }
 
-  /** Salta al directo, a la posición que recomienda el motor o con margen. */
   seekToLive(): void {
     if (!this.#manifest?.live) return;
-    const destino = this.#borde.seekTarget;
-    if (destino !== null) this.seek(destino);
+    const target = this.#edge.seekTarget;
+    if (target !== null) this.seek(target);
   }
 
-  /* ------------------------------------------------------------- recorte -- */
+  /* ---------------------------------------------------------------- trim -- */
 
-  /**
-   * El recorte, buscándolo en el manifiesto sin resolver si hace falta.
-   *
-   * Igual que con el póster: cuando el manifiesto viene ya cargado no hay por
-   * qué esperar a `resolve()` para saber cuánto dura el recorte. Así la barra
-   * puede pintar `0:15` antes de que se descargue un solo byte.
-   */
+  /** Read from the unresolved manifest if needed, so the bar can show the trimmed duration early. */
   #timeline(): TrimTimeline {
-    const m = this.#conocido();
-    if (m !== this.#lineaDe) {
-      this.#lineaDe = m;
-      this.#linea = new TrimTimeline(m ? trimOf(m) : null);
+    const m = this.#known();
+    if (m !== this.#timelineFor) {
+      this.#timelineFor = m;
+      this.#timelineCache = new TrimTimeline(m ? trimOf(m) : null);
     }
-    return this.#linea;
+    return this.#timelineCache;
   }
 
-  /**
-   * De tiempo del medio al que se enseña. Público para que la interfaz y los
-   * plugins, que reciben tiempos del manifiesto, no repitan la cuenta.
-   */
-  toVisibleTime(medio: number): number {
-    return this.#timeline().toVisible(medio);
+  /** Media time to visible time, for the UI and plugins, which get manifest times. */
+  toVisibleTime(media: number): number {
+    return this.#timeline().toVisible(media);
   }
 
-  /** Del tiempo que se enseña al del medio, acotado al recorte. */
+  /** Visible time to media time, clamped to the trim. */
   toMediaTime(visible: number): number {
     return this.#timeline().toMedia(visible);
   }
 
-  /** El recorte en vigor, o `null`. La interfaz lo usa para colocar marcas. */
   get trim(): TrimRange | null {
     const r = this.#timeline().range;
     return r ? { ...r } : null;
   }
 
   get currentTime(): number {
-    // Durante la cola el contenido ya ha terminado, aunque el maestro se haya
-    // parado unos milisegundos antes: el cambio se anticipa.
-    if (this.#cadena.phase === 'outro') return this.duration;
+    // The switch to the outro is early, so the master stops a little short of the end.
+    if (this.#chain.phase === 'outro') return this.duration;
     const m = this.master;
     return m ? this.toVisibleTime(m.currentTime) : this.#lc.resumeAt;
   }
 
   get duration(): number {
-    const recortada = this.#timeline().duration;
-    if (recortada !== null) return recortada;
-    // El motor dice 0 mientras no tiene metadatos, que en iOS es hasta el
-    // primer play: mientras tanto vale más la duración que trae el manifiesto.
-    const delMotor = this.master?.duration ?? 0;
-    return delMotor > 0 ? delMotor : this.#manifest?.duration ?? 0;
+    const trimmed = this.#timeline().duration;
+    if (trimmed !== null) return trimmed;
+    // The engine reports 0 until it has metadata, which on iOS is the first play.
+    // see docs/browser-quirks.md#ios-no-preload
+    const fromEngine = this.master?.duration ?? 0;
+    return fromEngine > 0 ? fromEngine : this.#manifest?.duration ?? 0;
   }
 
-  get paused(): boolean { return this.#cadena.currentEngine()?.paused ?? true; }
+  get paused(): boolean { return this.#chain.currentEngine()?.paused ?? true; }
 
-  /** Pieza de la cadena que se está viendo. */
-  get phase(): ChainPhase { return this.#cadena.phase; }
+  get phase(): ChainPhase { return this.#chain.phase; }
 
-  /** Si ahora mismo se puede saltar algo. Solo la cabecera; la cola, nunca. */
-  get canSkip(): boolean { return this.#cadena.canSkip; }
+  /** Only the intro can be skipped; the outro never. */
+  get canSkip(): boolean { return this.#chain.canSkip; }
 
   on<K extends keyof CoreEvents & string>(
     type: K, fn: (payload: CoreEvents[K]) => void,
@@ -368,7 +305,7 @@ export class Player {
 
   /* ------------------------------------------------------- idle → resolved */
 
-  /** Trae y valida el manifiesto. Es la primera —y única— petición hasta el play. */
+  /** Fetches and validates the manifest: the only request until play. */
   async resolve(): Promise<Manifest> {
     if (this.#manifest) return this.#manifest;
     this.#lc.transition('resolving');
@@ -376,23 +313,23 @@ export class Player {
 
     try {
       const src = this.#opts.manifest;
-      const crudo = typeof src === 'string'
-        ? await (this.#opts.manifestResolver ?? resolverPorDefecto)(src)
+      const raw = typeof src === 'string'
+        ? await (this.#opts.manifestResolver ?? defaultResolver)(src)
         : src;
 
-      const r = validateManifest(crudo);
+      const r = validateManifest(raw);
       if (!r.ok) {
-        const detalle = r.errors.map((e) => `${e.path || '(root)'}: ${e.message}`).join('; ');
-        throw playerError('manifest/invalid', `Invalid manifest — ${detalle}`);
+        const detail = r.errors.map((e) => `${e.path || '(root)'}: ${e.message}`).join('; ');
+        throw playerError('manifest/invalid', `Invalid manifest — ${detail}`);
       }
       this.#manifest = r.manifest;
-      this.#cadena.start(r.manifest);
+      this.#chain.start(r.manifest);
       this.#lc.transition('resolved');
       this.bus.emit('manifest:resolve:ok', { manifest: r.manifest });
       return r.manifest;
     } catch (error) {
       this.#lc.transition('idle');
-      const pe = this.#comoPlayerError(error, 'manifest/fetch');
+      const pe = this.#toPlayerError(error, 'manifest/fetch');
       this.bus.emit('manifest:resolve:fail', { error: pe });
       this.bus.emit('error', { error: pe });
       throw pe;
@@ -401,14 +338,7 @@ export class Player {
 
   /* --------------------------------------------------- resolved → attached */
 
-  /**
-   * Crea los motores y sus elementos. Aquí empieza a bajar vídeo.
-   *
-   * Si viene de un desalojo, retoma en `resumeAt` y **cuadra los esclavos con
-   * el maestro antes de empezar**: enganchar en secuencia deja un retraso de
-   * partida de decenas de milisegundos que no es deriva y que la corrección
-   * suave no arreglaría por sí sola.
-   */
+  /** Creates the engines and their elements. Video starts downloading here. */
   async attach(): Promise<void> {
     const m = this.#manifest ?? await this.resolve();
     if (this.#lc.hasEngine) return;
@@ -417,34 +347,26 @@ export class Player {
     this.bus.emit('engine:attach:start', {});
 
     try {
-      let nombreMotor = 'native';
-      const fallidos: string[] = [];
+      let engineName = 'native';
+      const failed: string[] = [];
 
-      await this.#cadena.attachIntro(m);
+      await this.#chain.attachIntro(m);
 
       for (const stream of m.streams) {
         try {
-          nombreMotor = await this.#engancharStream(stream);
-          if (m.live) this.#emision.markLive(stream.id);
+          engineName = await this.#attachStream(stream);
+          if (m.live) this.#broadcast.markLive(stream.id);
         } catch (error) {
-          /*
-           * En directo, que un flujo no esté emitiendo **no impide reproducir
-           * los demás**. Es el caso de la cámara que arranca antes que las
-           * diapositivas, o de una de las dos que se cae: bloquear ambas
-           * porque falta una sería peor experiencia que enseñar la que hay.
-           *
-           * Bajo demanda no aplica: si una fuente falta, el contenido está
-           * incompleto y hay que decirlo.
-           */
+          // Live, one stream not broadcasting does not block the others; on
+          // demand a missing source means incomplete content.
           if (!m.live) throw error;
-          fallidos.push(stream.id);
-          this.#emision.markUnavailable(stream.id);
-          this.#emision.retryLater(stream.id);
+          failed.push(stream.id);
+          this.#broadcast.markUnavailable(stream.id);
+          this.#broadcast.retryLater(stream.id);
         }
       }
 
-      if (m.live && fallidos.length === m.streams.length) {
-        // Ninguno emite todavía: se vuelve a `resolved` y se sigue esperando.
+      if (m.live && failed.length === m.streams.length) {
         this.#lc.transition('resolved');
         this.bus.emit('engine:attach:fail', {
           error: playerError('media/network',
@@ -453,250 +375,212 @@ export class Player {
         return;
       }
 
-      await this.#cadena.attachOutro(m);
+      await this.#chain.attachOutro(m);
 
-      this.#contenido.mountSync(m);
+      this.#content.mountSync(m);
       this.#lc.transition('attached');
       this.bus.emit('engine:attach:ok', {
-        engine: nombreMotor, resumeAt: this.#lc.resumeAt,
+        engine: engineName, resumeAt: this.#lc.resumeAt,
       });
     } catch (error) {
-      this.#soltarMotores();
+      this.#releaseEngines();
       this.#lc.transition('resolved');
-      const pe = this.#comoPlayerError(error, 'engine/failed');
+      const pe = this.#toPlayerError(error, 'engine/failed');
       this.bus.emit('engine:attach:fail', { error: pe });
       this.bus.emit('error', { error: pe });
       throw pe;
     }
   }
 
-  async #engancharStream(stream: Stream): Promise<string> {
-    const motor = await this.#contenido.attach(stream, {
-      // `resumeAt` está en tiempo visible; el motor quiere el del medio. Sin
-      // recorte son lo mismo, y con él esto es lo que hace que un enganche
-      // en frío empiece en `start` y no en el segundo cero del fichero.
+  async #attachStream(stream: Stream): Promise<string> {
+    const engine = await this.#content.attach(stream, {
+      // `resumeAt` is visible time; with a trim, this makes a cold attach start at `start`.
       startAt: this.toMediaTime(this.#lc.resumeAt),
-      // Con cabecera, el contenido espera detrás en silencio hasta descubrirse.
-      muted: this.#mudo || !stream.audio || this.#cadena.phase === 'intro',
+      // Behind an intro the content waits muted until revealed.
+      muted: this.#muted || !stream.audio || this.#chain.phase === 'intro',
       playsInline: true,
       callbacks: this.#callbacks(stream),
     }, this.#manifest?.live === true);
-    if (stream.audio) this.#contenido.engine(stream.id)?.setVolume(this.#volumen);
-    return motor;
+    if (stream.audio) this.#content.engine(stream.id)?.setVolume(this.#volume);
+    return engine;
   }
 
-  /** Vuelve a intentar un flujo de directo que no emitía. */
-  async #reintentar(streamId: string): Promise<void> {
+  async #retry(streamId: string): Promise<void> {
     const stream = this.#manifest?.streams.find((s) => s.id === streamId);
     if (this.#lc.isDestroyed || !this.#manifest?.live || !stream) return;
-    // Si ya no hay motores montados, el reproductor está desalojado: no tiene
-    // sentido seguir insistiendo hasta que alguien vuelva a engancharlo.
+    // Evicted: no point retrying until someone attaches again.
     if (!this.#lc.hasEngine && this.#lc.state !== 'resolved') return;
 
     try {
-      await this.#engancharStream(stream);
-      this.#emision.markLive(stream.id);
-      // Si el reproductor estaba esperando a que empezara algo, ya hay señal.
+      await this.#attachStream(stream);
+      this.#broadcast.markLive(stream.id);
       if (this.#lc.state === 'resolved') {
         this.#lc.transition('attaching');
         this.#lc.transition('attached');
       }
-      this.#contenido.mountSync(this.#manifest);
-      if (this.#lc.state === 'active' || this.#atascos.playing) {
-        await this.#contenido.engine(stream.id)?.play().catch(() => {});
+      this.#content.mountSync(this.#manifest);
+      if (this.#lc.state === 'active' || this.#stalls.playing) {
+        await this.#content.engine(stream.id)?.play().catch(() => {});
       }
     } catch {
-      this.#emision.markUnavailable(stream.id);
-      this.#emision.retryLater(stream.id);
+      this.#broadcast.markUnavailable(stream.id);
+      this.#broadcast.retryLater(stream.id);
     }
   }
 
-  /* ------------------------------------------------------ attached → resolved */
+  /* ---------------------------------------------------- attached → resolved */
 
   /**
-   * Suelta los motores conservando la posición.
-   *
-   * Es lo que permite que una página tenga muchos más reproductores que
-   * decodificadores: S2 midió el techo del navegador en 17 elementos
-   * simultáneos en WebKit y 18 en Blink.
+   * Releases the engines, keeping the position, so a page can hold more players
+   * than decoders. see docs/browser-quirks.md#decoder-limit
    */
   detach(): void {
     if (!this.#lc.hasEngine) return;
     if (this.#lc.state === 'active') {
       this.pause();
-      /*
-       * El evento `pause` del elemento es asíncrono, así que puede no haber
-       * llegado todavía y el estado seguir en `active`. Como la máquina de
-       * estados prohíbe `active` → `resolved` a propósito —para que nadie
-       * arranque el motor de debajo de una reproducción en curso—, aquí se
-       * cierra el paso intermedio a mano.
-       *
-       * Con MP4 no se notaba porque el evento llega en el mismo turno; con
-       * hls.js sí, y así apareció.
-       */
+      // `pause` is async (with hls.js it arrives a turn later) and the state
+      // machine forbids `active` → `resolved`, so the step is closed by hand.
       if (this.#lc.state === 'active') this.#lc.transition('attached');
     }
     const at = this.currentTime;
     this.#lc.rememberPosition(at);
-    this.#soltarMotores();
+    this.#releaseEngines();
     this.#lc.transition('resolved');
     this.bus.emit('engine:detach', { at });
   }
 
-  #soltarMotores(): void {
-    this.#emision.cancelRetries();
-    this.#contenido.release();
-    this.#cadena.release();
-    // Sin esto, un flujo que estaba atascado al soltar el motor dejaría el
-    // conjunto marcado como atascado para siempre y nadie volvería a reanudar.
-    this.#atascos.reset();
-    this.#finRecorteAvisado = false;
+  #releaseEngines(): void {
+    this.#broadcast.cancelRetries();
+    this.#content.release();
+    this.#chain.release();
+    // Otherwise a stream stalled at release leaves the set stalled forever.
+    this.#stalls.reset();
+    this.#trimEndAnnounced = false;
   }
 
-  /* ------------------------------------------------------------ reproducción */
+  /* ------------------------------------------------------------- playback */
 
   async play(): Promise<void> {
     if (!this.#lc.hasEngine) await this.attach();
     const m = this.#manifest;
     if (!m) return;
-    if (await this.#cadena.play()) return;
-    await this.#reproducirContenido(m);
-    this.#cadena.watch();
+    if (await this.#chain.play()) return;
+    await this.#playContent(m);
+    this.#chain.watch();
   }
 
-  /** Arranca los flujos del contenido. */
-  async #reproducirContenido(m: Manifest): Promise<void> {
-    // Dar al play con el recorte terminado vuelve al principio, que es lo que
-    // hace un <video> al final del medio. Sin esto se quedaría clavado.
-    if (this.#finRecorteAvisado) {
-      this.#finRecorteAvisado = false;
+  async #playContent(m: Manifest): Promise<void> {
+    // Like a <video> at its end, play after the trim's end restarts.
+    if (this.#trimEndAnnounced) {
+      this.#trimEndAnnounced = false;
       this.seek(0);
     }
 
-    await this.#contenido.play(masterStream(m).id);
-
-    // El cambio de estado y el evento los dispara el callback `onPlay` del
-    // motor, que es quien sabe si de verdad ha empezado a sonar.
+    // State and event come from the engine's `onPlay`, which knows it really started.
+    await this.#content.play(masterStream(m).id);
   }
 
   pause(): void {
-    this.#cadena.pause();
-    this.#atascos.userPaused();
-    this.#contenido.pause();
+    this.#chain.pause();
+    this.#stalls.userPaused();
+    this.#content.pause();
   }
 
-  /**
-   * Salta la cabecera. Solo la cabecera: **la cola no se puede saltar**, y por
-   * eso no hay un `skipOutro()`.
-   */
+  /** Skips the intro. The outro cannot be skipped, hence no `skipOutro()`. */
   skipIntro(): void {
-    this.#cadena.skipIntro();
+    this.#chain.skipIntro();
   }
 
-  /** Salta. `seconds` va en tiempo visible, y se acota al recorte si lo hay. */
+  /** `seconds` is visible time, clamped to the trim if any. */
   seek(seconds: number): void {
-    if (this.#cadena.seek(seconds)) return;
-    this.#saltarContenido(seconds);
+    if (this.#chain.seek(seconds)) return;
+    this.#seekContent(seconds);
   }
 
-  #saltarContenido(seconds: number): void {
-    const maestro = this.master;
-    if (!maestro) {
+  #seekContent(seconds: number): void {
+    const master = this.master;
+    if (!master) {
       this.#lc.rememberPosition(Math.max(0, Math.min(this.duration || seconds, seconds)));
       return;
     }
-    const destino = Math.max(0, seconds);
-    // Saltar hacia atrás vuelve a meter la reproducción dentro del recorte, así
-    // que el final tiene que poder volver a anunciarse.
-    if (this.#timeline().range && destino < this.duration) this.#finRecorteAvisado = false;
-    const from = this.toVisibleTime(maestro.currentTime);
-    this.bus.emit('seek:start', { from, to: destino });
-    maestro.seek(this.toMediaTime(destino));
-    // Los esclavos van de golpe: perseguir un salto con corrección suave
-    // tardaría segundos y se vería.
-    this.#contenido.align();
-    this.bus.emit('seek:end', { at: destino });
+    const target = Math.max(0, seconds);
+    if (this.#timeline().range && target < this.duration) this.#trimEndAnnounced = false;
+    const from = this.toVisibleTime(master.currentTime);
+    this.bus.emit('seek:start', { from, to: target });
+    master.seek(this.toMediaTime(target));
+    // Slaves snap: chasing a seek with smooth correction would take visible seconds.
+    this.#content.align();
+    this.bus.emit('seek:end', { at: target });
   }
 
-  get volume(): number { return this.#volumen; }
-  get muted(): boolean { return this.#mudo; }
+  get volume(): number { return this.#volume; }
+  get muted(): boolean { return this.#muted; }
 
   setVolume(volume: number): void {
     if (!Number.isFinite(volume)) return;
-    this.#volumen = Math.min(1, Math.max(0, volume));
-    this.master?.setVolume(this.#volumen);
-    this.#cadena.setVolume(this.#volumen);
-    this.bus.emit('volumechange', { volume: this.#volumen, muted: this.#mudo });
+    this.#volume = Math.min(1, Math.max(0, volume));
+    this.master?.setVolume(this.#volume);
+    this.#chain.setVolume(this.#volume);
+    this.bus.emit('volumechange', { volume: this.#volume, muted: this.#muted });
   }
 
   setMuted(muted: boolean): void {
-    // Se guarda para aplicarlo a cada pieza al descubrirla: las que esperan
-    // detrás van mudas hasta entonces, se haya pedido o no.
-    this.#mudo = muted;
-    this.#cadena.setMuted(muted);
-    this.bus.emit('volumechange', { volume: this.#volumen, muted });
+    this.#muted = muted;
+    this.#chain.setMuted(muted);
+    this.bus.emit('volumechange', { volume: this.#volume, muted });
   }
 
   setPlaybackRate(rate: number): void {
-    // Solo al maestro: los esclavos lo heredan por el lazo de sincronización,
-    // que ajusta su velocidad relativa a la de él.
+    // Master only: the sync loop sets the slaves' rate relative to it.
     this.master?.setPlaybackRate(rate);
     this.bus.emit('ratechange', { rate });
   }
 
   destroy(): void {
     if (this.#lc.isDestroyed) return;
-    this.#emision.reset();
-    this.#soltarMotores();
+    this.#broadcast.reset();
+    this.#releaseEngines();
     this.#lc.destroy();
     this.bus.clear();
   }
 
-  /** Segundos que le quedan al contenido, hasta el final del recorte si lo hay. */
-  #restanteContenido(): number {
+  /** Seconds left in the content, up to the trim's end if any. */
+  #contentRemaining(): number {
     const m = this.master;
     if (!m) return NaN;
-    const fin = this.#timeline().range?.end ?? m.duration;
-    return (fin - m.currentTime) / (m.getPlaybackRate() || 1);
+    const end = this.#timeline().range?.end ?? m.duration;
+    return (end - m.currentTime) / (m.getPlaybackRate() || 1);
   }
 
-  /** El medio ha empezado a sonar: el estado y el bus lo cuentan. */
-  #reflejarPlay(): void {
+  #reflectPlay(): void {
     if (this.#lc.can('active')) this.#lc.transition('active');
     this.bus.emit('play', { at: this.currentTime });
   }
 
-  /** El medio se ha parado. */
-  #reflejarPausa(): void {
+  #reflectPause(): void {
     if (this.#lc.state === 'active') this.#lc.transition('attached');
     this.bus.emit('pause', { at: this.currentTime });
   }
 
-  /* --------------------------------------------------------------- interno */
+  /* ------------------------------------------------------------- internal */
 
+  /**
+   * Playback state follows the media element, not what this object expected:
+   * otherwise a browser-initiated pause leaves the button showing the wrong state.
+   */
   #callbacks(stream: Stream) {
-    const esMaestro = stream.audio;
-    /*
-     * El contenido solo manda cuando es lo que se ve. Mientras suena la
-     * cabecera está parado o arrancando detrás, y durante un cambio de pieza
-     * sus avisos describen una transición, no algo que haya pedido el usuario.
-     */
-    const cuenta = () => this.#cadena.contentCounts;
+    const isMaster = stream.audio;
+    const counts = () => this.#chain.contentCounts;
     return {
       onTime: (current: number, duration: number) => {
-        if (!esMaestro || this.#cadena.contentHidden) return;
-        /*
-         * El final del recorte lo hace cumplir el reproductor, no el medio: el
-         * fichero sigue teniendo material por detrás y el motor no sabe que
-         * sobra. Se comprueba aquí y no con un temporizador porque el usuario
-         * puede saltar, cambiar de velocidad o quedarse sin búfer, y la única
-         * señal fiable de dónde está la reproducción es esta.
-         */
-        const recorte = this.#timeline().range;
-        if (recorte && current >= recorte.end) {
-          if (this.#cadena.onTrimEnd()) return;
-          if (!this.#finRecorteAvisado) {
-            this.#finRecorteAvisado = true;
+        if (!isMaster || this.#chain.contentHidden) return;
+        // The player enforces the trim's end: the file goes on and the engine
+        // does not know. Checked here since seeks, rate and stalls break a timer.
+        const trim = this.#timeline().range;
+        if (trim && current >= trim.end) {
+          if (this.#chain.onTrimEnd()) return;
+          if (!this.#trimEndAnnounced) {
+            this.#trimEndAnnounced = true;
             this.pause();
             this.bus.emit('time', { current: this.duration, duration: this.duration });
             this.bus.emit('ended', { at: this.duration });
@@ -708,69 +592,55 @@ export class Player {
           duration: this.duration || duration,
         });
       },
-      /*
-       * El estado de reproducción lo dicta el elemento multimedia, no lo que
-       * este objeto creía que iba a pasar.
-       *
-       * Sin esto la interfaz refleja la intención y no la realidad: si el
-       * navegador pausa por su cuenta —política de autoplay, un corte, un
-       * fallo— el botón sigue diciendo "Reproducir" con el vídeo en marcha, o
-       * al revés.
-       */
       onPlay: () => {
-        if (!esMaestro || !cuenta()) return;
-        this.#reflejarPlay();
+        if (!isMaster || !counts()) return;
+        this.#reflectPlay();
       },
-      /*
-       * Marca que la reproducción **ha empezado de verdad**, no solo que se ha
-       * pedido. Es lo que separa el buffering inicial —normal— de un corte a
-       * mitad de reproducción, que son dos cosas con respuestas opuestas.
-       */
-      onPlaying: () => { if (esMaestro) this.#atascos.markPlaying(); },
+      // Separates initial buffering, which is normal, from a mid-playback stall.
+      onPlaying: () => { if (isMaster) this.#stalls.markPlaying(); },
       onPause: () => {
-        if (!esMaestro || !cuenta()) return;
-        this.#atascos.markNotPlaying();
-        this.#reflejarPausa();
+        if (!isMaster || !counts()) return;
+        this.#stalls.markNotPlaying();
+        this.#reflectPause();
       },
       onEnded: () => {
-        if (!esMaestro || this.#cadena.phase !== 'main') return;
-        // Red de seguridad por si la vigilancia no llegó a anticipar la cola.
-        if (this.#cadena.onContentEnd()) return;
-        if (cuenta()) this.bus.emit('ended', { at: this.currentTime });
+        if (!isMaster || this.#chain.phase !== 'main') return;
+        // Safety net in case the watcher did not switch to the outro early.
+        if (this.#chain.onContentEnd()) return;
+        if (counts()) this.bus.emit('ended', { at: this.currentTime });
       },
       onSeeked: (at: number) => {
-        if (esMaestro && cuenta()) this.bus.emit('seek:end', { at: this.toVisibleTime(at) });
+        if (isMaster && counts()) this.bus.emit('seek:end', { at: this.toVisibleTime(at) });
       },
       onStallStart: () => {
-        if (!cuenta()) return;
+        if (!counts()) return;
         this.bus.emit('stall:start', { stream: stream.id });
-        this.#atascos.stallStarted(stream.id);
+        this.#stalls.stallStarted(stream.id);
       },
       onStallEnd: (durationMs: number) => {
-        if (!cuenta() && !this.#atascos.isStalled(stream.id)) return;
+        if (!counts() && !this.#stalls.isStalled(stream.id)) return;
         this.bus.emit('stall:end', { stream: stream.id, durationMs });
-        this.#atascos.stallEnded(stream.id);
+        this.#stalls.stallEnded(stream.id);
       },
       onError: (error: PlayerError) => {
         this.bus.emit('error', { error });
-        // En un directo, un fallo de red en un flujo ya enganchado es una
-        // interrupción, no un "aún no ha empezado": ese flujo llegó a emitir.
+        // A network failure on a stream that did broadcast is an interruption.
         if (this.#manifest?.live && error.retryable) {
-          this.#emision.markUnavailable(stream.id);
+          this.#broadcast.markUnavailable(stream.id);
         }
       },
     };
   }
 
-  #comoPlayerError(error: unknown, porDefecto: PlayerError['code']): PlayerError {
+  #toPlayerError(error: unknown, fallback: PlayerError['code']): PlayerError {
     if (error && typeof error === 'object' && 'code' in error && 'retryable' in error) {
       return error as PlayerError;
     }
-    return playerError(porDefecto, error instanceof Error ? error.message : String(error), error);
+    return playerError(fallback, error instanceof Error ? error.message : String(error), error);
   }
 }
 
-/** Punto de entrada de la API pública. */
+/** Public API entry point. */
 export function createPlayer(options: PlayerOptions): Player {
   return new Player(options);
 }

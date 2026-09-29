@@ -1,7 +1,6 @@
 {
-  // Solo para emitir los .d.ts; el bundle lo hace Vite. Extiende la base y no
-  // el tsconfig del paquete, que mapea los hermanos a su código fuente: aquí
-  // se resuelven contra los paquetes ya construidos, como hará el consumidor.
+  // Only emits .d.ts; Vite builds the bundle. Extends the base, not the package
+  // tsconfig: siblings resolve to their builds, as a consumer would see them.
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "emitDeclarationOnly": true,

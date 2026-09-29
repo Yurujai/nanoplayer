@@ -1,120 +1,93 @@
 /**
- * Estado de emisión de un directo.
- *
- * Distingue cuatro situaciones que se parecen y piden respuestas distintas.
- * La que más se confunde es la última:
- *
- * | Situación | Estado |
- * |---|---|
- * | Aún no se ha conseguido conectar, y nunca se consiguió | `waiting` |
- * | Está emitiendo | `live` |
- * | **Estuvo emitiendo y se cortó** | `interrupted` |
- * | No es un directo | `unknown` |
- *
- * Decirle "el evento aún no ha empezado" a quien llevaba veinte minutos
- * viéndolo sería desconcertante, así que el reproductor tiene que recordar si
- * llegó a emitir alguna vez.
+ * Broadcast status of a live stream. `interrupted` (it was on air and dropped)
+ * is kept apart from `waiting` (it never was): telling someone who watched for
+ * twenty minutes that the event has not started would be absurd.
  */
 export type LiveStatus = 'unknown' | 'waiting' | 'live' | 'interrupted';
 
 export interface RetryPolicy {
-  /** Primera espera, en milisegundos. */
+  /** First delay, in ms. */
   initialMs?: number;
-  /** Tope de la espera. */
+  /** Delay cap, in ms. */
   maxMs?: number;
-  /** Multiplicador entre intentos. */
+  /** Multiplier between attempts. */
   factor?: number;
 }
 
-const POR_DEFECTO: Required<RetryPolicy> = {
+const DEFAULTS: Required<RetryPolicy> = {
   initialMs: 2000,
   maxMs: 30000,
   factor: 1.6,
 };
 
 /**
- * Espera creciente entre reintentos.
- *
- * Sin crecimiento, un evento que empieza dos horas tarde son miles de
- * peticiones inútiles por espectador. Con tope, porque una espera que crece sin
- * límite acaba tardando minutos en enterarse de que el directo ya empezó.
+ * Growing delay between retries: without growth, an event starting two hours
+ * late means thousands of useless requests per viewer; without a cap, it takes
+ * minutes to notice it started.
  */
-export function backoff(intento: number, policy: RetryPolicy = {}): number {
-  const p = { ...POR_DEFECTO, ...policy };
-  const espera = p.initialMs * Math.pow(p.factor, Math.max(0, intento));
-  return Math.min(p.maxMs, Math.round(espera));
+export function backoff(attempt: number, policy: RetryPolicy = {}): number {
+  const p = { ...DEFAULTS, ...policy };
+  const delay = p.initialMs * Math.pow(p.factor, Math.max(0, attempt));
+  return Math.min(p.maxMs, Math.round(delay));
 }
 
-/**
- * Lleva la cuenta del estado de cada flujo de un directo.
- *
- * No hace peticiones ni sabe de HLS: solo recibe qué pasó al intentar
- * enganchar y deduce el estado. Mantenerlo así lo hace probable sin navegador
- * y sirve para cualquier protocolo.
- */
+/** Tracks each live stream's status from attach outcomes. No network, no HLS. */
 export class LiveTracker {
-  readonly #estados = new Map<string, LiveStatus>();
-  readonly #emitioAlguna = new Set<string>();
-  readonly #intentos = new Map<string, number>();
+  readonly #statuses = new Map<string, LiveStatus>();
+  readonly #everLive = new Set<string>();
+  readonly #attempts = new Map<string, number>();
 
   status(streamId: string): LiveStatus {
-    return this.#estados.get(streamId) ?? 'unknown';
+    return this.#statuses.get(streamId) ?? 'unknown';
   }
 
-  /** Estado del conjunto: emite si **alguno** emite. */
+  /** The whole set is live if **any** stream is. */
   get overall(): LiveStatus {
-    const todos = [...this.#estados.values()];
-    if (todos.length === 0) return 'unknown';
-    if (todos.includes('live')) return 'live';
-    // Si alguno llegó a emitir, esto es una interrupción y no una espera.
-    if (todos.includes('interrupted')) return 'interrupted';
-    return todos.includes('waiting') ? 'waiting' : 'unknown';
+    const all = [...this.#statuses.values()];
+    if (all.length === 0) return 'unknown';
+    if (all.includes('live')) return 'live';
+    if (all.includes('interrupted')) return 'interrupted';
+    return all.includes('waiting') ? 'waiting' : 'unknown';
   }
 
   get streams(): string[] {
-    return [...this.#estados.keys()];
+    return [...this.#statuses.keys()];
   }
 
-  /** Cuántos flujos siguen sin emitir. */
+  /** Streams still not on air. */
   get pending(): string[] {
-    return [...this.#estados.entries()]
+    return [...this.#statuses.entries()]
       .filter(([, s]) => s === 'waiting' || s === 'interrupted')
       .map(([id]) => id);
   }
 
   markLive(streamId: string): boolean {
-    this.#emitioAlguna.add(streamId);
-    this.#intentos.delete(streamId);
+    this.#everLive.add(streamId);
+    this.#attempts.delete(streamId);
     return this.#set(streamId, 'live');
   }
 
-  /**
-   * El flujo no está disponible.
-   *
-   * Se convierte en `interrupted` si ese flujo llegó a emitir alguna vez, y en
-   * `waiting` si nunca lo hizo. Es la distinción que evita el mensaje absurdo.
-   */
+  /** `interrupted` if the stream was ever live, `waiting` otherwise. */
   markUnavailable(streamId: string): boolean {
-    const estado = this.#emitioAlguna.has(streamId) ? 'interrupted' : 'waiting';
-    this.#intentos.set(streamId, (this.#intentos.get(streamId) ?? 0) + 1);
-    return this.#set(streamId, estado);
+    const status = this.#everLive.has(streamId) ? 'interrupted' : 'waiting';
+    this.#attempts.set(streamId, (this.#attempts.get(streamId) ?? 0) + 1);
+    return this.#set(streamId, status);
   }
 
-  /** Espera hasta el próximo intento de ese flujo. */
   nextDelay(streamId: string, policy?: RetryPolicy): number {
-    return backoff((this.#intentos.get(streamId) ?? 1) - 1, policy);
+    return backoff((this.#attempts.get(streamId) ?? 1) - 1, policy);
   }
 
   reset(): void {
-    this.#estados.clear();
-    this.#emitioAlguna.clear();
-    this.#intentos.clear();
+    this.#statuses.clear();
+    this.#everLive.clear();
+    this.#attempts.clear();
   }
 
-  /** Devuelve `true` si el estado ha cambiado. */
-  #set(streamId: string, estado: LiveStatus): boolean {
-    if (this.#estados.get(streamId) === estado) return false;
-    this.#estados.set(streamId, estado);
+  /** Returns `true` when the status changed. */
+  #set(streamId: string, status: LiveStatus): boolean {
+    if (this.#statuses.get(streamId) === status) return false;
+    this.#statuses.set(streamId, status);
     return true;
   }
 }

@@ -5,14 +5,11 @@ import { NativeEngine, nativeEngineFactory } from '../src/native-engine.js';
 import type { Stream } from '../src/manifest.js';
 
 /**
- * Elemento `<video>` gobernable.
- *
- * happy-dom crea el elemento pero no reproduce nada: `readyState` se queda a 0
- * y `play()` no existe. Se le injertan las partes multimedia para poder simular
- * carga, fallos y stalls con precisión. La reproducción de verdad se comprueba
- * con Playwright, no aquí.
+ * A drivable `<video>`: happy-dom plays nothing, so the media parts are grafted
+ * on to simulate loading, failures and stalls. Real playback is tested with
+ * Playwright.
  */
-function videoGobernable() {
+function drivableVideo() {
   const el = document.createElement('video') as HTMLVideoElement;
   let readyState = 0;
   let networkState = 0;
@@ -38,32 +35,29 @@ function videoGobernable() {
   });
 
   return Object.assign(el, {
-    /**
-     * Simula a iOS: no descarga nada hasta el primer `play()`, y avisa de que
-     * ha dejado de descargar con `suspend`.
-     */
-    simularSuspenso() {
+    /** Like iOS: downloads nothing until the first `play()`, and fires `suspend`. */
+    simulateSuspend() {
       el.dispatchEvent(new Event('suspend'));
     },
-    /** Simula que llegan los metadatos, sin datos de imagen todavía. */
-    simularMetadatos() {
+    /** Metadata arrives, with no picture data yet. */
+    simulateMetadata() {
       readyState = 1;
       el.dispatchEvent(new Event('loadedmetadata'));
     },
-    /** Simula que el medio ya tiene datos utilizables. */
-    simularCarga() {
+    /** The media has usable data. */
+    simulateLoad() {
       readyState = 2;
       el.dispatchEvent(new Event('loadeddata'));
     },
-    /** Simula un fallo del medio con el código de `MediaError` indicado. */
-    simularError(code: number, message = '') {
+    /** A media failure with the given `MediaError` code. */
+    simulateError(code: number, message = '') {
       error = { code, message } as MediaError;
       el.dispatchEvent(new Event('error'));
     },
-    /** Simula que `play()` es rechazado por la política del navegador. */
-    bloquearPlay(name = 'NotAllowedError') {
+    /** `play()` rejected, by default as the browser's autoplay policy does. */
+    rejectPlay(name = 'NotAllowedError') {
       el.play = vi.fn(async () => {
-        const e = new Error('bloqueado');
+        const e = new Error('blocked');
         e.name = name;
         throw e;
       });
@@ -78,11 +72,11 @@ const stream = (over: Partial<Stream> = {}): Stream => ({
 });
 
 let container: HTMLElement;
-let video: ReturnType<typeof videoGobernable>;
-let reloj: number;
+let video: ReturnType<typeof drivableVideo>;
+let clock: number;
 
-const motor = () => new NativeEngine({
-  now: () => reloj,
+const engine = () => new NativeEngine({
+  now: () => clock,
   createElement: () => video,
 });
 
@@ -90,88 +84,85 @@ beforeEach(() => {
   document.body.innerHTML = '';
   container = document.createElement('div');
   document.body.appendChild(container);
-  video = videoGobernable();
-  reloj = 0;
+  video = drivableVideo();
+  clock = 0;
 });
 
 describe('NativeEngine · attach', () => {
-  it('mete el elemento en el contenedor con sus fuentes', async () => {
-    const e = motor();
+  it('puts the element in the container with its sources', async () => {
+    const e = engine();
     const p = e.attach(container, stream({
       sources: [
         { src: 'a.m3u8', type: 'application/vnd.apple.mpegurl' },
         { src: 'a.mp4', type: 'video/mp4' },
       ],
     }));
-    video.simularCarga();
+    video.simulateLoad();
     await p;
 
     expect(container.contains(video)).toBe(true);
-    const fuentes = [...video.querySelectorAll('source')];
-    expect(fuentes.map((s) => s.getAttribute('type')))
+    const sources = [...video.querySelectorAll('source')];
+    expect(sources.map((s) => s.getAttribute('type')))
       .toEqual(['application/vnd.apple.mpegurl', 'video/mp4']);
   });
 
-  it('marca playsinline, que es obligatorio en iPhone', async () => {
-    const e = motor();
+  it('sets playsinline, required on iPhone', async () => {
+    const e = engine();
     const p = e.attach(container, stream());
-    video.simularCarga();
+    video.simulateLoad();
     await p;
-    // Propiedad y atributo: Safari antiguo solo mira el atributo.
+    // Property and attribute. see docs/browser-quirks.md#ios-playsinline
     expect(video.playsInline).toBe(true);
     expect(video.hasAttribute('playsinline')).toBe(true);
   });
 
-  it('resuelve con loadeddata, sin esperar a canplay', async () => {
-    const e = motor();
-    let resuelto = false;
-    const p = e.attach(container, stream()).then(() => { resuelto = true; });
+  it('resolves on loadeddata, without waiting for canplay', async () => {
+    const e = engine();
+    let resolved = false;
+    const p = e.attach(container, stream()).then(() => { resolved = true; });
 
     video.dispatchEvent(new Event('canplay'));
     await Promise.resolve();
-    expect(resuelto, 'canplay no debe resolver por sí solo').toBe(false);
+    expect(resolved, 'canplay must not resolve on its own').toBe(false);
 
-    video.simularCarga();
+    video.simulateLoad();
     await p;
-    expect(resuelto).toBe(true);
+    expect(resolved).toBe(true);
   });
 
-  it('resuelve también si el navegador no precarga nada (iOS)', async () => {
-    /*
-     * En un iPhone 17 Pro con Safari 26.5 no llegaba ni `loadeddata`: iOS no
-     * descarga hasta el primer play(). El enganche esperaba para siempre y el
-     * botón de play no hacía nada.
-     */
-    const e = motor();
+  it('also resolves if the browser preloads nothing (iOS)', async () => {
+    // Attach used to wait forever and play did nothing.
+    // see docs/browser-quirks.md#ios-no-preload
+    const e = engine();
     const p = e.attach(container, stream());
-    video.simularSuspenso();
+    video.simulateSuspend();
     await p;
     expect(video.readyState).toBe(0);
   });
 
-  it('sin metadatos, la posición recuperada se aplica cuando llegan', async () => {
-    const e = motor();
+  it('without metadata, the restored position applies when it arrives', async () => {
+    const e = engine();
     const p = e.attach(container, stream(), { startAt: 137.5 });
-    video.simularSuspenso();
+    video.simulateSuspend();
     await p;
     expect(video.currentTime).not.toBe(137.5);
-    video.simularMetadatos();
+    video.simulateMetadata();
     expect(video.currentTime).toBe(137.5);
   });
 
-  it('continúa desde la posición recuperada de un desalojo', async () => {
-    const e = motor();
+  it('resumes from the position restored after an eviction', async () => {
+    const e = engine();
     const p = e.attach(container, stream(), { startAt: 137.5 });
-    video.simularCarga();
+    video.simulateLoad();
     await p;
     expect(video.currentTime).toBe(137.5);
   });
 
-  it('rechaza con el error traducido si el medio falla al cargar', async () => {
-    const e = motor();
+  it('rejects with the mapped error if the media fails to load', async () => {
+    const e = engine();
     const onError = vi.fn();
     const p = e.attach(container, stream(), { callbacks: { onError } });
-    video.simularError(4, 'formato no soportado');
+    video.simulateError(4, 'unsupported format');
 
     await expect(p).rejects.toMatchObject({ code: 'engine/unsupported' });
     expect(onError).toHaveBeenCalledWith(
@@ -179,28 +170,28 @@ describe('NativeEngine · attach', () => {
     );
   });
 
-  it('no deja engancharse dos veces', async () => {
-    const e = motor();
+  it('does not allow attaching twice', async () => {
+    const e = engine();
     const p = e.attach(container, stream());
-    video.simularCarga();
+    video.simulateLoad();
     await p;
     await expect(e.attach(container, stream())).rejects.toThrow(/already attached/);
   });
 });
 
 describe('NativeEngine · detach', () => {
-  const enganchado = async () => {
-    const e = motor();
+  const attached = async () => {
+    const e = engine();
     const p = e.attach(container, stream());
-    video.simularCarga();
+    video.simulateLoad();
     await p;
     return e;
   };
 
-  it('suelta el recurso, no solo el nodo del DOM', async () => {
-    // La lección cara de S2: quitar del DOM no libera el decodificador. Sin
-    // vaciar la fuente y llamar a load(), una medición de 17 vídeos dio 2.
-    const e = await enganchado();
+  it('releases the resource, not just the DOM node', async () => {
+    // Removing from the DOM does not free the decoder.
+    // see docs/browser-quirks.md#decoder-release
+    const e = await attached();
     e.detach();
 
     expect(video.pause).toHaveBeenCalled();
@@ -211,11 +202,11 @@ describe('NativeEngine · detach', () => {
     expect(e.attached).toBe(false);
   });
 
-  it('desata los oyentes: ya no llegan callbacks', async () => {
+  it('unbinds the listeners: no more callbacks', async () => {
     const onPlay = vi.fn();
-    const e = motor();
+    const e = engine();
     const p = e.attach(container, stream(), { callbacks: { onPlay } });
-    video.simularCarga();
+    video.simulateLoad();
     await p;
 
     e.detach();
@@ -223,88 +214,85 @@ describe('NativeEngine · detach', () => {
     expect(onPlay).not.toHaveBeenCalled();
   });
 
-  it('es idempotente y no falla sin haber enganchado', () => {
-    const e = motor();
+  it('is idempotent and does not fail when never attached', () => {
+    const e = engine();
     expect(() => { e.detach(); e.detach(); }).not.toThrow();
   });
 
-  it('permite volver a engancharse después', async () => {
-    const e = await enganchado();
+  it('allows attaching again afterwards', async () => {
+    const e = await attached();
     e.detach();
-    video = videoGobernable();
+    video = drivableVideo();
     const p = e.attach(container, stream());
-    video.simularCarga();
+    video.simulateLoad();
     await expect(p).resolves.toBeUndefined();
   });
 });
 
-describe('NativeEngine · reproducción', () => {
-  const enganchado = async (cb = {}) => {
-    const e = motor();
+describe('NativeEngine · playback', () => {
+  const attached = async (cb = {}) => {
+    const e = engine();
     const p = e.attach(container, stream(), { callbacks: cb });
-    video.simularCarga();
+    video.simulateLoad();
     await p;
     return e;
   };
 
-  it('distingue el bloqueo por autoplay de un fallo del medio', async () => {
-    // La UI reacciona distinto: uno se arregla enseñando un botón de play.
-    const e = await enganchado();
-    video.bloquearPlay('NotAllowedError');
+  it('tells an autoplay block from a media failure', async () => {
+    // The UI reacts differently: a block is fixed by showing a play button.
+    const e = await attached();
+    video.rejectPlay('NotAllowedError');
     await expect(e.play()).rejects.toMatchObject({
       code: 'media/blocked', retryable: false,
     });
   });
 
-  it('un play() interrumpido por pause() no es un fallo', async () => {
-    /*
-     * Lo tomaba por error del medio. El desbloqueo del encadenado hace
-     * play() y pause() seguidos, y con la cola aún sin datos eso rechaza con
-     * AbortError: la cola se daba por rota y desaparecía.
-     */
-    const e = motor();
+  it('a play() interrupted by pause() is not a failure', async () => {
+    // The chain's unlock did this and the outro was dropped as broken.
+    // see docs/browser-quirks.md#play-abort
+    const e = engine();
     const onError = vi.fn();
     const p = e.attach(container, stream(), { callbacks: { onError } });
-    video.simularCarga();
+    video.simulateLoad();
     await p;
-    video.bloquearPlay('AbortError');
+    video.rejectPlay('AbortError');
     await expect(e.play()).resolves.toBeUndefined();
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it('trata cualquier otro rechazo como fallo de reproducción', async () => {
-    const e = await enganchado();
-    video.bloquearPlay('NotSupportedError');
+  it('treats any other rejection as a playback failure', async () => {
+    const e = await attached();
+    video.rejectPlay('NotSupportedError');
     await expect(e.play()).rejects.toMatchObject({ code: 'media/decode' });
   });
 
-  it('propaga play y pause a los callbacks', async () => {
+  it('forwards play and pause to the callbacks', async () => {
     const onPlay = vi.fn(), onPause = vi.fn();
-    const e = await enganchado({ onPlay, onPause });
+    const e = await attached({ onPlay, onPause });
     await e.play();
     e.pause();
     expect(onPlay).toHaveBeenCalled();
     expect(onPause).toHaveBeenCalled();
   });
 
-  it('ignora posiciones de seek absurdas en vez de propagarlas', async () => {
-    const e = await enganchado();
+  it('ignores nonsensical seek positions instead of forwarding them', async () => {
+    const e = await attached();
     e.seek(50);
     e.seek(-1);
     e.seek(Number.NaN);
     expect(video.currentTime).toBe(50);
   });
 
-  it('acota el volumen al rango válido', async () => {
-    const e = await enganchado();
+  it('clamps the volume to the valid range', async () => {
+    const e = await attached();
     e.setVolume(5);
     expect(video.volume).toBe(1);
     e.setVolume(-2);
     expect(video.volume).toBe(0);
   });
 
-  it('rechaza velocidades imposibles', async () => {
-    const e = await enganchado();
+  it('rejects impossible rates', async () => {
+    const e = await attached();
     e.setPlaybackRate(1.5);
     e.setPlaybackRate(0);
     e.setPlaybackRate(-1);
@@ -312,8 +300,8 @@ describe('NativeEngine · reproducción', () => {
     expect(e.getPlaybackRate()).toBe(1.5);
   });
 
-  it('expone duración 0 en vez de NaN o Infinity', async () => {
-    const e = await enganchado();
+  it('reports duration 0 instead of NaN or Infinity', async () => {
+    const e = await attached();
     Object.defineProperty(video, 'duration', { value: Number.NaN, configurable: true });
     expect(e.duration).toBe(0);
     Object.defineProperty(video, 'duration', { value: Infinity, configurable: true });
@@ -321,48 +309,46 @@ describe('NativeEngine · reproducción', () => {
   });
 });
 
-describe('NativeEngine · contabilidad de stalls', () => {
-  const enganchado = async (cb: object) => {
-    const e = motor();
+describe('NativeEngine · stall accounting', () => {
+  const attached = async (cb: object) => {
+    const e = engine();
     const p = e.attach(container, stream(), { callbacks: cb });
-    video.simularCarga();
+    video.simulateLoad();
     await p;
     return e;
   };
 
-  it('mide cuánto duró quedarse sin buffer', async () => {
-    // Es la señal que permitirá saber si las excursiones de sincronización que
-    // S2 midió en iPhone vienen de buffering o de otra cosa.
+  it('measures how long it ran out of buffer', async () => {
     const onStallStart = vi.fn(), onStallEnd = vi.fn();
-    await enganchado({ onStallStart, onStallEnd });
+    await attached({ onStallStart, onStallEnd });
 
-    reloj = 1000;
+    clock = 1000;
     video.dispatchEvent(new Event('waiting'));
-    reloj = 1350;
+    clock = 1350;
     video.dispatchEvent(new Event('playing'));
 
     expect(onStallStart).toHaveBeenCalledTimes(1);
     expect(onStallEnd).toHaveBeenCalledWith(350);
   });
 
-  it('no cuenta dos veces un stall que sigue abierto', async () => {
+  it('does not count an open stall twice', async () => {
     const onStallStart = vi.fn();
-    await enganchado({ onStallStart });
+    await attached({ onStallStart });
     video.dispatchEvent(new Event('waiting'));
     video.dispatchEvent(new Event('waiting'));
     expect(onStallStart).toHaveBeenCalledTimes(1);
   });
 
-  it('no inventa un fin de stall si no hubo stall', async () => {
+  it('does not invent a stall end without a stall', async () => {
     const onStallEnd = vi.fn();
-    await enganchado({ onStallEnd });
+    await attached({ onStallEnd });
     video.dispatchEvent(new Event('playing'));
     expect(onStallEnd).not.toHaveBeenCalled();
   });
 
-  it('un detach a mitad de stall no deja el contador colgado', async () => {
+  it('a detach mid-stall does not leave the counter hanging', async () => {
     const onStallEnd = vi.fn();
-    const e = await enganchado({ onStallEnd });
+    const e = await attached({ onStallEnd });
     video.dispatchEvent(new Event('waiting'));
     e.detach();
     video.dispatchEvent(new Event('playing'));
@@ -371,10 +357,10 @@ describe('NativeEngine · contabilidad de stalls', () => {
 });
 
 describe('NativeEngine · destroy', () => {
-  it('suelta el recurso y deja el motor inservible', async () => {
-    const e = motor();
+  it('releases the resource and leaves the engine unusable', async () => {
+    const e = engine();
     const p = e.attach(container, stream());
-    video.simularCarga();
+    video.simulateLoad();
     await p;
 
     e.destroy();
@@ -384,35 +370,34 @@ describe('NativeEngine · destroy', () => {
   });
 });
 
-describe('selección de motor', () => {
-  it('traduce canPlayType para fuentes normales', () => {
-    // happy-dom devuelve cadena vacía: para el motor eso es "no".
+describe('engine selection', () => {
+  it('maps canPlayType for normal sources', () => {
+    // happy-dom returns '': for the engine that is "no".
     expect(nativeEngineFactory.canPlay({ src: 'a.mp4', type: 'video/mp4' }))
       .toBe('no');
     expect(nativeEngineFactory.canPlay({ src: 'a.mp4', type: '' })).toBe('no');
   });
 
-  it('con HLS NO se fía de canPlayType, que miente', () => {
-    // Medido en S2: devolvió "maybe" en los cinco navegadores probados,
-    // incluido Chrome de escritorio, que no reproduce HLS nativo.
+  it('does NOT trust canPlayType for HLS, which lies', () => {
+    // see docs/browser-quirks.md#canplaytype-hls
     const hls = { src: 'a.m3u8', type: 'application/vnd.apple.mpegurl' };
     const g = globalThis as { MediaSource?: unknown };
-    const previo = g.MediaSource;
+    const previous = g.MediaSource;
 
-    // Con MSE presente se rebaja, para que un motor con hls.js pueda ganar.
+    // With MSE it is lowered, so an hls.js engine can win.
     g.MediaSource = function () {};
     expect(nativeEngineFactory.canPlay(hls)).toBe('maybe');
 
-    // Sin MSE (el caso de iOS) el soporte nativo es la única vía posible.
+    // Without MSE (iOS) native support is the only way.
     delete g.MediaSource;
     expect(nativeEngineFactory.canPlay(hls)).toBe('probably');
 
-    if (previo !== undefined) g.MediaSource = previo;
+    if (previous !== undefined) g.MediaSource = previous;
   });
 
-  it('reconoce las variantes del tipo MIME de HLS, con parámetros incluidos', () => {
+  it('recognises HLS MIME type variants, parameters included', () => {
     const g = globalThis as { MediaSource?: unknown };
-    const previo = g.MediaSource;
+    const previous = g.MediaSource;
     delete g.MediaSource;
     for (const type of [
       'application/x-mpegURL',
@@ -421,23 +406,23 @@ describe('selección de motor', () => {
     ]) {
       expect(nativeEngineFactory.canPlay({ src: 'a.m3u8', type }), type).toBe('probably');
     }
-    if (previo !== undefined) g.MediaSource = previo;
+    if (previous !== undefined) g.MediaSource = previous;
   });
 
-  it('la confianza de un stream es la mejor de sus fuentes', () => {
+  it('a stream\'s confidence is its best source\'s', () => {
     const fake: EngineFactory = {
       name: 'fake',
       canPlay: (s) => (s.type === 'video/mp4' ? 'probably' : 'no'),
-      create: () => { throw new Error('no usado'); },
+      create: () => { throw new Error('unused'); },
     };
     expect(confidenceFor(fake, stream({
       sources: [{ src: 'a.webm', type: 'video/webm' }, { src: 'a.mp4', type: 'video/mp4' }],
     }))).toBe('probably');
   });
 
-  it('gana el más confiado, y a empate el registrado antes', () => {
+  it('the most confident wins, and on a tie the first registered', () => {
     const mk = (name: string, c: 'probably' | 'maybe' | 'no'): EngineFactory => ({
-      name, canPlay: () => c, create: () => { throw new Error('no usado'); },
+      name, canPlay: () => c, create: () => { throw new Error('unused'); },
     });
     const s = stream();
     expect(selectEngine([mk('a', 'maybe'), mk('b', 'probably')], s)?.name).toBe('b');

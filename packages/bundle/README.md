@@ -1,10 +1,10 @@
 # @nanoplayer/bundle
 
-El reproductor entero en un fichero, con la interfaz, los subtítulos y los
-capítulos ya puestos. **85 KB, 27 KB gzip.**
+The whole player in one file, with the interface, captions and chapters already
+included. **85 KB, 27 KB gzip.**
 
-Es el paquete del objetivo O5: instalar con una etiqueta `<script>` y tres
-líneas, sin build, sin herramientas y sin npm.
+It is the package for installing with one `<script>` tag and three lines: no
+build, no tooling and no npm.
 
 ```html
 <div id="player"></div>
@@ -14,35 +14,35 @@ líneas, sin build, sin herramientas y sin npm.
 </script>
 ```
 
-Eso da un reproductor **con controles**: barra accesible, menú de ajustes,
-disposiciones y subtítulos si el manifiesto trae pistas.
+That gives a player **with controls**: an accessible bar, a settings menu,
+layouts, and captions if the manifest has tracks.
 
 ---
 
-## En qué se diferencia del núcleo
+## How it differs from the core
 
-`@nanoplayer/core` es *headless* a propósito — hay quien quiere su propia
-interfaz — así que su `create()` no monta ningún control. Aquí sí:
+`@nanoplayer/core` is *headless* on purpose — some people want their own
+interface — so its `create()` attaches no controls. This one does:
 
 ```js
-create('#player', { manifest });                    // con barra
-create('#player', { manifest, controls: false });   // sin ella
+create('#player', { manifest });                    // with the bar
+create('#player', { manifest, controls: false });   // without it
 create('#player', { manifest, controls: { lang: 'en' } });
 ```
 
-Todo lo demás es igual, incluido **el ciclo perezoso**: montar la interfaz no
-descarga nada. Con el póster a la vista no hay ningún `<video>` en el DOM ni un
-byte de vídeo pedido, y eso se comprueba en CI cargando este fichero en un
-navegador de verdad.
+Everything else is the same, including **the lazy lifecycle**: attaching the
+interface downloads nothing. While the poster is showing there is no `<video>`
+in the DOM and no byte of video has been requested, and CI checks that by
+loading this file in a real browser.
 
-## Una cosa o la otra, no las dos
+## One or the other, not both
 
-Este bundle **lleva el núcleo dentro**. Si en la misma página se carga además
-`@nanoplayer/core` por su cuenta, habrá dos registros de plugins y dos
-políticas de reproducción exclusiva, y ninguno verá al otro. Los plugins no se
-activarían y dos reproductores podrían sonar a la vez.
+This bundle **contains the core**. If the same page also loads
+`@nanoplayer/core` separately, there will be two plugin registries and two
+exclusive-playback policies, and neither will see the other. Plugins would not
+activate and two players could play at once.
 
-Con un build propio, usar los paquetes sueltos:
+With your own build, use the individual packages:
 
 ```js
 import { create } from '@nanoplayer/core';
@@ -50,34 +50,34 @@ import { attachControls } from '@nanoplayer/ui';
 import '@nanoplayer/plugin-captions';
 ```
 
-## Qué se publica
+## What is published
 
-| Fichero | Para qué |
+| File | What for |
 |---|---|
-| `nanoplayer.min.js` | IIFE. Deja la global `NanoPlayer`. **Es el de la etiqueta `<script>`** |
-| `nanoplayer.umd.js` | UMD. Para cargadores AMD —RequireJS, Moodle— y para CommonJS |
-| `index.js` | ESM, para quien tenga build propio |
-| `nanoplayer.css` | La hoja de estilos como fichero, para CSP estricta |
+| `nanoplayer.min.js` | IIFE. Leaves the global `NanoPlayer`. **The one for the `<script>` tag** |
+| `nanoplayer.umd.js` | UMD. For AMD loaders —RequireJS, Moodle— and CommonJS |
+| `index.js` | ESM, for your own build |
+| `nanoplayer.css` | The stylesheet as a file, for a strict CSP |
 
-**El UMD no sustituye al IIFE**, aunque lo parezca. UMD mira primero si hay
-`define.amd`: en una página que ya carga RequireJS, un `<script src>` de UMD se
-registra como módulo anónimo y **no crea la global**. Es decir, dejaría de
-funcionar justo en la plataforma donde más falta hace. Por eso van los dos, y
-CI comprueba que cada uno hace lo suyo con un cargador AMD presente.
+**UMD does not replace the IIFE**, even if it looks like it. UMD checks
+`define.amd` first: on a page that already loads RequireJS, a UMD
+`<script src>` registers as an anonymous module and **creates no global**. It
+would stop working exactly on the platform where it is needed most. So both
+ship, and CI checks each does its job with an AMD loader present.
 
-## Con una CSP estricta
+## With a strict CSP
 
-`injectStyles()` crea un `<style>` en línea, y una política `style-src 'self'`
-sin `'unsafe-inline'` lo bloquea **sin decir nada**: el reproductor se queda sin
-estilos y no hay error que mirar. Es el caso normal en una instalación
-institucional.
+`injectStyles()` creates an inline `<style>`, and a `style-src 'self'` policy
+without `'unsafe-inline'` blocks it **silently**: the player has no styles and
+there is no error to look at. That is the normal case in an institutional
+install.
 
-La salida es servir la hoja como un recurso más:
+The way out is to serve the stylesheet as one more resource:
 
 ```html
-<link rel="stylesheet" href="/ruta/nanoplayer.css">
+<link rel="stylesheet" href="/path/nanoplayer.css">
 <div id="player"></div>
-<script src="/ruta/nanoplayer.min.js"></script>
+<script src="/path/nanoplayer.min.js"></script>
 <script>
   NanoPlayer.create('#player', {
     manifest: '/api/video/123',
@@ -86,37 +86,35 @@ La salida es servir la hoja como un recurso más:
 </script>
 ```
 
-Por npm, la hoja se importa así:
+Through npm, import the stylesheet like this:
 
 ```js
 import '@nanoplayer/bundle/nanoplayer.css';
 ```
 
-Comprobado en CI con la CSP puesta de verdad por cabecera, no simulada: cero
-violaciones y los estilos aplicados.
+Checked in CI with the CSP really set by header, not simulated: zero violations
+and the styles applied.
 
-## Qué NO lleva
+## What it does NOT include
 
-**El motor de HLS.** `@nanoplayer/engine-hls` carga hls.js con un `import()`
-dinámico, y en una etiqueta `<script>` clásica no hay quien resuelva ese
-especificador.
+**The HLS engine.** `@nanoplayer/engine-hls` loads hls.js with a dynamic
+`import()`, and a classic `<script>` tag has nothing to resolve that specifier.
 
-En la práctica eso significa:
+In practice:
 
 | | HLS |
 |---|---|
-| Safari y iOS | **Sí**, por el motor nativo |
+| Safari and iOS | **Yes**, through the native engine |
 | Chrome, Firefox, Edge | No |
-| MP4 en todas partes | Sí |
+| MP4 everywhere | Yes |
 
-Quien necesite HLS en escritorio tiene que ir por npm y registrar el motor.
-Está anotado como pendiente: la salida razonable es que el bundle busque un
-`window.Hls` ya cargado, para que baste con añadir hls.js desde un CDN en otra
-etiqueta.
+HLS on desktop needs npm and registering the engine. It is on the to-do list:
+the sensible way out is for the bundle to pick up a `window.Hls` already
+loaded, so adding hls.js from a CDN in another tag is enough.
 
-## Idiomas
+## Languages
 
-Español e inglés de serie, y el resto es configuración:
+Spanish and English out of the box; the rest is configuration:
 
 ```js
 NanoPlayer.create('#player', { manifest, lang: 'eu', strings: {
@@ -124,4 +122,4 @@ NanoPlayer.create('#player', { manifest, lang: 'eu', strings: {
 } });
 ```
 
-Ver [`@nanoplayer/ui`](../ui/README.md#idiomas).
+See [`@nanoplayer/ui`](../ui/README.md#languages).

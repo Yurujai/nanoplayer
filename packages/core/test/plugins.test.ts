@@ -6,7 +6,7 @@ import {
   PluginRegistry, topoSort, type PluginManifest,
 } from '../src/plugins.js';
 
-const MANIFIESTO = {
+const MANIFEST = {
   id: 'x', duration: 60,
   streams: [{ id: 'cam', role: 'presenter', audio: true,
               sources: [{ src: 'a.mp4', type: 'video/mp4' }] }],
@@ -15,16 +15,16 @@ const MANIFIESTO = {
 
 let player: Player;
 
-/** Plugin de mentira que registra cuándo se activa. */
+/** Fake plugin that records when it is activated. */
 const plug = (
   id: string,
   extra: Partial<PluginManifest> = {},
-  traza: string[] = [],
+  trace: string[] = [],
 ): PluginManifest => ({
   id,
   load: () => ({
-    activate: () => { traza.push(`activar:${id}`); },
-    deactivate: () => { traza.push(`desactivar:${id}`); },
+    activate: () => { trace.push(`activate:${id}`); },
+    deactivate: () => { trace.push(`deactivate:${id}`); },
   }),
   ...extra,
 });
@@ -33,66 +33,65 @@ beforeEach(() => {
   document.body.innerHTML = '';
   const container = document.createElement('div');
   document.body.appendChild(container);
-  player = new Player({ container, manifest: MANIFIESTO as never });
+  player = new Player({ container, manifest: MANIFEST as never });
 });
 
 describe('topoSort', () => {
-  it('coloca las dependencias antes que quien las usa', () => {
-    const orden = topoSort([
+  it('puts dependencies before their users', () => {
+    const order = topoSort([
       plug('b', { dependsOn: ['a'] }),
       plug('a'),
       plug('c', { dependsOn: ['b'] }),
     ]).map((m) => m.id);
-    expect(orden).toEqual(['a', 'b', 'c']);
+    expect(order).toEqual(['a', 'b', 'c']);
   });
 
-  it('denuncia los ciclos con el camino completo', () => {
-    // Nada de resolución implícita por orden de carga: es donde estos sistemas
-    // se pudren, porque funcionan hasta que alguien reordena dos imports.
+  it('reports cycles with the full path', () => {
+    // No implicit resolution by load order: it works until two imports swap.
     expect(() => topoSort([
       plug('a', { dependsOn: ['b'] }),
       plug('b', { dependsOn: ['a'] }),
     ])).toThrow(/dependency cycle/);
   });
 
-  it('denuncia una dependencia que no existe', () => {
-    expect(() => topoSort([plug('a', { dependsOn: ['fantasma'] })]))
-      .toThrow(/depends on "fantasma"/);
+  it('reports a missing dependency', () => {
+    expect(() => topoSort([plug('a', { dependsOn: ['ghost'] })]))
+      .toThrow(/depends on "ghost"/);
   });
 
-  it('acepta dependencias compartidas sin duplicar', () => {
-    const orden = topoSort([
+  it('accepts shared dependencies without duplicates', () => {
+    const order = topoSort([
       plug('b', { dependsOn: ['base'] }),
       plug('c', { dependsOn: ['base'] }),
       plug('base'),
     ]).map((m) => m.id);
-    expect(orden[0]).toBe('base');
-    expect(orden).toHaveLength(3);
+    expect(order[0]).toBe('base');
+    expect(order).toHaveLength(3);
   });
 });
 
-describe('registro y activación', () => {
-  it('el plugin se auto-registra; el núcleo no lo importa', () => {
+describe('registration and activation', () => {
+  it('the plugin registers itself; the core does not import it', () => {
     const r = new PluginRegistry();
-    r.register(plug('subtitulos'));
-    expect(r.has('subtitulos')).toBe(true);
-    expect(r.registered).toEqual(['subtitulos']);
+    r.register(plug('captions'));
+    expect(r.has('captions')).toBe(true);
+    expect(r.registered).toEqual(['captions']);
   });
 
-  it('rechaza dos plugins con el mismo id', () => {
+  it('rejects two plugins with the same id', () => {
     const r = new PluginRegistry();
     r.register(plug('a'));
     expect(() => r.register(plug('a'))).toThrow(/id "a"/);
   });
 
-  it('activar es configuración, nunca un build', async () => {
+  it('activating is configuration, never a build', async () => {
     const r = new PluginRegistry();
     r.register(plug('chromecast'));
     const res = await r.activate(player, { chromecast: true });
     expect(res.activated).toEqual(['chromecast']);
   });
 
-  it('lo no configurado ni autoactivable se queda fuera', async () => {
+  it('what is neither configured nor auto-activated stays out', async () => {
     const r = new PluginRegistry();
     r.register(plug('chromecast'));
     const res = await r.activate(player, {});
@@ -100,174 +99,154 @@ describe('registro y activación', () => {
     expect(res.skipped).toEqual(['chromecast']);
   });
 
-  it('la configuración del plugin llega a su contexto', async () => {
+  it('the plugin\'s config reaches its context', async () => {
     const r = new PluginRegistry();
-    let recibida: unknown;
+    let received: unknown;
     r.register({
       id: 'h5p',
-      load: () => ({ activate: (ctx) => { recibida = ctx.config; } }),
+      load: () => ({ activate: (ctx) => { received = ctx.config; } }),
     });
     await r.activate(player, { h5p: { library: 'H5P.Blanks 1.14' } });
-    expect(recibida).toEqual({ library: 'H5P.Blanks 1.14' });
+    expect(received).toEqual({ library: 'H5P.Blanks 1.14' });
   });
 
-  // --- activación por condición ------------------------------------------
-
-  it('se autoactiva si el manifiesto lo justifica', async () => {
-    // El caso habitual no necesita configuración: los subtítulos se encienden
-    // solos porque el vídeo trae pistas de texto.
+  it('activates itself if the manifest calls for it', async () => {
     const r = new PluginRegistry();
-    r.register(plug('subtitulos', {
+    r.register(plug('captions', {
       activateWhen: (m) => (m?.textTracks?.length ?? 0) > 0,
     }));
-    const res = await r.activate(player, {}, MANIFIESTO);
-    expect(res.activated).toEqual(['subtitulos']);
+    const res = await r.activate(player, {}, MANIFEST);
+    expect(res.activated).toEqual(['captions']);
   });
 
-  it('no se autoactiva si el manifiesto no lo justifica', async () => {
+  it('does not activate itself if the manifest does not call for it', async () => {
     const r = new PluginRegistry();
     r.register(plug('h5p', {
       activateWhen: (m) => (m?.annotations ?? []).some((a) => a.kind === 'h5p'),
     }));
-    const res = await r.activate(player, {}, MANIFIESTO);
+    const res = await r.activate(player, {}, MANIFEST);
     expect(res.activated).toEqual([]);
   });
 
-  it('un false explícito gana a la condición automática', async () => {
+  it('an explicit false beats the automatic condition', async () => {
     const r = new PluginRegistry();
-    r.register(plug('subtitulos', { activateWhen: () => true }));
-    const res = await r.activate(player, { subtitulos: false }, MANIFIESTO);
+    r.register(plug('captions', { activateWhen: () => true }));
+    const res = await r.activate(player, { captions: false }, MANIFEST);
     expect(res.activated).toEqual([]);
   });
 
-  // --- dependencias -------------------------------------------------------
-
-  it('arrastra las dependencias aunque no se pidieran', async () => {
-    const traza: string[] = [];
+  it('pulls in dependencies even if not asked for', async () => {
+    const trace: string[] = [];
     const r = new PluginRegistry();
-    r.register(plug('base', {}, traza));
-    r.register(plug('encima', { dependsOn: ['base'] }, traza));
+    r.register(plug('base', {}, trace));
+    r.register(plug('top', { dependsOn: ['base'] }, trace));
 
-    const res = await r.activate(player, { encima: true });
-    expect(res.activated).toEqual(['base', 'encima']);
-    expect(traza).toEqual(['activar:base', 'activar:encima']);
+    const res = await r.activate(player, { top: true });
+    expect(res.activated).toEqual(['base', 'top']);
+    expect(trace).toEqual(['activate:base', 'activate:top']);
   });
 
-  // --- aislamiento de fallos ---------------------------------------------
-
-  it('un plugin que revienta no impide activar los demás', async () => {
-    // Son código de terceros: que uno falle no puede dejar al reproductor sin
-    // subtítulos y sin barra de progreso a la vez.
+  it('a plugin that blows up does not stop the others activating', async () => {
     const r = new PluginRegistry();
-    r.register({ id: 'roto', load: () => ({ activate: () => { throw new Error('boom'); } }) });
-    r.register(plug('sano'));
+    r.register({ id: 'broken', load: () => ({ activate: () => { throw new Error('boom'); } }) });
+    r.register(plug('healthy'));
 
-    const res = await r.activate(player, { roto: true, sano: true });
-    expect(res.activated).toEqual(['sano']);
+    const res = await r.activate(player, { broken: true, healthy: true });
+    expect(res.activated).toEqual(['healthy']);
     expect(res.failed).toHaveLength(1);
-    expect(res.failed[0]!.id).toBe('roto');
+    expect(res.failed[0]!.id).toBe('broken');
   });
 
-  it('un fallo al cargar la implementación se recoge igual', async () => {
+  it('a failure loading the implementation is collected too', async () => {
     const r = new PluginRegistry();
-    r.register({ id: 'lento', load: async () => { throw new Error('404'); } });
-    const res = await r.activate(player, { lento: true });
-    expect(res.failed[0]!.id).toBe('lento');
+    r.register({ id: 'slow', load: async () => { throw new Error('404'); } });
+    const res = await r.activate(player, { slow: true });
+    expect(res.failed[0]!.id).toBe('slow');
     expect(res.activated).toEqual([]);
   });
 
-  // --- carga diferida -----------------------------------------------------
-
-  it('no carga la implementación de lo que no se activa', async () => {
-    // Es lo que hace compatibles "todo disponible" y "núcleo pequeño": H5P no
-    // se descarga si el vídeo no trae anotaciones H5P.
+  it('does not load the implementation of what is not activated', async () => {
+    // H5P is not downloaded unless the video has H5P annotations.
     const load = vi.fn(() => ({ activate: () => {} }));
     const r = new PluginRegistry();
-    r.register({ id: 'pesado', load });
+    r.register({ id: 'heavy', load });
     await r.activate(player, {});
     expect(load).not.toHaveBeenCalled();
 
-    await r.activate(player, { pesado: true });
+    await r.activate(player, { heavy: true });
     expect(load).toHaveBeenCalledTimes(1);
   });
 
-  it('activar dos veces no reactiva lo ya activo', async () => {
-    const traza: string[] = [];
+  it('activating twice does not reactivate what is active', async () => {
+    const trace: string[] = [];
     const r = new PluginRegistry();
-    r.register(plug('a', {}, traza));
+    r.register(plug('a', {}, trace));
     await r.activate(player, { a: true });
     await r.activate(player, { a: true });
-    expect(traza).toEqual(['activar:a']);
+    expect(trace).toEqual(['activate:a']);
   });
 
-  // --- varios reproductores ----------------------------------------------
-
-  const otro = () => {
+  const another = () => {
     const c = document.createElement('div');
     document.body.appendChild(c);
-    return new Player({ container: c, manifest: MANIFIESTO as never });
+    return new Player({ container: c, manifest: MANIFEST as never });
   };
 
-  it('cada reproductor activa sus propios plugins', async () => {
-    /*
-     * El registro llevaba la cuenta por id de plugin, no por reproductor: en
-     * una página con dos, el segundo se quedaba sin subtítulos porque "ya
-     * estaban activos". Lo destapó la demo al recrear el reproductor.
-     */
-    const traza: string[] = [];
+  it('each player activates its own plugins', async () => {
+    // Tracked per plugin id, the second player on a page got no captions
+    // because they were "already active".
+    const trace: string[] = [];
     const r = new PluginRegistry();
-    r.register(plug('a', {}, traza));
-    const segundo = otro();
+    r.register(plug('a', {}, trace));
+    const second = another();
     await r.activate(player, { a: true });
-    await r.activate(segundo, { a: true });
-    expect(traza).toEqual(['activar:a', 'activar:a']);
+    await r.activate(second, { a: true });
+    expect(trace).toEqual(['activate:a', 'activate:a']);
     expect(r.activeFor(player)).toEqual(['a']);
-    expect(r.activeFor(segundo)).toEqual(['a']);
+    expect(r.activeFor(second)).toEqual(['a']);
   });
 
-  it('destruir un reproductor desactiva solo los suyos', async () => {
-    const traza: string[] = [];
+  it('destroying a player deactivates only its own', async () => {
+    const trace: string[] = [];
     const r = new PluginRegistry();
-    r.register(plug('a', {}, traza));
-    const segundo = otro();
+    r.register(plug('a', {}, trace));
+    const second = another();
     await r.activate(player, { a: true });
-    await r.activate(segundo, { a: true });
-    traza.length = 0;
+    await r.activate(second, { a: true });
+    trace.length = 0;
 
-    segundo.destroy();
+    second.destroy();
     await Promise.resolve();
-    expect(traza).toEqual(['desactivar:a']);
-    expect(r.activeFor(segundo)).toEqual([]);
+    expect(trace).toEqual(['deactivate:a']);
+    expect(r.activeFor(second)).toEqual([]);
     expect(r.activeFor(player)).toEqual(['a']);
   });
 
-  // --- desactivación ------------------------------------------------------
-
-  it('desactiva en orden inverso, por las dependencias', async () => {
-    const traza: string[] = [];
+  it('deactivates in reverse order, for the dependencies', async () => {
+    const trace: string[] = [];
     const r = new PluginRegistry();
-    r.register(plug('base', {}, traza));
-    r.register(plug('encima', { dependsOn: ['base'] }, traza));
-    await r.activate(player, { encima: true });
-    traza.length = 0;
+    r.register(plug('base', {}, trace));
+    r.register(plug('top', { dependsOn: ['base'] }, trace));
+    await r.activate(player, { top: true });
+    trace.length = 0;
 
     await r.deactivateAll();
-    expect(traza).toEqual(['desactivar:encima', 'desactivar:base']);
+    expect(trace).toEqual(['deactivate:top', 'deactivate:base']);
     expect(r.active).toEqual([]);
   });
 
-  it('un fallo al desactivar no impide desactivar el resto', async () => {
-    const traza: string[] = [];
+  it('a failure deactivating does not stop the rest', async () => {
+    const trace: string[] = [];
     const r = new PluginRegistry();
-    r.register({ id: 'malo', load: () => ({
+    r.register({ id: 'bad', load: () => ({
       activate: () => {}, deactivate: () => { throw new Error('boom'); },
     }) });
-    r.register(plug('bueno', {}, traza));
-    await r.activate(player, { malo: true, bueno: true });
-    traza.length = 0;
+    r.register(plug('good', {}, trace));
+    await r.activate(player, { bad: true, good: true });
+    trace.length = 0;
 
     await r.deactivateAll();
-    expect(traza).toContain('desactivar:bueno');
+    expect(trace).toContain('deactivate:good');
     expect(r.active).toEqual([]);
   });
 });

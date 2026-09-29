@@ -1,11 +1,6 @@
 /**
- * Ciclo de vida de una instancia: guarda el estado, valida cada transición y
- * conserva la posición entre desalojos.
- *
- * No sabe reproducir nada ni toca el DOM. Solo responde a "¿en qué estado
- * estoy?", "¿puedo pasar a este otro?" y "¿por dónde iba antes de que me
- * soltaran el motor?". Mantenerlo así es lo que permite probar el ciclo de vida
- * entero sin navegador.
+ * A player's lifecycle: holds the state, validates each transition and keeps
+ * the position across evictions. No DOM, so it is testable without a browser.
  */
 import type { EventBus } from './events.js';
 import type { CoreEvents } from './core-events.js';
@@ -27,13 +22,7 @@ export class Lifecycle {
     return this.#state;
   }
 
-  /**
-   * Posición desde la que continuar al volver a enganchar el motor.
-   *
-   * Es lo que hace del desalojo algo aceptable para el usuario: se le sueltan
-   * los recursos, pero al volver retoma donde estaba en lugar de empezar de
-   * cero.
-   */
+  /** Where to continue when engines are attached again after an eviction. */
   get resumeAt(): number {
     return this.#resumeAt;
   }
@@ -54,34 +43,24 @@ export class Lifecycle {
     return canTransition(this.#state, to);
   }
 
-  /**
-   * Cambia de estado. Lanza si la transición no está permitida: un cambio
-   * imposible es un fallo de programación, y tragárselo deja el reproductor
-   * incoherente de una forma que se manifiesta lejos de la causa.
-   */
+  /** Throws on a disallowed transition. */
   transition(to: PlayerState): void {
     assertTransition(this.#state, to);
     const from = this.#state;
     this.#state = to;
-
-    // Un reinicio completo descarta también la posición: volver a `idle`
-    // significa empezar de cero, no continuar.
+    // Back to `idle` is a full reset: start over, do not continue.
     if (to === 'idle') this.#resumeAt = 0;
 
     this.#bus.emit('state:change', { from, to });
     if (to === 'destroyed') this.#bus.emit('destroy', {});
   }
 
-  /**
-   * Anota por dónde va la reproducción, para poder retomarla tras un desalojo.
-   * Lo llama el reproductor antes de soltar el motor.
-   */
   rememberPosition(seconds: number): void {
     if (!Number.isFinite(seconds) || seconds < 0) return;
     this.#resumeAt = seconds;
   }
 
-  /** Va a `destroyed` desde donde sea. Idempotente. */
+  /** Idempotent. */
   destroy(): void {
     if (this.#state === 'destroyed') return;
     this.transition('destroyed');

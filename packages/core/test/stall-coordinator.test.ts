@@ -2,33 +2,33 @@ import { describe, expect, it, vi } from 'vitest';
 import type { MediaEngine } from '../src/engine.js';
 import { StallCoordinator } from '../src/stall-coordinator.js';
 
-const motor = () => ({ pause: vi.fn(), play: vi.fn(async () => {}) }) as unknown as MediaEngine
+const engine = () => ({ pause: vi.fn(), play: vi.fn(async () => {}) }) as unknown as MediaEngine
   & { pause: ReturnType<typeof vi.fn>; play: ReturnType<typeof vi.fn> };
 
-const conjunto = () => {
-  const cam = motor();
-  const slides = motor();
+const setup = () => {
+  const cam = engine();
+  const slides = engine();
   const c = new StallCoordinator(() => new Map([['cam', cam], ['slides', slides]]).entries());
   return { c, cam, slides };
 };
 
 describe('StallCoordinator', () => {
-  it('antes de sonar no frena a nadie: el waiting del arranque es normal', () => {
-    const { c, cam } = conjunto();
+  it('holds nobody back before playing: waiting at start-up is normal', () => {
+    const { c, cam } = setup();
     c.stallStarted('slides');
     expect(cam.pause).not.toHaveBeenCalled();
   });
 
-  it('sonando, frena a los demás pero no al que se atasca', () => {
-    const { c, cam, slides } = conjunto();
+  it('while playing, holds the others back but not the stalled one', () => {
+    const { c, cam, slides } = setup();
     c.markPlaying();
     c.stallStarted('slides');
     expect(cam.pause).toHaveBeenCalled();
-    expect(slides.pause, 'abortaría su propio play()').not.toHaveBeenCalled();
+    expect(slides.pause, 'it would abort its own play()').not.toHaveBeenCalled();
   });
 
-  it('solo reanuda cuando ya no queda nadie atascado', () => {
-    const { c, cam } = conjunto();
+  it('resumes only when nobody is stalled any more', () => {
+    const { c, cam } = setup();
     c.markPlaying();
     c.stallStarted('slides');
     c.stallStarted('cam');
@@ -38,8 +38,8 @@ describe('StallCoordinator', () => {
     expect(cam.play).toHaveBeenCalled();
   });
 
-  it('no resucita lo que el usuario pausó', () => {
-    const { c, cam } = conjunto();
+  it('does not resume what the user paused', () => {
+    const { c, cam } = setup();
     c.markPlaying();
     c.stallStarted('slides');
     c.userPaused();

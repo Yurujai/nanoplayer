@@ -11,46 +11,46 @@ const stream = (id: string, audio = false): Stream => ({
   sources: [{ src: `${id}.mp4`, type: 'video/mp4' }],
 });
 
-function factoria(fallan: string[] = []) {
-  const orden: string[] = [];
+function fakeFactory(failing: string[] = []) {
+  const order: string[] = [];
   const factory: EngineFactory = {
-    name: 'falso', canPlay: () => 'probably',
+    name: 'fake', canPlay: () => 'probably',
     create: () => {
       let id = '';
       return {
-        async attach(_c: HTMLElement, s: Stream) { id = s.id; if (fallan.includes(s.id)) throw new Error('no'); },
-        async play() { orden.push(id); },
+        async attach(_c: HTMLElement, s: Stream) { id = s.id; if (failing.includes(s.id)) throw new Error('no'); },
+        async play() { order.push(id); },
         pause: vi.fn(), destroy: vi.fn(),
       } as never;
     },
   };
-  return { factory, orden };
+  return { factory, order };
 }
 
 let container: HTMLElement;
 beforeEach(() => { document.body.innerHTML = ''; container = document.createElement('div'); });
 
 describe('ContentSet', () => {
-  it('reproduce el maestro antes que los demás', async () => {
-    const { factory, orden } = factoria();
+  it('plays the master before the others', async () => {
+    const { factory, order } = fakeFactory();
     const c = new ContentSet({ container, engines: [factory], bus: new EventBus<CoreEvents>() });
     await c.attach(stream('slides'), {}, false);
     await c.attach(stream('cam', true), {}, false);
     await c.play('cam');
-    expect(orden).toEqual(['cam', 'slides']);
+    expect(order).toEqual(['cam', 'slides']);
   });
 
-  it('si un flujo falla, su caja se va salvo que se pida conservarla', async () => {
-    const { factory } = factoria(['cam']);
+  it('removes a failed stream\'s box unless asked to keep it', async () => {
+    const { factory } = fakeFactory(['cam']);
     const c = new ContentSet({ container, engines: [factory], bus: new EventBus<CoreEvents>() });
     await expect(c.attach(stream('cam', true), {}, false)).rejects.toThrow();
     expect(container.querySelector('[data-stream]')).toBeNull();
     await expect(c.attach(stream('cam', true), {}, true)).rejects.toThrow();
-    expect(container.querySelector('[data-stream="cam"]'), 'en directo, el hueco del aviso').not.toBeNull();
+    expect(container.querySelector('[data-stream="cam"]'), 'live, the slot for the notice').not.toBeNull();
   });
 
-  it('soltar quita motores y cajas', async () => {
-    const { factory } = factoria();
+  it('release removes engines and boxes', async () => {
+    const { factory } = fakeFactory();
     const c = new ContentSet({ container, engines: [factory], bus: new EventBus<CoreEvents>() });
     await c.attach(stream('cam', true), {}, false);
     c.release();

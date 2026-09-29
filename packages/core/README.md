@@ -1,103 +1,104 @@
 # @nanoplayer/core
 
-Núcleo del reproductor: manifiesto, ciclo de vida, motores, sincronización y
-registro de plugins. Sin interfaz — los controles van en `@nanoplayer/ui`.
+The player's core: manifest, lifecycle, engines, sync and plugin registry. No
+UI — the controls live in `@nanoplayer/ui`.
 
-Sin dependencias en tiempo de ejecución. **7,5 KB gzip** en el bundle IIFE.
+No runtime dependencies. **7.5 KB gzip** in the IIFE bundle.
 
 ---
 
-## El manifiesto
+## The manifest
 
-Describe **qué** hay que reproducir, nunca **cómo**. No menciona motores,
-elementos `<video>` ni layouts: si algún día hace falta cambiar de motor, el
-manifiesto no se entera.
+It describes **what** to play, never **how**. It does not mention engines,
+`<video>` elements or layouts: if the engine ever has to change, the manifest
+does not notice.
 
-Es **JSON**, sin formato propio. Se puede pasar de dos formas:
+It is **JSON**, with no format of its own. It can be passed in two ways:
 
 ```js
-// Objeto, si la página ya tiene los datos
+// An object, if the page already has the data
 createPlayer({ container, manifest: { id: 'x', streams: [...] } });
 
-// URL, que se pide y se parsea como JSON
+// A URL, fetched and parsed as JSON
 createPlayer({ container, manifest: '/api/video/123' });
 ```
 
-JSON porque lo emite cualquier backend sin esfuerzo. Un formato propio
-obligaría a escribir y mantener un parser que nadie ha pedido. Si tu API
-devuelve otra cosa, `manifestResolver` puede traducirla: el reproductor solo
-mira la forma final.
+JSON because any backend emits it effortlessly. A format of its own would mean
+writing and maintaining a parser nobody asked for. If your API returns
+something else, `manifestResolver` can translate it: the player only looks at
+the final shape.
 
-### Mono-stream, el caso mínimo
+### Single stream, the minimal case
 
 ```json
 {
-  "id": "clase-1",
-  "title": "Introducción a la termodinámica",
-  "poster": "https://ejemplo/miniatura.jpg",
+  "id": "lecture-1",
+  "title": "Introduction to thermodynamics",
+  "poster": "https://example/thumbnail.jpg",
   "duration": 3600,
   "streams": [
     {
-      "id": "camara",
+      "id": "camera",
       "role": "presenter",
       "audio": true,
       "sources": [
-        { "src": "https://ejemplo/video.mp4", "type": "video/mp4" }
+        { "src": "https://example/video.mp4", "type": "video/mp4" }
       ]
     }
   ]
 }
 ```
 
-### Dual-stream
+### Dual stream
 
 ```json
 {
-  "id": "clase-1",
+  "id": "lecture-1",
   "duration": 3600,
   "streams": [
     {
-      "id": "camara", "role": "presenter", "label": "Ponente",
+      "id": "camera", "role": "presenter", "label": "Speaker",
       "audio": true,
-      "sources": [{ "src": "camara.mp4", "type": "video/mp4" }]
+      "sources": [{ "src": "camera.mp4", "type": "video/mp4" }]
     },
     {
-      "id": "diapositivas", "role": "presentation", "label": "Diapositivas",
+      "id": "slides", "role": "presentation", "label": "Slides",
       "audio": false,
-      "sources": [{ "src": "diapositivas.mp4", "type": "video/mp4" }]
+      "sources": [{ "src": "slides.mp4", "type": "video/mp4" }]
     }
   ]
 }
 ```
 
-> **Exactamente un stream puede llevar `audio: true`.** No es una convención
-> estética: ese stream es el maestro del reloj de sincronización y los demás lo
-> persiguen. El spike S1 midió que alterar la velocidad del stream con audio se
-> oye, así que la corrección recae en los mudos; y S2 midió que **iOS no
-> reproduce dos pistas de audio a la vez**. Un manifiesto con dos se rechaza al
-> validar, en lugar de producir un reproductor que falla solo en iPhone.
+> **Exactly one stream may carry `audio: true`.** It is not a matter of taste:
+> that stream is the master of the sync clock and the others chase it. Spike S1
+> measured that changing the rate of the stream with audio is audible, so the
+> correction falls on the muted ones; and S2 measured that **iOS does not play
+> two audio tracks at once**. A manifest with two is rejected at validation,
+> instead of producing a player that fails only on iPhone.
 
 ### HLS
 
-Idéntico, cambiando el tipo MIME de las fuentes:
+Identical, changing the sources' MIME type:
 
 ```json
 {
   "streams": [
     {
-      "id": "camara", "role": "presenter", "audio": true,
+      "id": "camera", "role": "presenter", "audio": true,
       "sources": [
-        { "src": "camara.m3u8", "type": "application/vnd.apple.mpegurl" }
+        { "src": "camera.m3u8", "type": "application/vnd.apple.mpegurl" }
       ]
     }
   ]
 }
 ```
 
-Con `@nanoplayer/engine-hls` registrado, ese tipo hace que gane hls.js donde hay
-MediaSource y el motor nativo donde no. **No cambia nada más del manifiesto.**
+With `@nanoplayer/engine-hls` registered, that type makes hls.js win where
+there is MediaSource and the native engine where there is not. **Nothing else
+in the manifest changes.**
 
-### Varias calidades
+### Several qualities
 
 ```json
 "sources": [
@@ -107,10 +108,10 @@ MediaSource y el motor nativo donde no. **No cambia nada más del manifiesto.**
 ]
 ```
 
-El motor elige. Con HLS la selección adaptativa la hace hls.js y basta una
-fuente.
+The engine chooses. With HLS, hls.js does adaptive selection and one source is
+enough.
 
-### Subtítulos
+### Captions
 
 ```json
 "textTracks": [
@@ -119,310 +120,307 @@ fuente.
 ]
 ```
 
-Con `@nanoplayer/plugin-captions` cargado, esto **activa los subtítulos sin
-configurar nada**: el plugin declara que le corresponde actuar cuando el
-manifiesto trae pistas.
+With `@nanoplayer/plugin-captions` loaded, this **turns captions on with no
+configuration**: the plugin declares that it applies when the manifest has
+tracks.
 
-### Solo audio
+### Audio only
 
-No hace falta declarar nada: el tipo MIME basta.
+Nothing needs declaring: the MIME type is enough.
 
 ```json
 {
   "id": "podcast-1",
-  "poster": "https://ejemplo/caratula.jpg",
+  "poster": "https://example/cover.jpg",
   "streams": [
     {
-      "id": "locucion", "role": "presenter", "audio": true,
+      "id": "voice", "role": "presenter", "audio": true,
       "sources": [{ "src": "audio.m4a", "type": "audio/mp4" }]
     }
   ]
 }
 ```
 
-La carátula **se queda puesta durante la reproducción** en lugar de dejar un
-rectángulo negro. Sin `poster`, el reproductor se reduce a la barra de
-controles: reservar un hueco de vídeo vacío no aporta nada.
+The cover **stays up during playback** instead of leaving a black rectangle.
+Without `poster`, the player shrinks to the control bar: reserving an empty
+video box adds nothing.
 
-Cuando el MIME no basta —HLS con solo audio, donde el tipo es el mismo que para
-vídeo— se declara explícitamente:
+When the MIME type is not enough —audio-only HLS, whose type is the same as for
+video— it is declared explicitly:
 
 ```json
 { "id": "x", "role": "presenter", "audio": true, "kind": "audio",
   "sources": [{ "src": "audio.m3u8", "type": "application/vnd.apple.mpegurl" }] }
 ```
 
-### Audio con diapositivas
+### Audio with slides
 
-Una clase sin cámara pero con la presentación. El modelo maestro/esclavo no
-cambia: **el audio es el maestro** y el vídeo mudo lo persigue.
+A lecture without a camera but with the presentation. The master/slave model
+does not change: **the audio is the master** and the muted video chases it.
 
 ```json
 "streams": [
-  { "id": "locucion", "role": "presenter", "audio": true,
+  { "id": "voice", "role": "presenter", "audio": true,
     "sources": [{ "src": "audio.m4a", "type": "audio/mp4" }] },
   { "id": "slides", "role": "presentation", "audio": false,
     "sources": [{ "src": "slides.mp4", "type": "video/mp4" }] }
 ]
 ```
 
-### Cabecera y cola
+### Intro and outro
 
-Piezas que se encadenan delante y detrás del contenido: una cabecera
-institucional o una cola con créditos.
+Pieces chained before and after the content: an institutional intro or an
+outro with credits.
 
 ```json
-"intro": { "sources": [{ "src": "cabecera.mp4", "type": "video/mp4" }] },
-"outro": { "sources": [{ "src": "cola.mp4", "type": "video/mp4" }] }
+"intro": { "sources": [{ "src": "intro.mp4", "type": "video/mp4" }] },
+"outro": { "sources": [{ "src": "outro.mp4", "type": "video/mp4" }] }
 ```
 
-**Las dos son opcionales y no dependen una de otra.** Se puede poner una sola,
-las dos o ninguna.
+**Both are optional and independent of each other.** Use one, both or neither.
 
-Cada una es **una sola pieza con su sonido**, aunque el contenido sea
-dual-stream: no hay nada que sincronizar.
+Each is **a single piece with its own sound**, even if the content is dual
+stream: there is nothing to sync.
 
-**La cabecera se puede saltar; la cola, no.** Por eso no hay un campo para
-configurarlo: lo decide el papel de la pieza. No saltar la cola significa que
-tampoco se puede adelantar con la barra, el teclado ni los controles del
-sistema. Sí se puede **retroceder** al contenido, y al volver a llegar al final
-la cola se reproduce de nuevo.
+**The intro can be skipped; the outro cannot.** That is why there is no field
+to configure it: the piece's role decides. Not skipping the outro means it
+cannot be fast-forwarded with the bar, the keyboard or the system controls
+either. It is possible to **seek back** into the content, and on reaching the
+end again the outro plays again.
 
-La barra de progreso muestra **solo el contenido**, ya recortado si hay `trim`.
-Ni `duration` ni `currentTime` cuentan la cabecera ni la cola.
+The progress bar shows **only the content**, already trimmed if there is a
+`trim`. Neither `duration` nor `currentTime` count the intro or the outro.
 
-**En directo se rechazan las dos.** Mientras suena la cabecera, la emisión
-sigue avanzando y se llega tarde al borde. La cola depende de que la emisión
-termine, y un directo no lo garantiza.
+**Both are rejected in a live stream.** While the intro plays, the broadcast
+moves on and the edge is reached late. The outro depends on the broadcast
+ending, and a live stream does not guarantee it.
 
-#### Cómo se encadena
+#### How the chain works
 
-Arrancar la pieza siguiente cuando termina la anterior deja un hueco negro de
-340–445 ms (spike S6). Por eso la siguiente se arranca **600 ms antes**, en
-silencio y detrás, y el cambio se hace **en su primer fotograma**, no en cuanto
-acepta el `play()`. Así no queda hueco en ningún motor.
+Starting the next piece when the previous one ends leaves a black gap of
+340–445 ms (spike S6). So the next one starts **600 ms early**, muted and
+behind, and the switch happens **on its first frame**, not as soon as it
+accepts `play()`. No gap is left on any engine.
 
 | | |
 |---|---|
-| `player.phase` | `'intro'`, `'main'` o `'outro'` |
-| `player.canSkip` | `true` solo durante la cabecera |
-| `player.skipIntro()` | Salta la cabecera, sin hueco. No hay `skipOutro()` |
-| `chain:phase` | `{ from, to, skipped }`, en el instante del cambio visible |
-| `chain:time` | Progreso de la cabecera o la cola. `time` es solo del contenido |
-| `chain:unavailable` | Una pieza no carga y se omite; el contenido sigue |
+| `player.phase` | `'intro'`, `'main'` or `'outro'` |
+| `player.canSkip` | `true` only during the intro |
+| `player.skipIntro()` | Skips the intro, with no gap. There is no `skipOutro()` |
+| `chain:phase` | `{ from, to, skipped }`, at the moment of the visible switch |
+| `chain:time` | Progress of the intro or outro. `time` is content only |
+| `chain:unavailable` | A piece does not load and is skipped; the content goes on |
 
-La fase también se publica como `data-phase` en el contenedor: la interfaz
-decide con **ese único atributo** qué se ve, y cambiarlo de golpe es lo que hace
-que el cambio sea instantáneo.
+The phase is also published as `data-phase` on the container: the UI decides
+what is shown from **that single attribute**, and flipping it at once is what
+makes the switch instant.
 
-`ended` llega al terminar **la cola**, no el contenido. Dar al play después
-vuelve al principio del contenido, sin repetir la cabecera. Si el reproductor
-se desaloja a mitad de una pieza, al volver esa pieza empieza desde el
-principio.
+`ended` arrives when **the outro** finishes, not the content. Pressing play
+afterwards goes back to the start of the content, without the intro. If the
+player is evicted halfway through a piece, that piece restarts from the
+beginning on return.
 
-### Anotaciones
+### Annotations
 
-Datos anclados al timeline. Unifica lo que parecen features sueltas: recorte,
-capítulos y contenido interactivo son consumidores del mismo mecanismo, y añadir
-uno nuevo no toca el núcleo.
+Data anchored to the timeline. It unifies what look like separate features:
+trim, chapters and interactive content consume the same mechanism, and adding a
+new one does not touch the core.
 
 ```json
 "annotations": [
   { "kind": "trim", "start": 12, "end": 3500 },
-  { "kind": "chapter", "start": 60, "end": 900, "title": "Primer principio" },
+  { "kind": "chapter", "start": 60, "end": 900, "title": "First law" },
   { "kind": "h5p", "start": 300, "data": { "library": "H5P.Blanks 1.14" } }
 ]
 ```
 
-Un `kind` desconocido **pasa la validación**: lo resolverá su plugin, no el
-núcleo.
+An unknown `kind` **passes validation**: its plugin will handle it, not the
+core.
 
-#### Recorte
+#### Trim
 
-`trim` **no modifica el medio: remapea el timeline que se enseña.** Con
-`{ "kind": "trim", "start": 100, "end": 160 }` sobre un vídeo de 600 s:
+`trim` **does not modify the media: it remaps the visible timeline.** With
+`{ "kind": "trim", "start": 100, "end": 160 }` on a 600 s video:
 
 | | |
 |---|---|
-| `player.duration` | `60`, no 600 |
-| `player.currentTime` | Cuenta desde el recorte: en el segundo 130 del fichero vale `30` |
-| `player.seek(20)` | Va al segundo 120 del medio |
-| `player.trim` | `{ start: 100, end: 160 }`, para quien pinte sobre el timeline |
+| `player.duration` | `60`, not 600 |
+| `player.currentTime` | Counts from the trim: at second 130 of the file it is `30` |
+| `player.seek(20)` | Goes to second 120 of the media |
+| `player.trim` | `{ start: 100, end: 160 }`, for whoever draws on the timeline |
 
-Saltar fuera se acota: no hay forma de llegar al material que queda a los
-lados, aunque siga en el fichero.
+Seeking outside is clamped: there is no way to reach the material on either
+side, even though it is still in the file.
 
-**El final lo hace cumplir el reproductor, no el medio.** Al fichero le quedan
-440 segundos y el motor no sabe que sobran, así que al alcanzar `end` se pausa
-y se emite `ended`. Dar al play después vuelve al principio del recorte, como
-haría un `<video>` al final del vídeo.
+**The player enforces the end, not the media.** The file has 440 more seconds
+and the engine does not know they are spare, so on reaching `end` it pauses and
+emits `ended`. Pressing play afterwards goes back to the start of the trim, as
+a `<video>` would at the end of the video.
 
-La duración **se sabe sin tocar la red**: sale del manifiesto, no del motor. Si
-el manifiesto viene ya cargado, la barra puede pintar `0:15` antes de descargar
-un solo byte.
+The duration **is known without touching the network**: it comes from the
+manifest, not the engine. If the manifest comes preloaded, the bar can show
+`0:15` before a single byte is downloaded.
 
-Solo puede haber **un** recorte, necesita `end`, y **sobre un directo se
-rechaza**: no tiene sentido recortar algo que aún no ha terminado.
+There can be only **one** trim, it needs `end`, and **it is rejected on a live
+stream**: trimming something that has not finished makes no sense.
 
 
-### Directo
+### Live
 
 ```json
 {
-  "id": "clausura",
+  "id": "closing",
   "live": true,
-  "liveWaitingImage": "https://ejemplo/empieza-a-las-10.jpg",
+  "liveWaitingImage": "https://example/starts-at-10.jpg",
   "streams": [
-    { "id": "camara", "role": "presenter", "audio": true,
-      "sources": [{ "src": "camara.m3u8", "type": "application/vnd.apple.mpegurl" }] },
+    { "id": "camera", "role": "presenter", "audio": true,
+      "sources": [{ "src": "camera.m3u8", "type": "application/vnd.apple.mpegurl" }] },
     { "id": "slides", "role": "presentation", "audio": false,
       "sources": [{ "src": "slides.m3u8", "type": "application/vnd.apple.mpegurl" }] }
   ]
 }
 ```
 
-`liveWaitingImage` es aparte de `poster` a propósito: el póster es lo que se ve
-**antes** de pulsar play; esto es lo que se ve **después**, esperando. Suelen
-querer decir cosas distintas. Si falta, se usa el póster.
+`liveWaitingImage` is separate from `poster` on purpose: the poster is what is
+shown **before** pressing play; this is what is shown **after**, while waiting.
+They usually mean different things. If missing, the poster is used.
 
-**Un flujo que no emite no impide reproducir el resto.** El aviso aparece en el
-hueco del que falta, y se reintenta con espera creciente hasta que empieza. El
-estado se consulta con `player.liveStatus` y `player.liveStatusOf(id)`, y llega
-por el evento `live:status`.
+**A stream that is not broadcasting does not stop the rest from playing.** The
+notice appears in the missing stream's slot, and it is retried with growing
+delays until it starts. The status is read with `player.liveStatus` and
+`player.liveStatusOf(id)`, and arrives through the `live:status` event.
 
-Se distingue **"aún no ha empezado"** de **"se ha interrumpido"**: decirle lo
-primero a quien llevaba veinte minutos viendo el evento sería desconcertante.
+**"Has not started yet"** is told apart from **"has been interrupted"**: saying
+the former to someone who had been watching for twenty minutes would be
+baffling.
 
-> **Requisito para dual-stream en vivo:** ambas listas deben traer
-> `EXT-X-PROGRAM-DATE-TIME`. Sin esa etiqueta el reproductor **no puede medir**
-> si los flujos están sincronizados —`currentTime` en directo tiene su origen en
-> el momento en que cada uno empezó a cargar— y por eso no corrige, en lugar de
-> fingir. En Wowza es la propiedad `cupertinoEnableProgramDateTime`, desactivada
-> por defecto.
+> **Requirement for live dual stream:** both playlists must carry
+> `EXT-X-PROGRAM-DATE-TIME`. Without that tag the player **cannot measure**
+> whether the streams are in sync —live `currentTime` starts from the moment
+> each one began loading— so it does not correct, rather than pretend. In Wowza
+> it is the `cupertinoEnableProgramDateTime` property, off by default.
 
-#### Ventana DVR y borde de la emisión
+#### DVR window and live edge
 
-En directo el servidor mantiene una **lista deslizante**: solo conserva los
-últimos segmentos y los viejos caducan. Eso es la **ventana DVR**, y es lo que
-se puede retroceder. En Wowza lo gobierna nDVR, con su coste en disco.
+Live, the server keeps a **sliding playlist**: it only holds the latest
+segments and old ones expire. That is the **DVR window**, and it is how far
+back one can go. In Wowza nDVR governs it, at a disk cost.
 
-| Propiedad | |
+| Property | |
 |---|---|
-| `player.dvrWindow` | Segundos que se pueden retroceder |
-| `player.liveEdge` | Posición más reciente disponible |
-| `player.behindLive` | Cuánto se va por detrás del borde |
-| `player.atLiveEdge` | Si se está viendo el borde |
-| `player.seekToLive()` | Volver al borde |
+| `player.dvrWindow` | Seconds that can be sought back |
+| `player.liveEdge` | Latest available position |
+| `player.behindLive` | How far behind the edge playback is |
+| `player.atLiveEdge` | Whether the edge is being watched |
+| `player.seekToLive()` | Go back to the edge |
 
-Reproducir un directo siempre va unos segundos por detrás del borde —el búfer
-que evita los cortes—, así que `atLiveEdge` tiene una tolerancia de 12 s. Y
-`seekToLive()` no va al final exacto: ese instante aún no está en el búfer y
-saltar ahí provoca un corte.
+Playing a live stream always runs a few seconds behind the edge —the buffer
+that prevents stalls— so `atLiveEdge` has a 12 s tolerance. And `seekToLive()`
+does not go to the exact end: that instant is not buffered yet and seeking
+there causes a stall.
 
-**Cuánto se queda por detrás depende de los segmentos.** Con segmentos de 6 s,
-quedarse a 3 s del borde es quedarse sin datos hasta que se publica el
-siguiente: medido, 15 s entrecortados al volver al directo. Por eso, si el
-motor sabe dónde conviene estar (`liveSyncPosition()`, que hls.js calcula
-según los segmentos), `seekToLive()` va ahí, y la tolerancia de `atLiveEdge` se
-cuenta desde esa posición y no desde el borde. Sin esa información, 3 s de
-margen.
+**How far behind depends on the segments.** With 6 s segments, staying 3 s from
+the edge means running out of data until the next one is published: measured,
+15 s of stuttering on returning to live. So if the engine knows where it is
+best to be (`liveSyncPosition()`, which hls.js works out from the segments),
+`seekToLive()` goes there, and the `atLiveEdge` tolerance counts from that
+position rather than the edge. Without that information, a 3 s margin.
 
-Un recorte sobre un directo se rechaza: no tiene sentido.
+A trim on a live stream is rejected: it makes no sense.
 
 ---
 
-## Referencia
+## Reference
 
 ### Manifest
 
-| Campo | Tipo | |
+| Field | Type | |
 |---|---|---|
-| `id` | `string` | **Requerido** |
-| `streams` | `Stream[]` | **Requerido**, al menos uno |
+| `id` | `string` | **Required** |
+| `streams` | `Stream[]` | **Required**, at least one |
 | `title` | `string` | |
-| `poster` | `string` | También se puede pasar en `createPlayer` para tenerlo sin resolver |
-| `duration` | `number` | Segundos |
-| `intro` | `Bumper` | Cabecera. Se puede saltar. No admitida en directo |
-| `outro` | `Bumper` | Cola. No se puede saltar. No admitida en directo |
+| `poster` | `string` | Can also be passed to `createPlayer` to have it without resolving |
+| `duration` | `number` | Seconds |
+| `intro` | `Bumper` | Can be skipped. Not allowed live |
+| `outro` | `Bumper` | Cannot be skipped. Not allowed live |
 | `annotations` | `Annotation[]` | |
 | `textTracks` | `TextTrackDef[]` | |
 | `live` | `boolean` | |
 
 ### Bumper
 
-| Campo | Tipo | |
+| Field | Type | |
 |---|---|---|
-| `sources` | `Source[]` | **Requerido**, al menos una |
+| `sources` | `Source[]` | **Required**, at least one |
 
 ### Stream
 
-| Campo | Tipo | |
+| Field | Type | |
 |---|---|---|
-| `id` | `string` | **Requerido**, único |
-| `role` | `string` | **Requerido**. `presenter`, `presentation` u otro |
-| `audio` | `boolean` | **Requerido**. Exactamente uno a `true` |
-| `sources` | `Source[]` | **Requerido**, al menos una |
-| `kind` | `'video' \| 'audio'` | Se deduce del MIME; solo hace falta si es ambiguo |
+| `id` | `string` | **Required**, unique |
+| `role` | `string` | **Required**. `presenter`, `presentation` or another |
+| `audio` | `boolean` | **Required**. Exactly one set to `true` |
+| `sources` | `Source[]` | **Required**, at least one |
+| `kind` | `'video' \| 'audio'` | Inferred from the MIME type; only needed if ambiguous |
 | `label` | `string` | |
 | `poster` | `string` | |
 
 ### Source
 
-| Campo | Tipo | |
+| Field | Type | |
 |---|---|---|
-| `src` | `string` | **Requerido** |
-| `type` | `string` | **Requerido**. El MIME decide el motor |
+| `src` | `string` | **Required** |
+| `type` | `string` | **Required**. The MIME type picks the engine |
 | `height` | `number` | |
 | `label` | `string` | |
 
 ---
 
-## Errores: código para la interfaz, mensaje para quien depura
+## Errors: a code for the UI, a message for whoever debugs
 
-`PlayerError` trae siempre las dos cosas, y sirven a públicos distintos:
+`PlayerError` always carries both, and they serve different audiences:
 
 ```ts
 { code: 'media/network', message: 'HLS network error: fragLoadError 404', retryable: true }
 ```
 
-**`message` es diagnóstico y va siempre en inglés.** Lleva el estado HTTP, el
-detalle de hls.js o la ruta del manifiesto, y está pensado para un `console.log`,
-un issue o un buscador. **No se le enseña nunca al usuario final.**
+**`message` is diagnostic and always in English.** It carries the HTTP status,
+the hls.js detail or the manifest path, and is meant for a `console.log`, an
+issue or a search engine. **It is never shown to the end user.**
 
-**`code` es lo que decide qué se le dice a quien mira.** La interfaz por defecto
-resuelve un texto propio por cada código —`ui.error.media/network` y
-compañía—, traducible como el resto del catálogo, y cae a `ui.error.generic`
-ante un código que no conozca. Así un usuario con lector de pantalla oye «se ha
-perdido la conexión con el vídeo» y no «hls.js cannot run in this browser: no
-Media Source Extensions».
+**`code` decides what the viewer is told.** The default UI resolves its own
+text for each code —`ui.error.media/network` and so on—, translatable like the
+rest of the catalogue, and falls back to `ui.error.generic` for a code it does
+not know. So a screen reader user hears that the connection to the video was
+lost, not "hls.js cannot run in this browser: no Media Source Extensions".
 
-Es lo mismo que vale para `retryable`: decidir con el código y no emparejando
-cadenas es lo que permite traducir sin romper nada.
+The same goes for `retryable`: deciding on the code rather than matching
+strings is what allows translating without breaking anything.
 
-| Código | |
+| Code | |
 |---|---|
-| `manifest/fetch` | No se pudo obtener el manifiesto. Reintentable |
-| `manifest/invalid` | Llegó, pero no pasa la validación |
-| `engine/unsupported` | Ningún motor sabe reproducir esas fuentes |
-| `engine/failed` | El motor falló al arrancar. Reintentable |
-| `media/decode` | El medio no se pudo decodificar |
-| `media/network` | Se cortó por red. Reintentable |
-| `media/blocked` | El navegador bloqueó la reproducción |
-| `internal` | Fallo de programación |
+| `manifest/fetch` | The manifest could not be fetched. Retryable |
+| `manifest/invalid` | It arrived, but does not pass validation |
+| `engine/unsupported` | No engine can play those sources |
+| `engine/failed` | The engine failed to start. Retryable |
+| `media/decode` | The media could not be decoded |
+| `media/network` | Cut off by the network. Retryable |
+| `media/blocked` | The browser blocked playback |
+| `internal` | Programming error |
 
-Los mensajes de **validación** siguen la misma regla: van en inglés, porque los
-lee quien integra y no quien mira.
+**Validation** messages follow the same rule: they are in English, because
+they are read by whoever integrates, not whoever watches.
 
-## Validar antes de reproducir
+## Validate before playing
 
 ```ts
 import { validateManifest } from '@nanoplayer/core';
 
-const r = validateManifest(datos);
+const r = validateManifest(data);
 if (!r.ok) {
   for (const e of r.errors) console.error(`${e.path}: ${e.message}`);
 }
 ```
 
-Los errores se **acumulan**, no se para en el primero: corregir un manifiesto de
-error en error es exasperante. Y cada mensaje dice el porqué, no solo el qué.
+Errors **accumulate** rather than stopping at the first: fixing a manifest one
+error at a time is maddening. And each message says why, not just what.

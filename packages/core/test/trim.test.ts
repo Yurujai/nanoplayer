@@ -3,17 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EngineFactory, MediaEngine } from '../src/engine.js';
 import { Player } from '../src/player.js';
 
-/** Motor de mentira, con control manual del tiempo del medio. */
-function factoriaFalsa() {
-  const creados: Array<MediaEngine & Record<string, any>> = [];
+/** Fake engine, with manual control of media time. */
+function fakeFactory() {
+  const created: Array<MediaEngine & Record<string, any>> = [];
   const factory: EngineFactory = {
-    name: 'falso',
+    name: 'fake',
     canPlay: () => 'probably',
     create() {
       let currentTime = 0, rate = 1, paused = true;
       let cb: any = {};
       const e = {
-        name: 'falso',
+        name: 'fake',
         get element() { return { seeking: false } as HTMLVideoElement; },
         get attached() { return true; },
         async attach(container: HTMLElement, _s: unknown, o: any) {
@@ -35,26 +35,26 @@ function factoriaFalsa() {
         setPlaybackRate(r: number) { rate = r; },
         setVolume() {}, setMuted() {},
         destroy() {},
-        /** Mueve el medio y dispara el `time`, como haría un <video> de verdad. */
-        _avanzar(t: number) { currentTime = t; cb.onTime?.(t, 600); },
-        _arranqueEn: () => currentTime,
+        /** Moves the media and fires `time`, as a real <video> would. */
+        _advance(t: number) { currentTime = t; cb.onTime?.(t, 600); },
+        _startedAt: () => currentTime,
       };
-      creados.push(e as never);
+      created.push(e as never);
       return e as never;
     },
   };
-  return { factory, creados };
+  return { factory, created };
 }
 
-/** Un medio de 600 s del que solo interesan los segundos 100 a 160. */
-const RECORTADO = {
+/** A 600 s media of which only seconds 100 to 160 matter. */
+const TRIMMED = {
   id: 'r', duration: 600,
   streams: [{ id: 'cam', role: 'presenter', audio: true,
               sources: [{ src: 'a.mp4', type: 'video/mp4' }] }],
   annotations: [{ kind: 'trim', start: 100, end: 160 }],
 };
 
-const SIN_RECORTE = {
+const UNTRIMMED = {
   id: 's', duration: 600,
   streams: [{ id: 'cam', role: 'presenter', audio: true,
               sources: [{ src: 'a.mp4', type: 'video/mp4' }] }],
@@ -62,10 +62,10 @@ const SIN_RECORTE = {
 
 let container: HTMLElement;
 
-const nuevo = (manifest: unknown) => {
-  const { factory, creados } = factoriaFalsa();
+const setup = (manifest: unknown) => {
+  const { factory, created } = fakeFactory();
   const p = new Player({ container, manifest: manifest as never, engines: [factory] });
-  return { p, creados };
+  return { p, created };
 };
 
 beforeEach(() => {
@@ -74,177 +74,163 @@ beforeEach(() => {
   document.body.appendChild(container);
 });
 
-describe('recorte · el timeline que se enseña', () => {
-  it('la duración es la del recorte, no la del medio', async () => {
-    const { p } = nuevo(RECORTADO);
+describe('trim · the visible timeline', () => {
+  it('the duration is the trim\'s, not the media\'s', async () => {
+    const { p } = setup(TRIMMED);
     await p.attach();
     expect(p.duration).toBe(60);
   });
 
-  it('sin recorte no cambia nada', async () => {
-    const { p } = nuevo(SIN_RECORTE);
+  it('without a trim nothing changes', async () => {
+    const { p } = setup(UNTRIMMED);
     await p.attach();
     expect(p.duration).toBe(600);
     expect(p.trim).toBeNull();
   });
 
-  it('la reproducción empieza en el inicio del recorte', async () => {
-    // El motor arranca en el segundo 100 del fichero, y para fuera eso es 0.
-    const { p, creados } = nuevo(RECORTADO);
+  it('playback starts at the start of the trim', async () => {
+    // The engine starts at second 100 of the file, which is 0 outside.
+    const { p, created } = setup(TRIMMED);
     await p.attach();
-    expect(creados[0]!._arranqueEn()).toBe(100);
+    expect(created[0]!._startedAt()).toBe(100);
     expect(p.currentTime).toBe(0);
   });
 
-  it('el tiempo se cuenta desde el recorte', async () => {
-    const { p, creados } = nuevo(RECORTADO);
+  it('time is counted from the trim', async () => {
+    const { p, created } = setup(TRIMMED);
     await p.attach();
-    creados[0]!._avanzar(130);
+    created[0]!._advance(130);
     expect(p.currentTime).toBe(30);
   });
 
-  it('saltar traduce al tiempo del medio', async () => {
-    const { p, creados } = nuevo(RECORTADO);
+  it('seeking maps to media time', async () => {
+    const { p, created } = setup(TRIMMED);
     await p.attach();
     p.seek(20);
-    expect(creados[0]!.currentTime).toBe(120);
+    expect(created[0]!.currentTime).toBe(120);
     expect(p.currentTime).toBe(20);
   });
 
-  it('no se puede saltar fuera del recorte', async () => {
-    // Ni antes del principio ni después del final: el material está ahí, pero
-    // para quien mira no existe.
-    const { p, creados } = nuevo(RECORTADO);
+  it('cannot seek outside the trim', async () => {
+    const { p, created } = setup(TRIMMED);
     await p.attach();
     p.seek(-30);
-    expect(creados[0]!.currentTime).toBe(100);
+    expect(created[0]!.currentTime).toBe(100);
     p.seek(9999);
-    expect(creados[0]!.currentTime).toBe(160);
+    expect(created[0]!.currentTime).toBe(160);
   });
 
-  it('expone el recorte para quien pinte sobre el timeline', async () => {
-    const { p } = nuevo(RECORTADO);
+  it('exposes the trim for whoever draws on the timeline', async () => {
+    const { p } = setup(TRIMMED);
     await p.attach();
     expect(p.trim).toEqual({ start: 100, end: 160 });
   });
 
-  it('convierte tiempos para quien los recibe del manifiesto', async () => {
-    // La interfaz y los plugins reciben tiempos del medio (capítulos) y
-    // tienen que pasarlos al que se enseña sin repetir la cuenta.
-    const { p } = nuevo(RECORTADO);
+  it('converts times for those that get them from the manifest', async () => {
+    const { p } = setup(TRIMMED);
     await p.attach();
     expect(p.toVisibleTime(130)).toBe(30);
-    expect(p.toVisibleTime(50), 'antes del recorte, al principio').toBe(0);
+    expect(p.toVisibleTime(50), 'before the trim, at the start').toBe(0);
     expect(p.toMediaTime(30)).toBe(130);
-    expect(p.toMediaTime(999), 'acotado al final del recorte').toBe(160);
+    expect(p.toMediaTime(999), 'clamped to the trim\'s end').toBe(160);
   });
 });
 
-describe('recorte · el final lo hace cumplir el reproductor', () => {
-  it('para y avisa al llegar al final del recorte', async () => {
-    // El fichero sigue teniendo 440 s por detrás y el motor no sabe que sobran.
-    const { p, creados } = nuevo(RECORTADO);
+describe('trim · the player enforces the end', () => {
+  it('stops and announces at the trim\'s end', async () => {
+    // The file has 440 s more and the engine does not know they are spare.
+    const { p, created } = setup(TRIMMED);
     await p.attach();
-    const terminado = vi.fn();
-    p.on('ended', terminado);
+    const ended = vi.fn();
+    p.on('ended', ended);
     await p.play();
 
-    creados[0]!._avanzar(159);
-    expect(terminado).not.toHaveBeenCalled();
+    created[0]!._advance(159);
+    expect(ended).not.toHaveBeenCalled();
     expect(p.paused).toBe(false);
 
-    creados[0]!._avanzar(160);
-    expect(terminado).toHaveBeenCalledOnce();
-    expect(terminado).toHaveBeenCalledWith({ at: 60 });
+    created[0]!._advance(160);
+    expect(ended).toHaveBeenCalledOnce();
+    expect(ended).toHaveBeenCalledWith({ at: 60 });
     expect(p.paused).toBe(true);
   });
 
-  it('no repite el aviso en cada tic', async () => {
-    const { p, creados } = nuevo(RECORTADO);
+  it('does not repeat the announcement on every tick', async () => {
+    const { p, created } = setup(TRIMMED);
     await p.attach();
-    const terminado = vi.fn();
-    p.on('ended', terminado);
+    const ended = vi.fn();
+    p.on('ended', ended);
     await p.play();
-    creados[0]!._avanzar(160);
-    creados[0]!._avanzar(161);
-    creados[0]!._avanzar(200);
-    expect(terminado).toHaveBeenCalledOnce();
+    created[0]!._advance(160);
+    created[0]!._advance(161);
+    created[0]!._advance(200);
+    expect(ended).toHaveBeenCalledOnce();
   });
 
-  it('el último `time` cuadra con la duración', async () => {
-    // Si el final dejara el tiempo en 59,8 la barra se quedaría sin llegar.
-    const { p, creados } = nuevo(RECORTADO);
+  it('the last `time` matches the duration', async () => {
+    // Ending at 59.8 would leave the bar short of the end.
+    const { p, created } = setup(TRIMMED);
     await p.attach();
-    const tiempos: number[] = [];
-    p.on('time', ({ current }) => tiempos.push(current));
+    const times: number[] = [];
+    p.on('time', ({ current }) => times.push(current));
     await p.play();
-    creados[0]!._avanzar(160);
-    expect(tiempos.at(-1)).toBe(60);
+    created[0]!._advance(160);
+    expect(times.at(-1)).toBe(60);
   });
 
-  it('volver atrás rearma el final', async () => {
-    const { p, creados } = nuevo(RECORTADO);
+  it('seeking back rearms the end', async () => {
+    const { p, created } = setup(TRIMMED);
     await p.attach();
-    const terminado = vi.fn();
-    p.on('ended', terminado);
+    const ended = vi.fn();
+    p.on('ended', ended);
     await p.play();
-    creados[0]!._avanzar(160);
+    created[0]!._advance(160);
     p.seek(10);
-    creados[0]!._avanzar(160);
-    expect(terminado).toHaveBeenCalledTimes(2);
+    created[0]!._advance(160);
+    expect(ended).toHaveBeenCalledTimes(2);
   });
 
-  it('dar al play una vez terminado vuelve al principio', async () => {
-    const { p, creados } = nuevo(RECORTADO);
+  it('play after the end restarts', async () => {
+    const { p, created } = setup(TRIMMED);
     await p.attach();
     await p.play();
-    creados[0]!._avanzar(160);
+    created[0]!._advance(160);
     await p.play();
-    expect(creados[0]!.currentTime).toBe(100);
+    expect(created[0]!.currentTime).toBe(100);
     expect(p.currentTime).toBe(0);
   });
 });
 
-describe('recorte · desalojo', () => {
-  it('soltar y volver a enganchar conserva la posición visible', async () => {
-    /*
-     * `resumeAt` va en tiempo visible y el motor quiere el del medio. Si se
-     * confundieran, un reproductor desalojado en el segundo 30 volvería en el
-     * 30 del fichero, que está fuera del recorte.
-     */
-    const { p, creados } = nuevo(RECORTADO);
+describe('trim · eviction', () => {
+  it('detaching and reattaching keeps the visible position', async () => {
+    // `resumeAt` is visible time; mixing it with media time would resume at
+    // second 30 of the file, outside the trim.
+    const { p, created } = setup(TRIMMED);
     await p.attach();
-    creados[0]!._avanzar(130);
+    created[0]!._advance(130);
     expect(p.currentTime).toBe(30);
 
     p.detach();
     expect(p.resumeAt).toBe(30);
 
     await p.attach();
-    expect(creados[1]!._arranqueEn()).toBe(130);
+    expect(created[1]!._startedAt()).toBe(130);
     expect(p.currentTime).toBe(30);
   });
 });
 
-describe('recorte · antes de resolver', () => {
-  it('la duración se sabe sin tocar la red', () => {
-    /*
-     * Con recorte, la duración sale del manifiesto y no del motor. Si hubiera
-     * que esperar a `resolve()`, la barra marcaría 0:00 hasta el primer play
-     * aunque el dato estuviera ahí desde el principio.
-     */
-    const { p } = nuevo(RECORTADO);
+describe('trim · before resolving', () => {
+  it('the duration is known without touching the network', () => {
+    const { p } = setup(TRIMMED);
     expect(p.state).toBe('idle');
     expect(p.duration).toBe(60);
     expect(p.trim).toEqual({ start: 100, end: 160 });
   });
 
-  it('un manifiesto por URL no se inventa nada', () => {
-    // Sin el manifiesto delante no hay recorte que saber, y pedirlo rompería
-    // el principio de cero red.
+  it('a manifest by URL makes nothing up', () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
-    const { p } = nuevo('https://ejemplo/m.json');
+    const { p } = setup('https://example/m.json');
     expect(p.trim).toBeNull();
     expect(p.duration).toBe(0);
     expect(fetchSpy).not.toHaveBeenCalled();

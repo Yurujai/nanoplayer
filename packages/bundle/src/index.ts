@@ -1,10 +1,6 @@
 /**
- * El reproductor entero en un solo fichero, con pilas incluidas.
- *
- * Existe por el objetivo O5: instalar con una etiqueta `<script>` y tres
- * líneas. Los paquetes sueltos no sirven para eso —`@nanoplayer/ui` solo se
- * construye como ESM, y una etiqueta clásica no puede cargarlo—, así que quien
- * pegaba la etiqueta obtenía un reproductor **sin un solo control**.
+ * The whole player in one file, batteries included, for a single `<script>` tag.
+ * Unlike the core's headless `create()`, controls come already attached.
  *
  * ```html
  * <div id="player"></div>
@@ -14,55 +10,32 @@
  * </script>
  * ```
  *
- * La diferencia con `create()` del núcleo es que **aquí los controles vienen
- * puestos**. El núcleo es deliberadamente *headless* porque hay quien quiere su
- * propia interfaz; este paquete es para quien no.
- *
- * > **Una cosa o la otra, no las dos.** Este bundle lleva el núcleo dentro. Si
- * > en la misma página se carga además `@nanoplayer/core` por su cuenta, habrá
- * > dos registros de plugins y dos políticas de reproducción exclusiva, y
- * > ninguno de los dos verá al otro.
+ * It bundles the core: loading `@nanoplayer/core` separately on the same page
+ * would create a second plugin registry and a second exclusive-playback policy.
  */
 import {
-  create as crearNucleo, plugins, registry, Player, PlayerRegistry, PluginRegistry,
+  create as createHeadless, plugins, registry, Player, PlayerRegistry, PluginRegistry,
   VERSION, type CreateConfig,
 } from '@nanoplayer/core';
 import { attachControls, type ControlBarOptions } from '@nanoplayer/ui';
-// Importarlos basta: se auto-registran y aportan sus cadenas al catálogo.
 import '@nanoplayer/plugin-captions';
 import '@nanoplayer/plugin-chapters';
 
 export interface Config extends CreateConfig {
-  /**
-   * Barra de controles. Puesta por defecto, que es el sentido de este paquete.
-   *
-   * `false` la deja fuera —para montar una propia— y un objeto la configura.
-   */
+  /** Control bar, on by default. `false` leaves it out; an object configures it. */
   controls?: boolean | ControlBarOptions;
 }
 
-/**
- * Crea un reproductor **con controles**.
- *
- * Sigue sin descargar nada: el ciclo perezoso del núcleo no cambia porque la
- * interfaz esté montada. Con el póster a la vista no hay ningún `<video>` en el
- * DOM ni un byte de vídeo pedido.
- */
+/** Creates a player with controls. Still downloads nothing until play. */
 export function create(target: string | HTMLElement, config: Config): Player {
-  const player = crearNucleo(target, config);
+  const player = createHeadless(target, config);
   if (config.controls !== false) {
     attachControls(player, typeof config.controls === 'object' ? config.controls : {});
   }
   return player;
 }
 
-/**
- * Superficie global para el caso `<script>`.
- *
- * Se redefine en vez de reexportar la del núcleo porque su `create` es el
- * *headless*: en este paquete, `NanoPlayer.create` tiene que ser el que trae
- * los controles puestos.
- */
+/** The global for the `<script>` case: its `create` is the one with controls. */
 export const NanoPlayer = {
   VERSION,
   create,
@@ -74,45 +47,29 @@ export const NanoPlayer = {
   PluginRegistry,
 } as const;
 
-/*
- * Todo lo demás del núcleo y de la interfaz.
- *
- * Reexportado a mano y NO con `export *`. La especificación dice que un export
- * explícito gana a uno de estrella con el mismo nombre, y de eso dependía que
- * `create` fuera el de aquí y no el headless del núcleo.
- *
- * El problema es que **las herramientas no se ponen de acuerdo**: Rollup lo
- * implementa bien y el bundle construido salía correcto, pero la
- * transformación de Vitest devuelve el del `export *`, así que los tests de
- * este paquete fallaban contra un artefacto que estaba bien. Con la promesa
- * principal en juego, no compensa apoyarse en ese rincón de la norma ni fiar a
- * que cada herramienta lo resuelva igual.
- *
- * De paso, una lista explícita deja ver de un vistazo qué tiene la global.
- *
- * `create` y `NanoPlayer` se quedan fuera a propósito: son los de arriba.
- */
+// Hand-written, not `export *`: Vitest and Rollup disagree on whether an explicit
+// `create` beats the core's star-exported one. Guarded by test/create.test.ts.
 export {
-  // manifiesto
+  // manifest
   isAudioOnly, isAudioOnlyManifest, masterStream, parseManifest, slaveStreams,
   trimOf, validateManifest,
-  // textos
-  IDIOMA_BASE, StringRegistry, strings,
-  // errores y eventos
+  // strings
+  BASE_LANGUAGE, StringRegistry, strings,
+  // errors and events
   playerError, EventBus,
-  // ciclo de vida
+  // lifecycle
   Lifecycle, assertTransition, canTransition, hasEngine, TRANSITIONS, WITH_ENGINE, WITH_MANIFEST,
-  // motores
+  // engines
   confidenceFor, hasMse, isHlsType, selectEngine,
   MediaElementEngine, mediaElementError, NativeEngine, nativeEngineFactory,
-  // sincronización
+  // sync
   defaultScheduler, detectProfile, SYNC_PROFILES, Synchronizer,
-  // reproductor y registro
+  // player and registry
   createPlayer, createBatchResolver,
-  // directo
+  // live
   backoff, LiveTracker,
-  // cabecera y cola
-  ANTICIPACION_MS, firstFrame,
+  // intro and outro
+  CHAIN_LEAD_MS, CHAIN_WATCH_MS, FIRST_FRAME_TIMEOUT_MS, firstFrame,
   // plugins
   topoSort,
 } from '@nanoplayer/core';
@@ -143,9 +100,6 @@ export type {
   ControlBarOptions, SettingsOption, SettingsPanel, LayoutDef, LayoutId,
 } from '@nanoplayer/ui';
 
-// `Player`, `PlayerRegistry`, `PluginRegistry`, `plugins`, `registry`, `VERSION`
-// y `attachControls` ya están importados arriba para componer `NanoPlayer`; se
-// reexportan desde ahí para no traerlos dos veces.
 export {
   Player, PlayerRegistry, PluginRegistry, plugins, registry, VERSION, attachControls,
 };

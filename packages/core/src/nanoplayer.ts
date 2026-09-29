@@ -1,7 +1,5 @@
 /**
- * Punto de entrada público.
- *
- * Diseñado para que el caso sencillo sea de verdad sencillo:
+ * Public entry point, so the simple case is simple:
  *
  * ```html
  * <div id="player"></div>
@@ -11,12 +9,8 @@
  * </script>
  * ```
  *
- * Y para que lo que hace bien lo haga **sin pedir permiso**. Un reproductor
- * creado así ya entra en el registro compartido de la página, así que la
- * reproducción exclusiva y el presupuesto de recursos funcionan sin escribir
- * una línea de configuración. Que el comportamiento correcto sea el de por
- * defecto es justamente la diferencia entre esto y tener que envolverlo en
- * JavaScript propio.
+ * A player created this way joins the page's shared registry, so exclusive
+ * playback works without configuration.
  */
 import type { EngineFactory } from './engine.js';
 import type { Catalogues } from './i18n.js';
@@ -26,45 +20,34 @@ import { PluginRegistry, plugins, type PluginConfig } from './plugins.js';
 import { PlayerRegistry } from './registry.js';
 import type { SyncProfile } from './sync.js';
 
-/** Debe coincidir con la versión de package.json (hay un test que lo vigila). */
+/** Must match package.json (a test checks it). */
 export const VERSION = '0.0.0';
 
 export interface CreateConfig {
-  /** Manifiesto ya cargado, o una URL de la que traerlo. */
+  /** A loaded manifest, or a URL to fetch it from. */
   manifest: Manifest | Record<string, unknown> | string;
   /**
-   * Qué plugins se activan. `false` apaga uno que vendría activo por defecto;
-   * un objeto lo enciende con configuración.
-   *
-   * Lo habitual es no escribir nada: los plugins que declaran su condición se
-   * activan solos según lo que traiga el manifiesto.
+   * Which plugins to activate. `false` turns off one that would activate by
+   * itself; an object turns it on with configuration. Usually nothing: plugins
+   * activate themselves from what the manifest contains.
    */
   plugins?: Record<string, PluginConfig>;
   engines?: readonly EngineFactory[];
   manifestResolver?: ManifestResolver;
-  /** Imagen previa, disponible sin resolver el manifiesto. */
+  /** Poster image, available without resolving the manifest. */
   poster?: string;
   muted?: boolean;
   volume?: number;
   syncProfile?: SyncProfile;
-  /**
-   * Registro con el que coordinarse. Por defecto, el compartido de la página.
-   * `false` deja el reproductor aislado.
-   */
+  /** Registry to coordinate with. The page's shared one by default; `false` isolates the player. */
   registry?: PlayerRegistry | false;
-  /** Empezar a reproducir en cuanto se pueda. Sujeto a la política del navegador. */
+  /** Start playing as soon as possible, subject to the browser's autoplay policy. */
   autoplay?: boolean;
-  /**
-   * Idioma de la interfaz. Por defecto, el que declare el documento.
-   *
-   * Lo heredan la barra de controles y todos los plugins: se dice una vez.
-   */
+  /** UI language. Defaults to the document's. The bar and plugins inherit it. */
   lang?: string;
   /**
-   * Cadenas propias, por idioma, que mandan sobre las de serie.
-   *
-   * Es lo que hace que añadir un idioma —o cambiar una palabra— sea
-   * configuración y no un fork:
+   * Own strings per language, overriding the built-in ones: adding a language
+   * or changing a word is configuration, not a fork.
    *
    * ```js
    * create('#p', { manifest, lang: 'eu', strings: {
@@ -75,17 +58,10 @@ export interface CreateConfig {
   strings?: Catalogues;
 }
 
-/**
- * Registro compartido de la página.
- *
- * Existe para que la coordinación entre instancias sea el comportamiento por
- * defecto. Sin presupuesto configurado —desalojar por sorpresa sería una
- * sorpresa desagradable— pero con reproducción exclusiva, que es lo que casi
- * todo el mundo espera y casi nadie implementa.
- */
+/** The page's shared registry: exclusive playback, no resource budget by default. */
 export const registry = new PlayerRegistry({ exclusive: true });
 
-function resolverElemento(target: string | HTMLElement): HTMLElement {
+function resolveElement(target: string | HTMLElement): HTMLElement {
   if (typeof target !== 'string') return target;
   const el = document.querySelector<HTMLElement>(target);
   if (!el) throw new Error(`No element found for "${target}"`);
@@ -93,19 +69,16 @@ function resolverElemento(target: string | HTMLElement): HTMLElement {
 }
 
 /**
- * Crea un reproductor.
- *
- * **No descarga nada.** Ni el manifiesto: hasta que no se llama a `resolve()`,
- * `attach()` o `play()`, la red se queda quieta. Una página con 32 llamadas a
- * `create()` hace cero peticiones.
+ * Creates a player. **It downloads nothing**, not even the manifest, until
+ * `resolve()`, `attach()` or `play()` is called.
  */
 export function create(
   target: string | HTMLElement,
   config: CreateConfig,
 ): Player {
-  const container = resolverElemento(target);
+  const container = resolveElement(target);
 
-  const opciones: PlayerOptions = {
+  const options: PlayerOptions = {
     container,
     manifest: config.manifest,
     ...(config.engines ? { engines: config.engines } : {}),
@@ -118,33 +91,27 @@ export function create(
     ...(config.strings ? { strings: config.strings } : {}),
   };
 
-  const player = new Player(opciones);
+  const player = new Player(options);
 
   const reg = config.registry === false ? null : (config.registry ?? registry);
   reg?.register(player);
 
-  // Los plugins se activan cuando hay manifiesto, porque su condición depende
-  // de él: subtítulos si hay pistas, H5P si hay anotaciones de ese tipo.
+  // Plugins activate once there is a manifest: their conditions depend on it.
   player.on('manifest:resolve:ok', ({ manifest }) => {
     void plugins.activate(player, config.plugins ?? {}, manifest);
   });
 
   if (config.autoplay) {
-    void player.play().catch(() => {
-      // El bloqueo por política de autoplay ya viaja por el bus como
-      // `media/blocked`; aquí solo se evita la promesa sin capturar.
-    });
+    // An autoplay block already travels on the bus as `media/blocked`.
+    void player.play().catch(() => {});
   }
 
   return player;
 }
 
 /**
- * Superficie global para el caso `<script>`.
- *
- * Sin `export default`: mezclarlo con los nombrados obliga al consumidor del
- * bundle IIFE a escribir `NanoPlayer.default.create(...)`, que es exactamente
- * la clase de fricción que este punto de entrada existe para evitar.
+ * The global for the `<script>` case. No `export default`: mixing it with named
+ * exports would make IIFE users write `NanoPlayer.default.create(...)`.
  */
 export const NanoPlayer = {
   VERSION,
@@ -156,6 +123,5 @@ export const NanoPlayer = {
   PluginRegistry,
 } as const;
 
-// Reexportados como nombrados para que en el bundle IIFE la global los tenga
-// en el primer nivel: `NanoPlayer.plugins`, no `NanoPlayer.NanoPlayer.plugins`.
+// Named too, so the IIFE global has them at the top level.
 export { plugins, Player, PlayerRegistry, PluginRegistry };

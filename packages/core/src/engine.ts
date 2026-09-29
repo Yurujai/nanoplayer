@@ -1,75 +1,58 @@
 /**
- * Contrato del motor de reproducción.
- *
- * **Un motor gobierna un stream, no un reproductor.** Un dual-stream son dos
- * motores coordinados por el sincronizador, no un motor con dos elementos
- * dentro. Así el modelo maestro/esclavo de S1 se expresa donde debe —en el
- * sincronizador— y el motor solo tiene que saber reproducir una cosa bien.
- *
- * El motor **no conoce el bus de eventos del núcleo**: se comunica por
- * callbacks. Eso lo hace probable en aislamiento y permite reutilizarlo sin
- * arrastrar el catálogo de eventos entero.
+ * Engine contract. **An engine drives one stream, not a player**: dual-stream
+ * is two engines coordinated by the synchronizer. Engines talk through
+ * callbacks, not the core bus, so they are testable in isolation.
  */
 import type { PlayerError } from './errors.js';
 import type { Source, Stream } from './manifest.js';
 
-/** Confianza en poder reproducir algo, con la misma escala que `canPlayType`. */
+/** Confidence in playing something, on the same scale as `canPlayType`. */
 export type Confidence = 'probably' | 'maybe' | 'no';
 
 export interface EngineCallbacks {
-  /** Progreso de reproducción. */
   onTime?(current: number, duration: number): void;
-  /** La reproducción se ha **solicitado**. Aún puede no haber empezado. */
+  /** Playback was **requested**; it may not have started yet. */
   onPlay?(): void;
   /**
-   * La reproducción **está sonando de verdad**.
-   *
-   * No es lo mismo que `onPlay`: entre uno y otro el navegador puede estar
-   * llenando el buffer. Con HLS ese hueco siempre existe, porque enganchar
-   * termina al parsear la lista, antes de tener un solo segmento.
+   * Playback **is actually running**. Not the same as `onPlay`: the browser
+   * may be filling the buffer in between, which with HLS always happens.
    */
   onPlaying?(): void;
   onPause?(): void;
   onEnded?(): void;
-  /** Se quedó sin buffer. */
+  /** Ran out of buffer. */
   onStallStart?(): void;
-  /** Volvió de un stall, con lo que duró. */
+  /** Recovered from a stall, with how long it lasted. */
   onStallEnd?(durationMs: number): void;
   onSeeked?(at: number): void;
   onError?(error: PlayerError): void;
 }
 
 export interface AttachOptions {
-  /** Posición desde la que continuar, recuperada de un desalojo previo. */
+  /** Position to continue from, recovered from an eviction. */
   startAt?: number;
   muted?: boolean;
-  /** Necesario para reproducir en línea en iPhone: sin esto salta a pantalla completa. */
+  /** see docs/browser-quirks.md#ios-playsinline */
   playsInline?: boolean;
   callbacks?: EngineCallbacks;
 }
 
 export interface MediaEngine {
   readonly name: string;
-  /** El elemento multimedia, o `null` mientras no esté enganchado. */
+  /** The media element, or `null` while not attached. */
   readonly element: HTMLVideoElement | null;
   readonly attached: boolean;
 
   /**
-   * Crea el elemento, lo mete en `container` y resuelve cuando ya puede
-   * aceptar un `play()`.
-   *
-   * No cuando tenga datos: en iOS no llegan hasta el primer `play()`, y
-   * esperarlos dejaba el botón de play sin hacer nada (el motor nativo
-   * resuelve también con `suspend`). El de HLS resuelve al leer la lista.
+   * Creates the element, puts it in `container` and resolves once it can
+   * accept `play()` — not once it has data, which iOS only fetches on the
+   * first play(). see docs/browser-quirks.md#ios-no-preload
    */
   attach(container: HTMLElement, stream: Stream, options?: AttachOptions): Promise<void>;
 
   /**
-   * Suelta el elemento y **todos** los recursos del navegador asociados.
-   *
-   * Quitar el elemento del DOM no basta: hay que vaciar la fuente y llamar a
-   * `load()`. S2 lo demostró de la peor forma — una limpieza parcial dejaba
-   * decodificadores retenidos y falseó una medición entera.
+   * Releases the element and **every** browser resource behind it.
+   * see docs/browser-quirks.md#decoder-release
    */
   detach(): void;
 
@@ -82,57 +65,34 @@ export interface MediaEngine {
   readonly paused: boolean;
   readonly ended: boolean;
   readonly buffered: TimeRanges | null;
-  /**
-   * Tramo al que se puede saltar.
-   *
-   * En vídeo bajo demanda es el contenido entero. **En directo es la ventana
-   * DVR**: lo que el servidor todavía conserva. Fuera de ahí los segmentos ya
-   * han caducado y no hay nada que reproducir.
-   */
+  /** The seekable range: the whole content on demand, the DVR window live. */
   readonly seekable: TimeRanges | null;
 
   /**
-   * Hora absoluta de la posición actual, en milisegundos desde epoch, o `null`
-   * si no se puede saber.
-   *
-   * Solo existe cuando el flujo trae `EXT-X-PROGRAM-DATE-TIME`. Es lo que
-   * permite sincronizar dos directos independientes: **en directo,
-   * `currentTime` no es comparable entre flujos** — su origen lo fija el
-   * instante en que cada reproductor empezó a cargar, no el contenido. S5 midió
-   * dos flujos sincronizados a 28 ms cuyos `currentTime` diferían en 20
-   * segundos por haberse cargado con esa separación.
-   *
-   * Basta con esto para corregir: el desfase entre hora y posición es constante
-   * en cada flujo, así que buscar una hora concreta es
-   * `currentTime + (destino - getProgramTime()) / 1000`.
+   * Absolute time of the current position, in ms since epoch, or `null`. Only
+   * with `EXT-X-PROGRAM-DATE-TIME`; it is what makes two live streams
+   * comparable. see docs/browser-quirks.md#live-currenttime-origin
    */
   getProgramTime?(): number | null;
 
   /**
-   * Posición recomendada para ver un directo sin cortes, o `null` si el motor
-   * no la sabe.
-   *
-   * Depende de la duración de los segmentos: el borde de la lista es el final
-   * del último segmento publicado, y quedarse a pocos segundos de él con
-   * segmentos de 6 s es quedarse sin datos hasta que salga el siguiente.
-   * Medido con un canal así: con 3 s de margen, 15 s entrecortados al volver
-   * al directo y cortes sueltos después.
+   * Recommended position to watch a live stream without stalls, or `null`.
+   * see docs/browser-quirks.md#live-segment-latency
    */
   liveSyncPosition?(): number | null;
 
   getPlaybackRate(): number;
-  /** Cambiar la velocidad del stream con audio se oye: solo para los esclavos. */
+  /** Changing the audio stream's rate is audible: slaves only. */
   setPlaybackRate(rate: number): void;
   setVolume(volume: number): void;
   setMuted(muted: boolean): void;
 
-  /** Suelta todo y deja el motor inservible. */
+  /** Releases everything and leaves the engine unusable. */
   destroy(): void;
 }
 
 export interface EngineFactory {
   readonly name: string;
-  /** Con qué confianza este motor reproduce esa fuente. */
   canPlay(source: Source): Confidence;
   create(): MediaEngine;
 }
@@ -145,54 +105,48 @@ const HLS_TYPES = new Set([
   'video/x-mpegurl',
 ]);
 
-/** Si un tipo MIME es HLS, con los alias que circulan y sin parámetros. */
+/** Whether a MIME type is HLS, any common alias, parameters ignored. */
 export function isHlsType(type: string): boolean {
   return HLS_TYPES.has(type.split(';')[0]!.trim().toLowerCase());
 }
 
-/**
- * Si hay Media Source Extensions, que es lo que hls.js necesita para existir.
- * `ManagedMediaSource` cuenta: es la variante de Safari 17 en adelante.
- */
+/** Media Source Extensions, which hls.js needs. `ManagedMediaSource` (Safari 17+) counts. */
 export function hasMse(): boolean {
   if (typeof globalThis === 'undefined') return false;
   const g = globalThis as { MediaSource?: unknown; ManagedMediaSource?: unknown };
   return g.MediaSource !== undefined || g.ManagedMediaSource !== undefined;
 }
 
-const ORDEN: Record<Confidence, number> = { probably: 2, maybe: 1, no: 0 };
+const RANK: Record<Confidence, number> = { probably: 2, maybe: 1, no: 0 };
 
-/** La mejor confianza del motor sobre cualquiera de las fuentes del stream. */
+/** The engine's best confidence over any of the stream's sources. */
 export function confidenceFor(factory: EngineFactory, stream: Stream): Confidence {
-  let mejor: Confidence = 'no';
+  let best: Confidence = 'no';
   for (const source of stream.sources) {
     const c = factory.canPlay(source);
-    if (ORDEN[c] > ORDEN[mejor]) mejor = c;
+    if (RANK[c] > RANK[best]) best = c;
   }
-  return mejor;
+  return best;
 }
 
 /**
- * Elige el motor más confiado para un stream, o `null` si ninguno sirve.
- *
- * A igualdad de confianza gana el que se registró antes, así que el orden de
- * registro expresa la preferencia: es lo que permitirá anteponer un motor
- * basado en MSE al nativo sin cambiar esta función.
+ * The most confident engine for a stream, or `null`. On a tie the one
+ * registered first wins, so registration order expresses preference.
  */
 export function selectEngine(
   factories: readonly EngineFactory[],
   stream: Stream,
 ): EngineFactory | null {
-  let elegido: EngineFactory | null = null;
-  let mejor = 0;
+  let chosen: EngineFactory | null = null;
+  let best = 0;
   for (const f of factories) {
-    const c = ORDEN[confidenceFor(f, stream)];
-    if (c > mejor) {
-      mejor = c;
-      elegido = f;
+    const c = RANK[confidenceFor(f, stream)];
+    if (c > best) {
+      best = c;
+      chosen = f;
     }
   }
-  return elegido;
+  return chosen;
 }
 
 export type { Source, Stream };

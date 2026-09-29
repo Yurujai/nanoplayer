@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { masterStream, slaveStreams, trimOf } from '../src/manifest-queries.js';
 import { parseManifest, validateManifest } from '../src/validate.js';
 
-/** Manifiesto dual-stream válido, con sobrescrituras puntuales. */
+/** A valid dual-stream manifest, with one-off overrides. */
 const dual = (over: Record<string, unknown> = {}) => ({
-  id: 'clase-1',
+  id: 'lecture-1',
   duration: 3600,
   streams: [
     { id: 'cam', role: 'presenter', audio: true,
@@ -19,13 +19,13 @@ const pathsOf = (r: ReturnType<typeof validateManifest>) =>
   r.ok ? [] : r.errors.map((e) => e.path);
 
 describe('validateManifest', () => {
-  it('acepta un dual-stream bien formado', () => {
+  it('accepts a well-formed dual-stream', () => {
     const r = validateManifest(dual());
     expect(r.ok).toBe(true);
     expect(r.warnings).toEqual([]);
   });
 
-  it('acepta un mono-stream', () => {
+  it('accepts a single stream', () => {
     const r = validateManifest({
       id: 'x',
       streams: [{ id: 'a', role: 'presenter', audio: true,
@@ -34,13 +34,13 @@ describe('validateManifest', () => {
     expect(r.ok).toBe(true);
   });
 
-  it('rechaza lo que no es un objeto', () => {
+  it('rejects anything that is not an object', () => {
     for (const bad of [null, 42, 'x', []]) {
       expect(validateManifest(bad).ok).toBe(false);
     }
   });
 
-  it('exige id y al menos un stream', () => {
+  it('requires an id and at least one stream', () => {
     expect(pathsOf(validateManifest({}))).toEqual(
       expect.arrayContaining(['id', 'streams']),
     );
@@ -48,9 +48,7 @@ describe('validateManifest', () => {
       .toContain('streams');
   });
 
-  // --- la regla que codifica los hallazgos de S1 y S2 ---------------------
-
-  it('rechaza dos streams con audio', () => {
+  it('rejects two streams with audio', () => {
     const m = dual();
     (m.streams[1] as { audio: boolean }).audio = true;
     const r = validateManifest(m);
@@ -59,7 +57,7 @@ describe('validateManifest', () => {
     if (!r.ok) expect(r.errors.some((e) => /iOS/.test(e.message))).toBe(true);
   });
 
-  it('rechaza que ningún stream lleve audio', () => {
+  it('rejects no stream carrying audio', () => {
     const m = dual();
     (m.streams[0] as { audio: boolean }).audio = false;
     const r = validateManifest(m);
@@ -67,28 +65,26 @@ describe('validateManifest', () => {
     if (!r.ok) expect(r.errors.some((e) => /master/.test(e.message))).toBe(true);
   });
 
-  it('rechaza ids de stream duplicados', () => {
+  it('rejects duplicate stream ids', () => {
     const m = dual();
     (m.streams[1] as { id: string }).id = 'cam';
     expect(pathsOf(validateManifest(m))).toContain('streams[1].id');
   });
 
-  it('exige el tipo MIME de cada fuente, que es lo que elige el motor', () => {
+  it('requires each source\'s MIME type, which picks the engine', () => {
     const m = dual();
     (m.streams[0] as { sources: unknown[] }).sources = [{ src: 'a.mp4' }];
     expect(pathsOf(validateManifest(m))).toContain('streams[0].sources[0].type');
   });
 
-  // --- cabecera y cola ----------------------------------------------------
+  const bumper = (src: string) => ({ sources: [{ src, type: 'video/mp4' }] });
 
-  const pieza = (src: string) => ({ sources: [{ src, type: 'video/mp4' }] });
-
-  it('acepta cabecera y cola por separado, juntas o ninguna', () => {
+  it('accepts intro and outro separately, together or neither', () => {
     for (const over of [
       {},
-      { intro: pieza('intro.mp4') },
-      { outro: pieza('outro.mp4') },
-      { intro: pieza('intro.mp4'), outro: pieza('outro.mp4') },
+      { intro: bumper('intro.mp4') },
+      { outro: bumper('outro.mp4') },
+      { intro: bumper('intro.mp4'), outro: bumper('outro.mp4') },
     ]) {
       const r = validateManifest(dual(over));
       expect(r.ok, JSON.stringify(over)).toBe(true);
@@ -96,12 +92,12 @@ describe('validateManifest', () => {
     }
   });
 
-  it('exige fuentes en la cabecera y en la cola', () => {
+  it('requires sources in the intro and outro', () => {
     expect(pathsOf(validateManifest(dual({ intro: {} })))).toContain('intro.sources');
     expect(pathsOf(validateManifest(dual({ outro: { sources: [] } })))).toContain('outro.sources');
   });
 
-  it('valida las fuentes de la cabecera y la cola como las de un stream', () => {
+  it('validates intro and outro sources like a stream\'s', () => {
     const r = validateManifest(dual({
       intro: { sources: [{ src: 'intro.mp4' }] },
       outro: { sources: [{ type: 'video/mp4', height: -1 }] },
@@ -111,39 +107,37 @@ describe('validateManifest', () => {
     ]));
   });
 
-  it('rechaza cabecera y cola en un directo', () => {
-    expect(pathsOf(validateManifest(dual({ live: true, intro: pieza('intro.mp4') }))))
+  it('rejects intro and outro in a live stream', () => {
+    expect(pathsOf(validateManifest(dual({ live: true, intro: bumper('intro.mp4') }))))
       .toEqual(['intro']);
-    expect(pathsOf(validateManifest(dual({ live: true, outro: pieza('outro.mp4') }))))
+    expect(pathsOf(validateManifest(dual({ live: true, outro: bumper('outro.mp4') }))))
       .toEqual(['outro']);
   });
 
-  it('rechaza una cabecera o cola que no es un objeto', () => {
+  it('rejects an intro or outro that is not an object', () => {
     const r = validateManifest(dual({ intro: 'intro.mp4', outro: [] }));
     expect(pathsOf(r)).toEqual(expect.arrayContaining(['intro', 'outro']));
   });
 
-  // --- anotaciones --------------------------------------------------------
-
-  it('acepta recorte, capítulo y contenido interactivo juntos', () => {
+  it('accepts trim, chapter and interactive content together', () => {
     const r = validateManifest(dual({
       annotations: [
         { kind: 'trim', start: 30, end: 3400 },
-        { kind: 'chapter', start: 60, title: 'Introducción' },
+        { kind: 'chapter', start: 60, title: 'Introduction' },
         { kind: 'h5p', start: 120, data: { library: 'H5P.Blanks 1.14' } },
       ],
     }));
     expect(r.ok).toBe(true);
   });
 
-  it('rechaza un recorte sin fin o invertido', () => {
+  it('rejects a trim with no end or reversed', () => {
     expect(pathsOf(validateManifest(dual({ annotations: [{ kind: 'trim', start: 30 }] }))))
       .toContain('annotations[0].end');
     expect(pathsOf(validateManifest(dual({ annotations: [{ kind: 'trim', start: 90, end: 30 }] }))))
       .toContain('annotations[0].end');
   });
 
-  it('rechaza más de un recorte', () => {
+  it('rejects more than one trim', () => {
     const r = validateManifest(dual({
       annotations: [
         { kind: 'trim', start: 10, end: 20 },
@@ -153,39 +147,37 @@ describe('validateManifest', () => {
     expect(pathsOf(r)).toContain('annotations');
   });
 
-  it('rechaza recortar un directo', () => {
+  it('rejects trimming a live stream', () => {
     const r = validateManifest(dual({
       live: true, annotations: [{ kind: 'trim', start: 10, end: 20 }],
     }));
     expect(r.ok).toBe(false);
   });
 
-  it('exige título en los capítulos, porque es texto accesible', () => {
+  it('requires a chapter title, since it is accessible text', () => {
     expect(pathsOf(validateManifest(dual({ annotations: [{ kind: 'chapter', start: 5 }] }))))
       .toContain('annotations[0].title');
   });
 
-  it('avisa, sin fallar, de una anotación fuera de la duración', () => {
+  it('warns, without failing, about an annotation past the duration', () => {
     const r = validateManifest(dual({ annotations: [{ kind: 'chapter', start: 9999, title: 'x' }] }));
     expect(r.ok).toBe(true);
     expect(r.warnings.map((w) => w.path)).toContain('annotations[0].start');
   });
 
-  it('deja pasar un kind desconocido: lo resolverá su plugin', () => {
+  it('lets an unknown kind through: its plugin will handle it', () => {
     const r = validateManifest(dual({
-      annotations: [{ kind: 'encuesta', start: 10, data: {} }],
+      annotations: [{ kind: 'poll', start: 10, data: {} }],
     }));
     expect(r.ok).toBe(true);
   });
 
-  // --- pistas de texto ----------------------------------------------------
-
-  it('exige src e idioma en las pistas de texto', () => {
+  it('requires src and language in text tracks', () => {
     const r = validateManifest(dual({ textTracks: [{ src: 'a.vtt' }] }));
     expect(pathsOf(r)).toContain('textTracks[0].lang');
   });
 
-  it('rechaza dos pistas marcadas por defecto', () => {
+  it('rejects two tracks marked as default', () => {
     const r = validateManifest(dual({
       textTracks: [
         { src: 'es.vtt', lang: 'es', default: true },
@@ -195,7 +187,7 @@ describe('validateManifest', () => {
     expect(pathsOf(r)).toContain('textTracks');
   });
 
-  it('acumula todos los errores en vez de parar en el primero', () => {
+  it('collects every error instead of stopping at the first', () => {
     const r = validateManifest({ streams: [{ role: 'presenter' }] });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.errors.length).toBeGreaterThan(2);
@@ -203,21 +195,21 @@ describe('validateManifest', () => {
 });
 
 describe('helpers', () => {
-  it('parseManifest lanza con las rutas dentro del mensaje', () => {
+  it('parseManifest throws with the paths in the message', () => {
     expect(() => parseManifest({})).toThrow(/streams/);
   });
 
-  it('parseManifest devuelve el manifiesto si es válido', () => {
-    expect(parseManifest(dual()).id).toBe('clase-1');
+  it('parseManifest returns the manifest if valid', () => {
+    expect(parseManifest(dual()).id).toBe('lecture-1');
   });
 
-  it('separa maestro y esclavos', () => {
+  it('splits master and slaves', () => {
     const m = parseManifest(dual());
     expect(masterStream(m).id).toBe('cam');
     expect(slaveStreams(m).map((s) => s.id)).toEqual(['slides']);
   });
 
-  it('extrae el recorte, o null si no hay', () => {
+  it('extracts the trim, or null if none', () => {
     expect(trimOf(parseManifest(dual()))).toBeNull();
     const m = parseManifest(dual({ annotations: [{ kind: 'trim', start: 30, end: 90 }] }));
     expect(trimOf(m)).toEqual({ start: 30, end: 90 });

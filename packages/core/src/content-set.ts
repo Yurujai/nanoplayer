@@ -1,10 +1,7 @@
 /**
- * Los flujos del contenido: sus motores, las cajas donde se montan y el
- * sincronizador que los mantiene juntos.
- *
- * Solo hace lo mecánico. Qué posición, si va en silencio y qué callbacks usa
- * cada flujo lo decide quien lo usa, que es quien sabe de recorte, cabecera o
- * directo.
+ * The content streams: their engines, the boxes they mount in and the
+ * synchronizer that keeps them together. Only the mechanics; position, muting
+ * and callbacks are decided by the caller.
  */
 import type { CoreEvents } from './core-events.js';
 import { selectEngine, type AttachOptions, type EngineFactory, type MediaEngine } from './engine.js';
@@ -22,74 +19,70 @@ export interface ContentSetOptions {
 }
 
 export class ContentSet {
-  readonly #motores = new Map<string, MediaEngine>();
-  readonly #cajas = new Map<string, HTMLElement>();
+  readonly #engines = new Map<string, MediaEngine>();
+  readonly #boxes = new Map<string, HTMLElement>();
   #sync: Synchronizer | null = null;
 
   constructor(private readonly options: ContentSetOptions) {}
 
   engine(streamId: string): MediaEngine | null {
-    return this.#motores.get(streamId) ?? null;
+    return this.#engines.get(streamId) ?? null;
   }
 
   entries(): IterableIterator<[string, MediaEngine]> {
-    return this.#motores.entries();
+    return this.#engines.entries();
   }
 
   engines(): IterableIterator<MediaEngine> {
-    return this.#motores.values();
+    return this.#engines.values();
   }
 
   /**
-   * Engancha un flujo y devuelve el nombre del motor elegido.
-   *
-   * En directo, **la caja se conserva aunque falle**: es el hueco donde la
-   * interfaz pone el aviso de que ese flujo no emite. Sin ella el mensaje
-   * acabaría encima del flujo que sí funciona.
+   * Attaches a stream and returns the chosen engine's name. In a live stream
+   * the box is kept on failure: the UI puts the "not on air" notice in it.
    */
   async attach(stream: Stream, options: AttachOptions, keepBoxOnFailure: boolean): Promise<string> {
     const factory = selectEngine(this.options.engines, stream);
     if (!factory) {
       throw playerError('engine/unsupported', `No engine can play stream "${stream.id}"`);
     }
-    // Reutilizar la caja si ya existe: un reintento no debe duplicarla.
-    let caja = this.#cajas.get(stream.id);
-    if (!caja) {
-      caja = document.createElement('div');
-      caja.dataset['stream'] = stream.id;
-      caja.dataset['role'] = stream.role;
-      this.options.container.appendChild(caja);
-      this.#cajas.set(stream.id, caja);
+    // A retry must reuse the box, not add another.
+    let box = this.#boxes.get(stream.id);
+    if (!box) {
+      box = document.createElement('div');
+      box.dataset['stream'] = stream.id;
+      box.dataset['role'] = stream.role;
+      this.options.container.appendChild(box);
+      this.#boxes.set(stream.id, box);
     }
 
     const engine = factory.create();
-    this.#motores.set(stream.id, engine);
+    this.#engines.set(stream.id, engine);
     try {
-      await engine.attach(caja, stream, options);
+      await engine.attach(box, stream, options);
     } catch (error) {
       engine.destroy();
-      this.#motores.delete(stream.id);
+      this.#engines.delete(stream.id);
       if (!keepBoxOnFailure) {
-        caja.remove();
-        this.#cajas.delete(stream.id);
+        box.remove();
+        this.#boxes.delete(stream.id);
       }
       throw error;
     }
     return factory.name;
   }
 
-  /** Monta el sincronizador con los flujos que hayan enganchado. */
   mountSync(manifest: Manifest): void {
-    const maestroId = masterStream(manifest).id;
-    const maestro = this.#motores.get(maestroId);
-    const esclavos = slaveStreams(manifest)
-      .map((s) => ({ id: s.id, engine: this.#motores.get(s.id) }))
+    const masterId = masterStream(manifest).id;
+    const master = this.#engines.get(masterId);
+    const slaves = slaveStreams(manifest)
+      .map((s) => ({ id: s.id, engine: this.#engines.get(s.id) }))
       .filter((x): x is { id: string; engine: MediaEngine } => !!x.engine);
-    if (!maestro || esclavos.length === 0) return;
+    if (!master || slaves.length === 0) return;
 
     this.#sync = new Synchronizer({
-      master: { id: maestroId, engine: maestro },
-      slaves: esclavos,
+      master: { id: masterId, engine: master },
+      slaves,
       live: manifest.live === true,
       bus: this.options.bus,
       ...(this.options.syncProfile ? { profile: this.options.syncProfile } : {}),
@@ -98,13 +91,12 @@ export class ContentSet {
   }
 
   /**
-   * Arranca todos los flujos. El maestro primero: es quien fija el reloj que
-   * los demás persiguen. Se cuadra antes de arrancar el lazo, porque el retraso
-   * de partida quedaría como offset y la corrección suave tardaría en absorberlo.
+   * The master first: it sets the clock the others chase. Aligning before the
+   * loop starts, or the start-up lag would stay as an offset.
    */
   async play(masterId: string): Promise<void> {
-    await this.#motores.get(masterId)?.play();
-    for (const [id, e] of this.#motores) {
+    await this.#engines.get(masterId)?.play();
+    for (const [id, e] of this.#engines) {
       if (id !== masterId) await e.play().catch(() => {});
     }
     this.#sync?.align();
@@ -113,21 +105,20 @@ export class ContentSet {
 
   pause(): void {
     this.#sync?.stop();
-    for (const e of this.#motores.values()) e.pause();
+    for (const e of this.#engines.values()) e.pause();
   }
 
-  /** Cuadra los esclavos de golpe, tras un salto. */
+  /** Snaps the slaves into place after a seek. */
   align(): void {
     this.#sync?.align();
   }
 
-  /** Suelta motores, sincronizador y cajas. */
   release(): void {
     this.#sync?.stop();
     this.#sync = null;
-    for (const e of this.#motores.values()) e.destroy();
-    this.#motores.clear();
-    for (const caja of this.#cajas.values()) caja.remove();
-    this.#cajas.clear();
+    for (const e of this.#engines.values()) e.destroy();
+    this.#engines.clear();
+    for (const box of this.#boxes.values()) box.remove();
+    this.#boxes.clear();
   }
 }

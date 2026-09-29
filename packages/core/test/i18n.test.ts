@@ -1,39 +1,39 @@
 import { describe, expect, it } from 'vitest';
 import { StringRegistry, strings } from '../src/i18n.js';
 
-const registro = () => new StringRegistry();
+const registry = () => new StringRegistry();
 
 describe('StringRegistry', () => {
-  it('devuelve la cadena del idioma pedido', () => {
-    const r = registro();
+  it('returns the string for the requested language', () => {
+    const r = registry();
     r.register('es', { 'ui.play': 'Reproducir' });
     r.register('en', { 'ui.play': 'Play' });
     expect(r.translator('es')('ui.play')).toBe('Reproducir');
     expect(r.translator('en')('ui.play')).toBe('Play');
   });
 
-  it('un catálogo regional cae al idioma corto', () => {
-    const r = registro();
+  it('a regional language falls back to the short one', () => {
+    const r = registry();
     r.register('es', { 'ui.play': 'Reproducir' });
     expect(r.translator('es-MX')('ui.play')).toBe('Reproducir');
     expect(r.translator('EN-gb')).toBeTypeOf('function');
   });
 
-  it('cae al idioma base cuando no hay catálogo', () => {
-    const r = registro();
+  it('falls back to the base language when there is no catalogue', () => {
+    const r = registry();
     r.register('es', { 'ui.play': 'Reproducir' });
     expect(r.translator('fr')('ui.play')).toBe('Reproducir');
   });
 
-  it('devuelve la clave si no existe, en vez de quedarse en blanco', () => {
-    // Un hueco vacío en la interfaz no dice dónde mirar; `ui.falta` sí.
-    const r = registro();
-    expect(r.translator('es')('ui.falta')).toBe('ui.falta');
+  it('returns the key if missing, instead of a blank', () => {
+    // A blank in the UI does not say where to look; `ui.missing` does.
+    const r = registry();
+    expect(r.translator('es')('ui.missing')).toBe('ui.missing');
   });
 
-  it('fusiona los catálogos en vez de reemplazarlos', () => {
-    // Los paquetes se cargan en cualquier orden y ninguno debe pisar al otro.
-    const r = registro();
+  it('merges catalogues instead of replacing them', () => {
+    // Packages load in any order and none may overwrite another.
+    const r = registry();
     r.register('es', { 'ui.play': 'Reproducir' });
     r.register('es', { 'captions.label': 'Subtítulos' });
     const t = r.translator('es');
@@ -41,48 +41,41 @@ describe('StringRegistry', () => {
     expect(t('captions.label')).toBe('Subtítulos');
   });
 
-  it('las cadenas propias mandan sobre las registradas', () => {
-    const r = registro();
+  it('own strings override registered ones', () => {
+    const r = registry();
     r.register('es', { 'ui.layout.presentation': 'Diapositivas' });
     const t = r.translator('es', { es: { 'ui.layout.presentation': 'Pizarra' } });
     expect(t('ui.layout.presentation')).toBe('Pizarra');
   });
 
-  it('permite añadir un idioma entero sin tocar el código', () => {
-    // El caso que justifica todo esto: euskera sin forkear nada.
-    const r = registro();
+  it('allows adding a whole language without touching the code', () => {
+    const r = registry();
     r.register('es', { 'ui.play': 'Reproducir', 'ui.pause': 'Pausar' });
     const t = r.translator('eu', { eu: { 'ui.play': 'Erreproduzitu' } });
     expect(t('ui.play')).toBe('Erreproduzitu');
-    // Lo que el idioma nuevo no cubra sigue cayendo al base, no se rompe.
+    // What the new language lacks falls back to the base.
     expect(t('ui.pause')).toBe('Pausar');
   });
 
-  it('interpola variables', () => {
-    const r = registro();
-    r.register('es', { 'ui.live.behind': 'Retrasado: {tiempo}' });
-    expect(r.translator('es')('ui.live.behind', { tiempo: '3 segundos' }))
+  it('interpolates variables', () => {
+    const r = registry();
+    r.register('es', { 'ui.live.behind': 'Retrasado: {time}' });
+    expect(r.translator('es')('ui.live.behind', { time: '3 segundos' }))
       .toBe('Retrasado: 3 segundos');
   });
 
-  it('deja intacta una variable que no se le pasa', () => {
-    const r = registro();
-    r.register('es', { k: 'hola {quien}' });
-    expect(r.translator('es')('k', {})).toBe('hola {quien}');
+  it('leaves a variable that is not passed untouched', () => {
+    const r = registry();
+    r.register('es', { k: 'hola {who}' });
+    expect(r.translator('es')('k', {})).toBe('hola {who}');
   });
 
-  it('resuelve el idioma al leerlo, no al crear el traductor', () => {
-    /*
-     * Los paquetes registran sus cadenas al importarse, y nadie garantiza que
-     * eso ocurra antes de construir el reproductor. Si `lang` se calculara de
-     * antemano, un traductor creado pronto se quedaría con el idioma de
-     * respaldo para siempre y los tiempos hablados saldrían en otro idioma
-     * distinto del de los botones.
-     */
-    const r = registro();
+  it('resolves the language when read, not when the translator is created', () => {
+    // Packages register on import, maybe after the player is built: a `lang`
+    // computed early would stick to the fallback and spoken times would disagree.
+    const r = registry();
     r.register('es', { 'ui.play': 'Reproducir' });
     const t = r.translator('en');
-    // Todavía no hay catálogo inglés: se habla en el idioma base.
     expect(t.lang).toBe('es');
     expect(t('ui.play')).toBe('Reproducir');
 
@@ -91,14 +84,14 @@ describe('StringRegistry', () => {
     expect(t('ui.play')).toBe('Play');
   });
 
-  it('sin idioma pedido usa el base', () => {
-    const r = registro();
+  it('with no requested language, uses the base', () => {
+    const r = registry();
     r.register('es', { 'ui.play': 'Reproducir' });
     expect(r.translator('')('ui.play')).toBe('Reproducir');
   });
 
-  it('lleva la cuenta de los idiomas registrados', () => {
-    const r = registro();
+  it('keeps track of registered languages', () => {
+    const r = registry();
     r.register('es', { a: '1' });
     r.register('EN', { a: '1' });
     expect(r.languages.sort()).toEqual(['en', 'es']);
@@ -107,8 +100,8 @@ describe('StringRegistry', () => {
   });
 });
 
-describe('registro compartido', () => {
-  it('existe para que los paquetes dejen ahí sus cadenas', () => {
+describe('shared registry', () => {
+  it('exists so packages can leave their strings there', () => {
     expect(strings).toBeInstanceOf(StringRegistry);
   });
 });

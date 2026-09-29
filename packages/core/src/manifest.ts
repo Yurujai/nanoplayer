@@ -1,50 +1,34 @@
 /**
- * El manifiesto es el contrato del que cuelga todo lo demás: motores, layouts,
- * plugins y adaptadores. Describe QUÉ hay que reproducir, nunca CÓMO.
- *
- * Nada aquí menciona hls.js, elementos `<video>` ni layouts concretos. Si algún
- * día hace falta cambiar de motor, el manifiesto no debería enterarse.
+ * The manifest describes WHAT to play, never HOW: nothing here mentions hls.js,
+ * `<video>` elements or layouts, so engines can change without it noticing.
  */
 
-/** Una fuente concreta: una URL y su tipo MIME. */
 export interface Source {
   src: string;
-  /** MIME. `application/vnd.apple.mpegurl` para HLS, `video/mp4`, etc. */
+  /** MIME type: `application/vnd.apple.mpegurl` for HLS, `video/mp4`, etc. It picks the engine. */
   type: string;
-  /** Alto en píxeles, si se conoce. Solo informativo: la calidad la elige el motor. */
+  /** Height in pixels, if known. Informative only: the engine picks the quality. */
   height?: number;
   label?: string;
 }
 
-/**
- * Papel del stream dentro de la composición. Los dos primeros son los casos de
- * captura docente; el resto queda abierto porque los layouts son plugins y
- * pueden inventarse los suyos.
- */
+/** The stream's role in the composition. Open, because layouts are plugins. */
 export type StreamRole = 'presenter' | 'presentation' | (string & {});
 
-/** Un flujo de medios. Un manifiesto dual-stream tiene dos. */
 export interface Stream {
   id: string;
   role: StreamRole;
   label?: string;
   /**
-   * Si el flujo trae imagen o solo sonido.
-   *
-   * **Casi nunca hace falta ponerlo**: se deduce del tipo MIME de las fuentes,
-   * y un `audio/mpeg` no deja lugar a dudas. Solo es necesario cuando el MIME
-   * es ambiguo, que en la práctica es HLS con solo audio: ahí el tipo es el
-   * mismo que para vídeo y no hay forma de saberlo sin descargarlo.
+   * Video or sound only. Inferred from the sources' MIME type; only needed when
+   * that is ambiguous, which in practice is audio-only HLS.
    */
   kind?: 'video' | 'audio';
   /**
-   * Si este stream aporta el audio.
-   *
-   * **Exactamente uno** debe tenerlo a `true` en todo el manifiesto, y ese es
-   * el maestro del reloj de sincronización. No es una convención estética:
-   *   - S1 demostró que al maestro no se le puede tocar el `playbackRate` sin
-   *     que se oiga, así que la corrección de deriva recae en los demás.
-   *   - S2 midió que iPhone no reproduce dos audios a la vez.
+   * Whether this stream carries the audio. **Exactly one** does: it is the
+   * master of the sync clock, since its playbackRate cannot be touched without
+   * being heard (S1), and iPhone cannot play two audio tracks
+   * (see docs/browser-quirks.md#ios-single-audio).
    */
   audio: boolean;
   sources: Source[];
@@ -52,29 +36,22 @@ export interface Stream {
 }
 
 /**
- * Pieza que se encadena delante o detrás del contenido: una cabecera
- * institucional, una cola con créditos.
- *
- * Es mono-stream a propósito, aunque el contenido sea dual: una cabecera es un
- * único vídeo con su sonido, y no hay nada que sincronizar.
- *
- * No hay campo para decidir si se puede saltar porque no es configurable: la
- * cabecera siempre se puede saltar y la cola nunca. Eso depende del papel de la
- * pieza, no de cada manifiesto.
+ * A piece chained before or after the content: an institutional intro, an
+ * outro with credits. Single-stream, with its own sound. Whether it can be
+ * skipped is not configurable: the intro always can, the outro never.
  */
 export interface Bumper {
   sources: Source[];
 }
 
-/** Recorte de reproducción. No modifica el medio: remapea el timeline visible. */
+/** Playback trim. It does not modify the media: it remaps the visible timeline. */
 export interface TrimAnnotation {
   kind: 'trim';
-  /** Segundos desde el inicio del medio. */
+  /** Seconds from the start of the media. */
   start: number;
   end: number;
 }
 
-/** Marcador navegable en la barra de progreso. */
 export interface ChapterAnnotation {
   kind: 'chapter';
   start: number;
@@ -82,29 +59,21 @@ export interface ChapterAnnotation {
   title: string;
 }
 
-/**
- * Contenido interactivo anclado a un instante. El núcleo no sabe interpretarlo:
- * solo lo entrega al plugin que declare ese `kind`.
- */
+/** Interactive content anchored to a time. The core only hands it to the plugin that declares its `kind`. */
 export interface InteractiveAnnotation {
   kind: 'h5p' | (string & {});
   start: number;
   end?: number;
-  /** Carga útil opaca para el plugin correspondiente. */
+  /** Opaque payload for that plugin. */
   data: Record<string, unknown>;
 }
 
-/**
- * Datos anclados al timeline. Unifica lo que parecían features sueltas:
- * trimming, capítulos y contenido interactivo son consumidores del mismo
- * mecanismo, y añadir uno nuevo no toca el núcleo.
- */
+/** Data anchored to the timeline: trim, chapters and interactive content share the mechanism. */
 export type Annotation = TrimAnnotation | ChapterAnnotation | InteractiveAnnotation;
 
-/** Subtítulos y similares. */
 export interface TextTrackDef {
   src: string;
-  /** Código BCP 47. */
+  /** BCP 47 code. */
   lang: string;
   label?: string;
   kind?: 'subtitles' | 'captions' | 'descriptions' | 'chapters';
@@ -114,33 +83,22 @@ export interface TextTrackDef {
 export interface Manifest {
   id: string;
   title?: string;
-  /**
-   * Imagen previa. Es lo único que se descarga en estado `idle`: el reproductor
-   * no pide medios hasta que el usuario lo pide.
-   */
+  /** The only thing downloaded in the `idle` state. */
   poster?: string;
-  /** Duración en segundos, si se conoce de antemano. */
+  /** Duration in seconds, if known in advance. */
   duration?: number;
-  /** Un stream para mono, dos o más para multi-stream. */
+  /** One stream for single-stream, two or more for multi-stream. */
   streams: Stream[];
-  /**
-   * Cabecera, antes del contenido. Opcional e independiente de `outro`: puede
-   * haber una, la otra, las dos o ninguna. Se puede saltar.
-   */
+  /** Intro, before the content. Optional and independent of `outro`. Can be skipped. */
   intro?: Bumper;
-  /** Cola, después del contenido. Opcional. **No se puede saltar.** */
+  /** Outro, after the content. Optional. **Cannot be skipped.** */
   outro?: Bumper;
   annotations?: Annotation[];
   textTracks?: TextTrackDef[];
-  /** Directo. Cambia los estados de la UI y desactiva lo que no aplica. */
   live?: boolean;
   /**
-   * Imagen que se enseña mientras el directo no emite.
-   *
-   * Aparte de `poster` a propósito: el póster es lo que se ve **antes** de
-   * pulsar play, y esto es lo que se ve **después**, esperando. Suelen querer
-   * decir cosas distintas —una carátula del evento frente a un "empieza a las
-   * 10:00"—. Si falta, se usa el póster.
+   * Image shown after pressing play while a live stream is not on air, apart
+   * from `poster`, which is shown before. Falls back to the poster.
    */
   liveWaitingImage?: string;
 }

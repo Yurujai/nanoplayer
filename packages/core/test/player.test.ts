@@ -3,18 +3,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EngineFactory, MediaEngine } from '../src/engine.js';
 import { Player } from '../src/player.js';
 
-/** Motor de mentira: engancha al instante y deja inspeccionar lo que le piden. */
-function factoriaFalsa() {
-  const creados: Array<MediaEngine & Record<string, any>> = [];
+/** Fake engine: attaches instantly and lets tests inspect what it is asked. */
+function fakeFactory() {
+  const created: Array<MediaEngine & Record<string, any>> = [];
   const factory: EngineFactory = {
-    name: 'falso',
+    name: 'fake',
     canPlay: () => 'probably',
     create() {
       let currentTime = 0, rate = 1, paused = true, muted = false, volume = 1;
       let attached = false;
       let cb: any = {};
       const e = {
-        name: 'falso',
+        name: 'fake',
         get element() { return { seeking: false } as HTMLVideoElement; },
         get attached() { return attached; },
         async attach(container: HTMLElement, _s: unknown, o: any) {
@@ -25,10 +25,8 @@ function factoriaFalsa() {
           container.appendChild(document.createElement('video'));
         },
         detach() { attached = false; },
-        // Un motor de verdad avisa por callback, y el Player se apoya en eso
-        // para saber si de verdad está sonando. Sin esto el falso miente.
-        // Un <video> real dispara `play` al pedirlo y `playing` al empezar a
-        // sonar de verdad. Con HLS entre ambos hay siempre un hueco.
+        // The Player relies on callbacks to know it really plays. A real <video>
+        // fires `play` when asked and `playing` when it starts; HLS has a gap.
         async play() { paused = false; cb.onPlay?.(); cb.onPlaying?.(); },
         pause() { paused = true; cb.onPause?.(); },
         seek(s: number) { currentTime = s; },
@@ -37,23 +35,23 @@ function factoriaFalsa() {
         get paused() { return paused; },
         get ended() { return false; },
         get buffered() { return null; },
-      get seekable() { return null; },
+        get seekable() { return null; },
         getPlaybackRate: () => rate,
         setPlaybackRate(r: number) { rate = r; },
         setVolume(v: number) { volume = v; },
         setMuted(m: boolean) { muted = m; },
         destroy() { attached = false; },
-        // Ayudas de prueba
+        // Test helpers
         _cb: () => cb,
         _muted: () => muted,
         _volume: () => volume,
         _set(t: number) { currentTime = t; },
       };
-      creados.push(e as never);
+      created.push(e as never);
       return e as never;
     },
   };
-  return { factory, creados };
+  return { factory, created };
 }
 
 const MONO = {
@@ -73,12 +71,12 @@ const DUAL = {
 
 let container: HTMLElement;
 
-const nuevo = (manifest: unknown, extra: Record<string, unknown> = {}) => {
-  const { factory, creados } = factoriaFalsa();
+const setup = (manifest: unknown, extra: Record<string, unknown> = {}) => {
+  const { factory, created } = fakeFactory();
   const p = new Player({
     container, manifest: manifest as never, engines: [factory], ...extra,
   });
-  return { p, creados };
+  return { p, created };
 };
 
 beforeEach(() => {
@@ -87,11 +85,11 @@ beforeEach(() => {
   document.body.appendChild(container);
 });
 
-describe('Player · cero red hasta que se pide', () => {
-  it('construirlo no resuelve ni descarga nada', () => {
+describe('Player · zero network until asked', () => {
+  it('constructing it resolves and downloads nothing', () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
-    const { p } = nuevo('https://ejemplo/manifiesto.json');
+    const { p } = setup('https://example/manifest.json');
     expect(p.state).toBe('idle');
     expect(p.manifest).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -99,80 +97,76 @@ describe('Player · cero red hasta que se pide', () => {
     vi.unstubAllGlobals();
   });
 
-  it('resolver no crea ningún elemento multimedia', async () => {
-    const { p } = nuevo(MONO);
+  it('resolving creates no media element', async () => {
+    const { p } = setup(MONO);
     await p.resolve();
     expect(p.state).toBe('resolved');
     expect(container.querySelectorAll('video')).toHaveLength(0);
   });
 
-  it('los elementos aparecen solo al enganchar', async () => {
-    const { p } = nuevo(DUAL);
+  it('elements appear only on attach', async () => {
+    const { p } = setup(DUAL);
     await p.attach();
     expect(p.state).toBe('attached');
     expect(container.querySelectorAll('video')).toHaveLength(2);
   });
 });
 
-describe('Player · manifiesto', () => {
-  it('usa el resolutor inyectado en vez de fetch', async () => {
-    // Es el punto de extensión que permite agrupar 32 peticiones en una.
+describe('Player · manifest', () => {
+  it('uses the injected resolver instead of fetch', async () => {
     const manifestResolver = vi.fn(async () => MONO);
-    const { p } = nuevo('cualquier/cosa.json', { manifestResolver });
+    const { p } = setup('any/thing.json', { manifestResolver });
     await p.resolve();
-    expect(manifestResolver).toHaveBeenCalledWith('cualquier/cosa.json');
+    expect(manifestResolver).toHaveBeenCalledWith('any/thing.json');
     expect(p.manifest?.id).toBe('m');
   });
 
-  it('un manifiesto inválido deja el reproductor en idle', async () => {
-    const roto = { id: 'x', streams: [
+  it('an invalid manifest leaves the player idle', async () => {
+    const broken = { id: 'x', streams: [
       { id: 'a', role: 'presenter', audio: true, sources: [{ src: 'a', type: 'video/mp4' }] },
       { id: 'b', role: 'presentation', audio: true, sources: [{ src: 'b', type: 'video/mp4' }] },
     ] };
-    const { p } = nuevo(roto);
+    const { p } = setup(broken);
     await expect(p.resolve()).rejects.toMatchObject({ code: 'manifest/invalid' });
     expect(p.state).toBe('idle');
   });
 
-  it('el error de validación llega por el bus con el motivo', async () => {
-    const { p } = nuevo({ id: 'x' });
-    const visto: string[] = [];
-    p.on('manifest:resolve:fail', ({ error }) => visto.push(error.message));
+  it('the validation error reaches the bus with the reason', async () => {
+    const { p } = setup({ id: 'x' });
+    const seen: string[] = [];
+    p.on('manifest:resolve:fail', ({ error }) => seen.push(error.message));
     await p.resolve().catch(() => {});
-    expect(visto[0]).toMatch(/streams/);
+    expect(seen[0]).toMatch(/streams/);
   });
 
-  it('resolver dos veces no repite la petición', async () => {
+  it('resolving twice does not repeat the request', async () => {
     const manifestResolver = vi.fn(async () => MONO);
-    const { p } = nuevo('x.json', { manifestResolver });
+    const { p } = setup('x.json', { manifestResolver });
     await p.resolve();
     await p.resolve();
     expect(manifestResolver).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('Player · duración', () => {
-  it('sin metadatos en el motor, usa la del manifiesto', async () => {
-    // En iOS el motor no sabe la duración hasta el primer play: la barra
-    // marcaba 0:00 en lugar de lo que ya decía el manifiesto.
-    const { p, creados } = nuevo({ ...MONO, duration: 42 });
+describe('Player · duration', () => {
+  it('without engine metadata, uses the manifest\'s', async () => {
+    // see docs/browser-quirks.md#ios-no-preload
+    const { p, created } = setup({ ...MONO, duration: 42 });
     await p.attach();
-    Object.defineProperty(creados[0], 'duration', { get: () => 0 });
+    Object.defineProperty(created[0], 'duration', { get: () => 0 });
     expect(p.duration).toBe(42);
   });
 });
 
-describe('Player · volumen', () => {
-  it('volumechange cuenta el estado real, no valores fijos', async () => {
-    // Antes `setMuted` publicaba siempre volumen 1 y `setVolume` siempre
-    // "sin silenciar", fuera cual fuera el estado.
-    const { p } = nuevo(MONO);
-    const vistos: Array<{ volume: number; muted: boolean }> = [];
-    p.on('volumechange', (e) => vistos.push(e));
+describe('Player · volume', () => {
+  it('volumechange reports the real state, not fixed values', async () => {
+    const { p } = setup(MONO);
+    const seen: Array<{ volume: number; muted: boolean }> = [];
+    p.on('volumechange', (e) => seen.push(e));
     p.setVolume(0.4);
     p.setMuted(true);
     p.setVolume(0.6);
-    expect(vistos).toEqual([
+    expect(seen).toEqual([
       { volume: 0.4, muted: false },
       { volume: 0.4, muted: true },
       { volume: 0.6, muted: true },
@@ -181,45 +175,43 @@ describe('Player · volumen', () => {
     expect(p.muted).toBe(true);
   });
 
-  it('el volumen elegido sobrevive a un desalojo', async () => {
-    const { p, creados } = nuevo(MONO);
+  it('the chosen volume survives an eviction', async () => {
+    const { p, created } = setup(MONO);
     await p.attach();
     p.setVolume(0.3);
     p.detach();
     await p.attach();
-    expect(creados.at(-1)!._volume()).toBe(0.3);
+    expect(created.at(-1)!._volume()).toBe(0.3);
   });
 });
 
-describe('Player · audio y maestro', () => {
-  it('solo suena el stream con audio', async () => {
-    const { p, creados } = nuevo(DUAL);
+describe('Player · audio and master', () => {
+  it('only the stream with audio is heard', async () => {
+    const { p, created } = setup(DUAL);
     await p.attach();
-    expect(creados[0]!._muted()).toBe(false);   // cam, lleva audio
-    expect(creados[1]!._muted()).toBe(true);    // slides
+    expect(created[0]!._muted()).toBe(false);   // cam, carries audio
+    expect(created[1]!._muted()).toBe(true);    // slides
   });
 
-  it('el maestro es el que lleva el audio', async () => {
-    const { p, creados } = nuevo(DUAL);
+  it('the master is the one carrying audio', async () => {
+    const { p, created } = setup(DUAL);
     await p.attach();
-    expect(p.master).toBe(creados[0]);
+    expect(p.master).toBe(created[0]);
   });
 
-  it('la velocidad se aplica al maestro, no a los esclavos', async () => {
-    // Los esclavos la heredan por el lazo de sincronización, que ajusta su
-    // velocidad relativa a la del maestro.
-    const { p, creados } = nuevo(DUAL);
+  it('the rate applies to the master, not the slaves', async () => {
+    const { p, created } = setup(DUAL);
     await p.attach();
     p.setPlaybackRate(1.5);
-    expect(creados[0]!.getPlaybackRate()).toBe(1.5);
+    expect(created[0]!.getPlaybackRate()).toBe(1.5);
   });
 });
 
-describe('Player · desalojo', () => {
-  it('suelta los motores y conserva la posición', async () => {
-    const { p, creados } = nuevo(DUAL);
+describe('Player · eviction', () => {
+  it('releases the engines and keeps the position', async () => {
+    const { p, created } = setup(DUAL);
     await p.play();
-    creados[0]!._set(42);
+    created[0]!._set(42);
 
     p.detach();
     expect(p.state).toBe('resolved');
@@ -227,42 +219,42 @@ describe('Player · desalojo', () => {
     expect(p.resumeAt).toBe(42);
   });
 
-  it('al volver a enganchar retoma donde estaba', async () => {
-    const { p, creados } = nuevo(DUAL);
+  it('reattaching resumes where it was', async () => {
+    const { p, created } = setup(DUAL);
     await p.attach();
-    creados[0]!._set(42);
+    created[0]!._set(42);
     p.detach();
     await p.attach();
     expect(p.currentTime).toBe(42);
   });
 
-  it('emite engine:detach con la posición', async () => {
-    const { p, creados } = nuevo(MONO);
+  it('emits engine:detach with the position', async () => {
+    const { p, created } = setup(MONO);
     await p.attach();
-    creados[0]!._set(17);
+    created[0]!._set(17);
     const fn = vi.fn();
     p.on('engine:detach', fn);
     p.detach();
     expect(fn).toHaveBeenCalledWith({ at: 17 });
   });
 
-  it('desaloja aunque el aviso de pausa llegue tarde', async () => {
-    // Con un motor cuyo `pause` es asíncrono —hls.js lo es— el estado seguía
-    // en `active` al intentar soltar, y la transición prohibida lanzaba.
-    const { factory, creados } = factoriaFalsa();
+  it('evicts even if the pause event arrives late', async () => {
+    // With an async `pause` (hls.js) the state was still `active` and the
+    // forbidden transition threw.
+    const { factory, created } = fakeFactory();
     const p = new Player({ container, manifest: DUAL as never, engines: [factory] });
     await p.play();
     expect(p.state).toBe('active');
 
-    // El falso deja de avisar: simula el aviso que aún no ha llegado.
-    for (const e of creados) e._cb().onPause = undefined;
+    // The fake stops reporting: the event has not arrived yet.
+    for (const e of created) e._cb().onPause = undefined;
 
     expect(() => p.detach()).not.toThrow();
     expect(p.state).toBe('resolved');
   });
 
-  it('desalojar sin motor enganchado no hace nada', async () => {
-    const { p } = nuevo(MONO);
+  it('evicting with no engine attached does nothing', async () => {
+    const { p } = setup(MONO);
     await p.resolve();
     expect(() => p.detach()).not.toThrow();
     expect(p.state).toBe('resolved');
@@ -270,141 +262,122 @@ describe('Player · desalojo', () => {
 });
 
 describe('Player · stalls', () => {
-  it('al recuperarse vuelven a arrancar los que se frenaron', async () => {
-    const { p, creados } = nuevo(DUAL);
+  it('on recovery, the held-back streams restart', async () => {
+    const { p, created } = setup(DUAL);
     await p.play();
-    creados[1]!._cb().onStallStart();
-    expect(creados[0]!.paused).toBe(true);
-    creados[1]!._cb().onStallEnd(250);
+    created[1]!._cb().onStallStart();
+    expect(created[0]!.paused).toBe(true);
+    created[1]!._cb().onStallEnd(250);
     await Promise.resolve();
-    expect(creados.every((e) => !e.paused)).toBe(true);
+    expect(created.every((e) => !e.paused)).toBe(true);
   });
 
-  it('si se atascan los dos, el último en recuperarse también reanuda', async () => {
-    /*
-     * Un salto deja a los dos flujos rellenando búfer a la vez. Con un solo
-     * indicador para todo el reproductor, el primero en recuperarse lo bajaba y
-     * el segundo se encontraba con que ya no había nada que reanudar.
-     *
-     * Medido en un directo dual tras retroceder: el esclavo se quedaba en pausa
-     * y el sincronizador lo arrastraba a saltos de 733 ms, con la deriva clavada
-     * en ese valor indefinidamente.
-     */
-    const { p, creados } = nuevo(DUAL);
+  it('if both stall, the last to recover also resumes', async () => {
+    // With a single flag the first to recover cleared it and the slave stayed
+    // paused, dragged by the sync loop in 733 ms seeks forever.
+    const { p, created } = setup(DUAL);
     await p.play();
 
-    creados[0]!._cb().onStallStart();
-    creados[1]!._cb().onStallStart();
+    created[0]!._cb().onStallStart();
+    created[1]!._cb().onStallStart();
 
-    creados[0]!._cb().onStallEnd(200);
+    created[0]!._cb().onStallEnd(200);
     await Promise.resolve();
-    expect(creados[1]!.paused, 'el que sigue atascado no se reanuda').toBe(true);
+    expect(created[1]!.paused, 'the one still stalled is not resumed').toBe(true);
 
-    creados[1]!._cb().onStallEnd(300);
+    created[1]!._cb().onStallEnd(300);
     await Promise.resolve();
-    expect(creados.every((e) => !e.paused), 'nadie se queda en pausa').toBe(true);
+    expect(created.every((e) => !e.paused), 'nobody stays paused').toBe(true);
   });
 
-  it('mientras uno siga atascado, los demás no se sueltan', async () => {
-    const { p, creados } = nuevo(DUAL);
+  it('while one is still stalled, the others are not released', async () => {
+    const { p, created } = setup(DUAL);
     await p.play();
 
-    creados[1]!._cb().onStallStart();
-    expect(creados[0]!.paused).toBe(true);
+    created[1]!._cb().onStallStart();
+    expect(created[0]!.paused).toBe(true);
 
-    // Otro corte del mismo flujo antes de que se recupere: sigue atascado.
-    creados[1]!._cb().onStallStart();
-    creados[1]!._cb().onStallEnd(120);
+    // Another stall of the same stream before it recovers: still stalled.
+    created[1]!._cb().onStallStart();
+    created[1]!._cb().onStallEnd(120);
     await Promise.resolve();
-    expect(creados.every((e) => !e.paused)).toBe(true);
+    expect(created.every((e) => !e.paused)).toBe(true);
   });
 });
 
-describe('Player · el arranque no se aborta a sí mismo', () => {
-  it('un stall durante el arranque no pausa nada', async () => {
-    // Fallo real: el `waiting` inicial es normal —el navegador llena el
-    // buffer— y pausar ahí abortaba el play() recién iniciado con un
-    // AbortError. El vídeo no arrancaba y el botón se quedaba en "Reproducir".
-    const { p, creados } = nuevo(DUAL);
+describe('Player · start-up does not abort itself', () => {
+  it('a stall during start-up pauses nothing', async () => {
+    // Pausing on the initial `waiting` aborted the fresh play().
+    // see docs/browser-quirks.md#play-abort
+    const { p, created } = setup(DUAL);
     await p.attach();
     expect(p.state).toBe('attached');
 
-    creados[1]!._cb().onStallStart();
-    expect(creados.every((e) => e.paused), 'nadie debe pausarse aún').toBe(true);
+    created[1]!._cb().onStallStart();
+    expect(created.every((e) => e.paused), 'nobody should pause yet').toBe(true);
 
     await p.play();
     expect(p.state).toBe('active');
-    expect(creados.every((e) => !e.paused)).toBe(true);
+    expect(created.every((e) => !e.paused)).toBe(true);
   });
 
-  it('el stall entre "pedir" y "sonar" tampoco pausa', async () => {
-    /*
-     * Lo destapó el motor HLS: el evento `play` significa que se ha pedido, no
-     * que suene. Enganchar HLS termina al parsear la lista, antes de tener un
-     * segmento, así que el `waiting` posterior encontraba el estado ya en
-     * `active` y abortaba el propio play() con un AbortError.
-     */
-    const { p, creados } = nuevo(DUAL);
+  it('a stall between "asked" and "playing" does not pause either', async () => {
+    // HLS attaches before it has a segment, so `play` fires well before
+    // `playing`. see docs/browser-quirks.md#play-abort
+    const { p, created } = setup(DUAL);
     await p.attach();
-    // Se pide la reproducción pero aún no suena.
-    creados[0]!._cb().onPlay();
+    // Playback is asked for but not yet playing.
+    created[0]!._cb().onPlay();
     expect(p.state).toBe('active');
 
-    creados[1]!._cb().onStallStart();
-    expect(creados.every((e) => e.paused), 'nadie debe pausarse aún').toBe(true);
+    created[1]!._cb().onStallStart();
+    expect(created.every((e) => e.paused), 'nobody should pause yet').toBe(true);
   });
 
-  it('ya reproduciendo, un stall frena a los DEMÁS', async () => {
-    // La política de S1 sigue vigente donde tiene sentido: con la reproducción
-    // en marcha, dejar correr al resto dispara la deriva.
-    const { p, creados } = nuevo(DUAL);
+  it('once playing, a stall holds back the OTHERS', async () => {
+    // Letting the rest run would make drift spike (S1).
+    const { p, created } = setup(DUAL);
     await p.play();
-    creados[1]!._cb().onStallStart();
-    expect(creados[0]!.paused, 'el otro se frena').toBe(true);
+    created[1]!._cb().onStallStart();
+    expect(created[0]!.paused, 'the other is held back').toBe(true);
   });
 
-  it('al que se atasca no se le pausa: abortaría su propio play()', async () => {
-    /*
-     * Así se manifestaba con HLS en directo: el flujo atascado se pausaba a sí
-     * mismo y su play() en vuelo moría con un AbortError. Pausarlo además no
-     * frena nada, porque ya está parado por falta de datos.
-     */
-    const { p, creados } = nuevo(DUAL);
+  it('the stalled one is not paused: it would abort its own play()', async () => {
+    // see docs/browser-quirks.md#play-abort
+    const { p, created } = setup(DUAL);
     await p.play();
-    creados[0]!._cb().onStallStart();
-    expect(creados[0]!.paused, 'el que se atasca sigue sin pausarse').toBe(false);
-    expect(creados[1]!.paused, 'el otro sí').toBe(true);
+    created[0]!._cb().onStallStart();
+    expect(created[0]!.paused, 'the stalled one is still not paused').toBe(false);
+    expect(created[1]!.paused, 'the other is').toBe(true);
   });
 
-  it('no resucita un vídeo que el usuario había pausado', async () => {
-    const { p, creados } = nuevo(DUAL);
+  it('does not resume a video the user had paused', async () => {
+    const { p, created } = setup(DUAL);
     await p.play();
     p.pause();
-    creados[1]!._cb().onStallEnd(300);
-    expect(creados.every((e) => e.paused), 'debe seguir pausado').toBe(true);
+    created[1]!._cb().onStallEnd(300);
+    expect(created.every((e) => e.paused), 'must stay paused').toBe(true);
   });
 });
 
-describe('Player · el estado sale del medio, no de la intención', () => {
-  it('si el elemento arranca por su cuenta, el estado lo refleja', async () => {
-    // Sin esto la interfaz muestra lo que el Player creía que iba a pasar: el
-    // botón decía "Reproducir" con el vídeo sonando.
-    const { p, creados } = nuevo(MONO);
+describe('Player · state comes from the media, not intent', () => {
+  it('if the element starts on its own, the state shows it', async () => {
+    const { p, created } = setup(MONO);
     await p.attach();
-    creados[0]!._cb().onPlay();
+    created[0]!._cb().onPlay();
     expect(p.state).toBe('active');
   });
 
-  it('si el navegador lo pausa por su cuenta, el estado lo refleja', async () => {
-    const { p, creados } = nuevo(MONO);
+  it('if the browser pauses it on its own, the state shows it', async () => {
+    const { p, created } = setup(MONO);
     await p.play();
     expect(p.state).toBe('active');
-    creados[0]!._cb().onPause();
+    created[0]!._cb().onPause();
     expect(p.state).toBe('attached');
   });
 
-  it('emite play y pause una sola vez', async () => {
-    const { p } = nuevo(MONO);
+  it('emits play and pause once', async () => {
+    const { p } = setup(MONO);
     const onPlay = vi.fn(), onPause = vi.fn();
     p.on('play', onPlay); p.on('pause', onPause);
     await p.play();
@@ -414,9 +387,9 @@ describe('Player · el estado sale del medio, no de la intención', () => {
   });
 });
 
-describe('Player · destrucción', () => {
-  it('suelta todo y deja de emitir', async () => {
-    const { p } = nuevo(DUAL);
+describe('Player · destruction', () => {
+  it('releases everything and stops emitting', async () => {
+    const { p } = setup(DUAL);
     await p.attach();
     const fn = vi.fn();
     p.on('play', fn);
@@ -426,109 +399,101 @@ describe('Player · destrucción', () => {
     expect(fn).not.toHaveBeenCalled();
   });
 
-  it('destruir dos veces no falla', async () => {
-    const { p } = nuevo(MONO);
+  it('destroying twice does not fail', async () => {
+    const { p } = setup(MONO);
     await p.attach();
     expect(() => { p.destroy(); p.destroy(); }).not.toThrow();
   });
 });
 
-describe('Player · borde de la emisión', () => {
-  const DIRECTO = {
+describe('Player · live edge', () => {
+  const LIVE = {
     id: 'v', live: true,
     streams: [{ id: 'cam', role: 'presenter', audio: true,
                 sources: [{ src: 'v.m3u8', type: 'application/vnd.apple.mpegurl' }] }],
   };
 
-  /** Le pone al motor una ventana recorrible de `[inicio, fin]`. */
-  const conVentana = (e: object, inicio: number, fin: number) => {
+  /** Gives the engine a seekable window of `[start, end]`. */
+  const withWindow = (e: object, start: number, end: number) => {
     Object.defineProperty(e, 'seekable', {
       configurable: true,
-      get: () => ({ length: 1, start: () => inicio, end: () => fin }) as TimeRanges,
+      get: () => ({ length: 1, start: () => start, end: () => end }) as TimeRanges,
     });
   };
 
-  it('la ventana DVR y el borde salen de seekable', async () => {
-    const { p, creados } = nuevo(DIRECTO);
+  it('the DVR window and edge come from seekable', async () => {
+    const { p, created } = setup(LIVE);
     await p.attach();
-    conVentana(creados[0]!, 40, 160);
+    withWindow(created[0]!, 40, 160);
     expect(p.dvrWindow).toBe(120);
     expect(p.liveEdge).toBe(160);
   });
 
-  it('sin borde conocido no se está en el borde', async () => {
-    const { p } = nuevo(DIRECTO);
+  it('without a known edge it is not at the edge', async () => {
+    const { p } = setup(LIVE);
     await p.attach();
-    // El motor no publica ventana: `liveEdge` y `currentTime` valen ambos 0.
-    // Restarlos da 0, que entra en la tolerancia, y antes eso bastaba para
-    // declarar "EN DIRECTO" un evento que todavía no había empezado.
+    // Both 0 used to fall within tolerance and showed LIVE before the event began.
     expect(p.liveEdge).toBe(0);
     expect(p.atLiveEdge).toBe(false);
   });
 
-  it('retrasarse lo suficiente saca del borde, y volver reengancha', async () => {
-    const { p, creados } = nuevo(DIRECTO);
+  it('falling far enough behind leaves the edge, and going back rejoins it', async () => {
+    const { p, created } = setup(LIVE);
     await p.attach();
-    const motor = creados[0]! as Record<string, any>;
-    conVentana(motor, 40, 160);
+    const engine = created[0]! as Record<string, any>;
+    withWindow(engine, 40, 160);
 
-    motor._set(158);
+    engine._set(158);
     expect(p.atLiveEdge).toBe(true);
 
-    motor._set(100);
+    engine._set(100);
     expect(p.behindLive).toBe(60);
     expect(p.atLiveEdge).toBe(false);
 
-    // Deja margen en vez de ir al final exacto: el último instante casi nunca
-    // está en el búfer todavía.
+    // A margin, since the very last instant is rarely buffered yet.
     p.seekToLive();
     expect(p.currentTime).toBeLessThan(160);
     expect(p.atLiveEdge).toBe(true);
   });
 
-  it('con segmentos largos, va donde recomienda el motor y no al borde', async () => {
-    /*
-     * Con segmentos de 6 s, quedarse a 3 s del borde es quedarse sin datos
-     * hasta que se publica el siguiente: medido, 15 s entrecortados al volver
-     * al directo. hls.js sabe dónde conviene estar y el motor lo publica.
-     */
-    const { p, creados } = nuevo(DIRECTO);
+  it('with long segments, goes where the engine recommends, not to the edge', async () => {
+    // see docs/browser-quirks.md#live-segment-latency
+    const { p, created } = setup(LIVE);
     await p.attach();
-    const motor = creados[0]! as Record<string, any>;
-    conVentana(motor, 40, 160);
-    motor['liveSyncPosition'] = () => 142;
+    const engine = created[0]! as Record<string, any>;
+    withWindow(engine, 40, 160);
+    engine['liveSyncPosition'] = () => 142;
 
-    motor._set(100);
+    engine._set(100);
     p.seekToLive();
     expect(p.currentTime).toBe(142);
-    // 18 s por detrás del borde, pero es donde se recomienda estar: es directo.
+    // 18 s behind the edge, but where it is recommended to be: that is live.
     expect(p.atLiveEdge).toBe(true);
 
-    // Unos segundos por detrás de lo recomendado sigue siendo directo: el
-    // borde avanza a saltos de un segmento.
-    motor._set(135);
+    // The edge moves a segment at a time, so a little behind is still live.
+    engine._set(135);
     expect(p.atLiveEdge).toBe(true);
 
-    motor._set(120);
-    expect(p.atLiveEdge, 'bastante más atrás, ya no').toBe(false);
+    engine._set(120);
+    expect(p.atLiveEdge, 'much further back, no longer').toBe(false);
   });
 
-  it('bajo demanda nada de esto aplica', async () => {
-    const { p, creados } = nuevo(MONO);
+  it('none of this applies on demand', async () => {
+    const { p, created } = setup(MONO);
     await p.attach();
-    conVentana(creados[0]!, 0, 60);
+    withWindow(created[0]!, 0, 60);
     expect(p.atLiveEdge).toBe(false);
     expect(p.behindLive).toBe(0);
   });
 });
 
-describe('Player · sin motor capaz', () => {
-  it('falla con engine/unsupported y vuelve a resolved', async () => {
-    const inutil: EngineFactory = {
-      name: 'inutil', canPlay: () => 'no',
-      create: () => { throw new Error('no usado'); },
+describe('Player · no capable engine', () => {
+  it('fails with engine/unsupported and returns to resolved', async () => {
+    const useless: EngineFactory = {
+      name: 'useless', canPlay: () => 'no',
+      create: () => { throw new Error('unused'); },
     };
-    const p = new Player({ container, manifest: MONO as never, engines: [inutil] });
+    const p = new Player({ container, manifest: MONO as never, engines: [useless] });
     await expect(p.attach()).rejects.toMatchObject({ code: 'engine/unsupported' });
     expect(p.state).toBe('resolved');
     expect(container.children).toHaveLength(0);

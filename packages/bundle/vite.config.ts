@@ -3,9 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 const src = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
-// Al revés que los demás paquetes: aquí **no** se externaliza nada. Que el
-// núcleo, la interfaz, los subtítulos y los capítulos queden dentro es justamente el motivo de
-// que este paquete exista — una etiqueta `<script>` no resuelve imports.
+// Unlike the other packages nothing is externalised: a `<script>` tag cannot resolve imports.
 export default defineConfig({
   resolve: {
     alias: {
@@ -19,17 +17,9 @@ export default defineConfig({
     lib: {
       entry: src('src/index.ts'),
       name: 'NanoPlayer',
-      /*
-       * Tres formatos, y el UMD **no sustituye al IIFE** aunque lo parezca.
-       *
-       * UMD mira primero si hay `define.amd`. En una página que ya carga
-       * RequireJS —Moodle es el caso— un `<script src>` de UMD se registra
-       * como módulo anónimo y **no crea la global**: la etiqueta dejaría de
-       * funcionar justo donde más falta hace. Por eso conviven:
-       *
-       *   nanoplayer.min.js   IIFE, siempre deja la global. Para `<script>`.
-       *   nanoplayer.umd.js   UMD, para cargadores AMD y para CommonJS.
-       */
+      // UMD does not replace the IIFE: with RequireJS on the page (Moodle) a UMD
+      // `<script src>` registers as an anonymous module and creates no global.
+      // Checked by e2e/integration.mjs.
       formats: ['es', 'iife', 'umd'],
       fileName: (format) => {
         if (format === 'iife') return 'nanoplayer.min.js';

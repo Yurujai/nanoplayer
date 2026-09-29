@@ -4,15 +4,15 @@ import type { EngineFactory } from '../src/engine.js';
 import { Player } from '../src/player.js';
 import { PlayerRegistry, createBatchResolver } from '../src/registry.js';
 
-/** Motor de mentira que engancha al instante. */
-const factoriaFalsa = (): EngineFactory => ({
-  name: 'falso',
+/** Fake engine that attaches instantly. */
+const fakeFactory = (): EngineFactory => ({
+  name: 'fake',
   canPlay: () => 'probably',
   create() {
     let paused = true, t = 0;
     let cb: { onPlay?: () => void; onPause?: () => void } = {};
     return {
-      name: 'falso',
+      name: 'fake',
       get element() { return { seeking: false } as HTMLVideoElement; },
       get attached() { return true; },
       async attach(c: HTMLElement, _s: unknown, o?: { callbacks?: typeof cb }) {
@@ -20,7 +20,7 @@ const factoriaFalsa = (): EngineFactory => ({
         c.appendChild(document.createElement('video'));
       },
       detach() {},
-      // El Player deduce el estado de estos avisos, como con un <video> real.
+      // The Player derives its state from these, as with a real <video>.
       async play() { paused = false; cb.onPlay?.(); },
       pause() { paused = true; cb.onPause?.(); },
       seek(s: number) { t = s; },
@@ -39,30 +39,30 @@ const factoriaFalsa = (): EngineFactory => ({
   },
 });
 
-const MANIFIESTO = {
+const MANIFEST = {
   id: 'x', duration: 60,
   streams: [{ id: 'cam', role: 'presenter', audio: true,
               sources: [{ src: 'a.mp4', type: 'video/mp4' }] }],
 };
 
-let reloj = 0;
-const nuevoPlayer = () => {
+let clock = 0;
+const newPlayer = () => {
   const container = document.createElement('div');
   document.body.appendChild(container);
   return new Player({
-    container, manifest: MANIFIESTO as never, engines: [factoriaFalsa()],
+    container, manifest: MANIFEST as never, engines: [fakeFactory()],
   });
 };
 
 beforeEach(() => {
   document.body.innerHTML = '';
-  reloj = 0;
+  clock = 0;
 });
 
-describe('reproducción exclusiva', () => {
-  it('al reproducir uno se pausan los demás', async () => {
-    const r = new PlayerRegistry({ now: () => reloj++ });
-    const a = nuevoPlayer(), b = nuevoPlayer();
+describe('exclusive playback', () => {
+  it('playing one pauses the others', async () => {
+    const r = new PlayerRegistry({ now: () => clock++ });
+    const a = newPlayer(), b = newPlayer();
     r.register(a); r.register(b);
 
     await a.play();
@@ -70,12 +70,12 @@ describe('reproducción exclusiva', () => {
 
     await b.play();
     expect(b.state).toBe('active');
-    expect(a.state, 'el primero debe haberse pausado').toBe('attached');
+    expect(a.state, 'the first must have paused').toBe('attached');
   });
 
-  it('se puede desactivar', async () => {
-    const r = new PlayerRegistry({ exclusive: false, now: () => reloj++ });
-    const a = nuevoPlayer(), b = nuevoPlayer();
+  it('can be turned off', async () => {
+    const r = new PlayerRegistry({ exclusive: false, now: () => clock++ });
+    const a = newPlayer(), b = newPlayer();
     r.register(a); r.register(b);
     await a.play();
     await b.play();
@@ -83,23 +83,22 @@ describe('reproducción exclusiva', () => {
     expect(b.state).toBe('active');
   });
 
-  it('deja de aplicarse al darse de baja', async () => {
-    const r = new PlayerRegistry({ now: () => reloj++ });
-    const a = nuevoPlayer(), b = nuevoPlayer();
-    const baja = r.register(a); r.register(b);
+  it('stops applying once unregistered', async () => {
+    const r = new PlayerRegistry({ now: () => clock++ });
+    const a = newPlayer(), b = newPlayer();
+    const unregister = r.register(a); r.register(b);
     await a.play();
-    baja();
+    unregister();
     await b.play();
     expect(a.state).toBe('active');
   });
 });
 
-describe('presupuesto de recursos', () => {
-  it('suelta el motor del menos usado al pasarse', async () => {
-    // S2 midió el techo del navegador en 17 elementos <video> en WebKit y 18
-    // en Blink: sin presupuesto, una página con muchos reproductores lo agota.
-    const r = new PlayerRegistry({ maxAttached: 2, now: () => reloj++ });
-    const a = nuevoPlayer(), b = nuevoPlayer(), c = nuevoPlayer();
+describe('resource budget', () => {
+  it('releases the least recently used engine when over budget', async () => {
+    // see docs/browser-quirks.md#decoder-limit
+    const r = new PlayerRegistry({ maxAttached: 2, now: () => clock++ });
+    const a = newPlayer(), b = newPlayer(), c = newPlayer();
     r.register(a); r.register(b); r.register(c);
 
     await a.attach();
@@ -107,14 +106,14 @@ describe('presupuesto de recursos', () => {
     expect(r.attachedCount).toBe(2);
 
     await c.attach();
-    expect(r.attachedCount, 'debe volver al presupuesto').toBe(2);
-    expect(a.state, 'el más antiguo pierde el motor').toBe('resolved');
+    expect(r.attachedCount, 'must return to budget').toBe(2);
+    expect(a.state, 'the oldest loses its engine').toBe('resolved');
     expect(c.state).toBe('attached');
   });
 
-  it('el desalojado conserva su posición', async () => {
-    const r = new PlayerRegistry({ maxAttached: 1, now: () => reloj++ });
-    const a = nuevoPlayer(), b = nuevoPlayer();
+  it('the evicted one keeps its position', async () => {
+    const r = new PlayerRegistry({ maxAttached: 1, now: () => clock++ });
+    const a = newPlayer(), b = newPlayer();
     r.register(a); r.register(b);
 
     await a.attach();
@@ -125,99 +124,97 @@ describe('presupuesto de recursos', () => {
     expect(a.resumeAt).toBe(25);
   });
 
-  it('nunca desaloja al que acaba de engancharse', async () => {
-    const r = new PlayerRegistry({ maxAttached: 1, now: () => reloj++ });
-    const a = nuevoPlayer(), b = nuevoPlayer();
+  it('never evicts the one that just attached', async () => {
+    const r = new PlayerRegistry({ maxAttached: 1, now: () => clock++ });
+    const a = newPlayer(), b = newPlayer();
     r.register(a); r.register(b);
     await a.attach();
     await b.attach();
     expect(b.state).toBe('attached');
   });
 
-  it('prefiere desalojar a los pausados antes que a los que reproducen', async () => {
-    // Quitarle el motor a un vídeo en marcha es justo lo que no debe pasar.
-    const r = new PlayerRegistry({ maxAttached: 2, exclusive: false, now: () => reloj++ });
-    const reproduciendo = nuevoPlayer(), pausado = nuevoPlayer(), nuevo = nuevoPlayer();
-    r.register(reproduciendo); r.register(pausado); r.register(nuevo);
+  it('prefers evicting paused players over playing ones', async () => {
+    const r = new PlayerRegistry({ maxAttached: 2, exclusive: false, now: () => clock++ });
+    const playing = newPlayer(), paused = newPlayer(), latest = newPlayer();
+    r.register(playing); r.register(paused); r.register(latest);
 
-    await reproduciendo.play();     // el más antiguo, pero está activo
-    await pausado.attach();
-    await nuevo.attach();
+    await playing.play();           // the oldest, but active
+    await paused.attach();
+    await latest.attach();
 
-    expect(reproduciendo.state, 'sigue reproduciendo').toBe('active');
-    expect(pausado.state, 'el pausado cede el motor').toBe('resolved');
+    expect(playing.state, 'still playing').toBe('active');
+    expect(paused.state, 'the paused one gives up its engine').toBe('resolved');
   });
 
-  it('sin presupuesto configurado no desaloja a nadie', async () => {
-    const r = new PlayerRegistry({ now: () => reloj++ });
-    const ps = [nuevoPlayer(), nuevoPlayer(), nuevoPlayer()];
+  it('with no budget configured it evicts nobody', async () => {
+    const r = new PlayerRegistry({ now: () => clock++ });
+    const ps = [newPlayer(), newPlayer(), newPlayer()];
     for (const p of ps) r.register(p);
     for (const p of ps) await p.attach();
     expect(r.attachedCount).toBe(3);
   });
 });
 
-describe('resolución por visibilidad', () => {
-  it('solo resuelve lo que entra en pantalla', async () => {
-    // Con 32 reproductores en una página, apenas unos pocos se ven.
+describe('resolution on visibility', () => {
+  it('resolves only what comes on screen', async () => {
     let callback: IntersectionObserverCallback | null = null;
-    const observados: Element[] = [];
+    const observed: Element[] = [];
     const r = new PlayerRegistry({
       resolveWhenVisible: true,
       createObserver: (cb) => {
         callback = cb;
         return {
-          observe: (el: Element) => observados.push(el),
+          observe: (el: Element) => observed.push(el),
           unobserve: () => {}, disconnect: () => {},
         } as unknown as IntersectionObserver;
       },
     });
 
-    const a = nuevoPlayer(), b = nuevoPlayer();
+    const a = newPlayer(), b = newPlayer();
     r.register(a); r.register(b);
-    expect(observados).toHaveLength(2);
+    expect(observed).toHaveLength(2);
     expect(a.state).toBe('idle');
 
     callback!([{ target: a.container, isIntersecting: true } as never], null as never);
     await new Promise((res) => setTimeout(res, 0));
 
-    expect(a.state, 'el visible resuelve').toBe('resolved');
-    expect(b.state, 'el que sigue fuera no').toBe('idle');
+    expect(a.state, 'the visible one resolves').toBe('resolved');
+    expect(b.state, 'the one still off screen does not').toBe('idle');
   });
 
-  it('sin IntersectionObserver el registro sigue funcionando', async () => {
+  it('without IntersectionObserver the registry still works', async () => {
     const r = new PlayerRegistry({
       resolveWhenVisible: true,
-      createObserver: () => { throw new Error('no soportado'); },
-      now: () => reloj++,
+      createObserver: () => { throw new Error('unsupported'); },
+      now: () => clock++,
     });
-    const a = nuevoPlayer(), b = nuevoPlayer();
+    const a = newPlayer(), b = newPlayer();
     expect(() => { r.register(a); r.register(b); }).not.toThrow();
     await a.play(); await b.play();
-    expect(a.state, 'la exclusividad sigue aplicándose').toBe('attached');
+    expect(a.state, 'exclusivity still applies').toBe('attached');
   });
 });
 
-describe('gestión del registro', () => {
-  it('un reproductor destruido se da de baja solo', async () => {
-    const r = new PlayerRegistry({ now: () => reloj++ });
-    const a = nuevoPlayer();
+describe('registry management', () => {
+  it('a destroyed player unregisters itself', async () => {
+    const r = new PlayerRegistry({ now: () => clock++ });
+    const a = newPlayer();
     r.register(a);
     expect(r.size).toBe(1);
     a.destroy();
     expect(r.size).toBe(0);
   });
 
-  it('registrar dos veces no duplica', () => {
+  it('registering twice does not duplicate', () => {
     const r = new PlayerRegistry();
-    const a = nuevoPlayer();
+    const a = newPlayer();
     r.register(a); r.register(a);
     expect(r.size).toBe(1);
   });
 
-  it('pauseAll y detachAll actúan sobre todos', async () => {
-    const r = new PlayerRegistry({ exclusive: false, now: () => reloj++ });
-    const ps = [nuevoPlayer(), nuevoPlayer()];
+  it('pauseAll and detachAll act on all', async () => {
+    const r = new PlayerRegistry({ exclusive: false, now: () => clock++ });
+    const ps = [newPlayer(), newPlayer()];
     for (const p of ps) { r.register(p); await p.play(); }
 
     r.pauseAll();
@@ -229,8 +226,7 @@ describe('gestión del registro', () => {
 });
 
 describe('createBatchResolver', () => {
-  it('junta varias peticiones en una sola llamada', async () => {
-    // El problema original: 32 reproductores generaban 32 peticiones.
+  it('batches several requests into one call', async () => {
     const fetchMany = vi.fn(async (ids: string[]) =>
       Object.fromEntries(ids.map((id) => [id, { id }])));
     const resolver = createBatchResolver(fetchMany, { windowMs: 5 });
@@ -242,7 +238,7 @@ describe('createBatchResolver', () => {
     expect(r).toEqual([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
   });
 
-  it('deduplica: dos reproductores del mismo vídeo comparten respuesta', async () => {
+  it('deduplicates: two players of the same video share the response', async () => {
     const fetchMany = vi.fn(async (ids: string[]) =>
       Object.fromEntries(ids.map((id) => [id, { id }])));
     const resolver = createBatchResolver(fetchMany, { windowMs: 5 });
@@ -252,7 +248,7 @@ describe('createBatchResolver', () => {
     expect(x).toEqual(y);
   });
 
-  it('vacía el lote al llegar al tope sin esperar la ventana', async () => {
+  it('flushes the batch at the cap without waiting for the window', async () => {
     const fetchMany = vi.fn(async (ids: string[]) =>
       Object.fromEntries(ids.map((id) => [id, { id }])));
     const resolver = createBatchResolver(fetchMany, { windowMs: 10_000, maxBatch: 2 });
@@ -262,13 +258,13 @@ describe('createBatchResolver', () => {
     expect(fetchMany).toHaveBeenCalledTimes(1);
   });
 
-  it('un fallo del lote rechaza a todos los que esperaban', async () => {
+  it('a batch failure rejects everyone waiting', async () => {
     const resolver = createBatchResolver(async () => { throw new Error('500'); },
       { windowMs: 5 });
     await expect(Promise.all([resolver('a'), resolver('b')])).rejects.toThrow('500');
   });
 
-  it('si el lote no trae una clave, solo falla esa', async () => {
+  it('if the batch lacks a key, only that one fails', async () => {
     const resolver = createBatchResolver(
       async () => ({ a: { id: 'a' } }), { windowMs: 5 });
     const [ra, rb] = await Promise.allSettled([resolver('a'), resolver('b')]);
@@ -276,7 +272,7 @@ describe('createBatchResolver', () => {
     expect(rb.status).toBe('rejected');
   });
 
-  it('lotes sucesivos son independientes', async () => {
+  it('successive batches are independent', async () => {
     const fetchMany = vi.fn(async (ids: string[]) =>
       Object.fromEntries(ids.map((id) => [id, { id }])));
     const resolver = createBatchResolver(fetchMany, { windowMs: 5 });

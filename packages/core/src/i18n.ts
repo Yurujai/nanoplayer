@@ -1,150 +1,104 @@
 /**
- * Catálogo de textos.
- *
- * El núcleo **no tiene ni una cadena traducible**: aquí solo vive el mecanismo.
- * Cada paquete aporta las suyas —la interfaz las de la barra, cada plugin las
- * del suyo— igual que con los anclajes: el núcleo define el contrato y otros lo
- * rellenan.
- *
- * Antes había cinco tablas repartidas por dos paquetes, cada una con su propia
- * forma de deducir el idioma. Eso tenía dos consecuencias malas: añadir un
- * idioma obligaba a tocar seis ficheros —o sea, a forkear, que es justo lo que
- * este proyecto dice evitar— y cada plugin nuevo traía una tabla más con la que
- * desincronizarse.
- *
- * Las claves van con espacio de nombres por paquete (`ui.play`,
- * `captions.label`). Una clave que no existe **se devuelve tal cual** en vez de
- * quedarse en blanco: un hueco vacío en la interfaz no dice dónde mirar, y un
- * botón que pone `ui.play` sí.
+ * String catalogue. The core has no translatable strings, only the mechanism:
+ * each package registers its own under a namespace (`ui.play`,
+ * `captions.label`). A missing key is returned as is, so a button reading
+ * `ui.play` says where to look where a blank one would not.
  */
 
-/** Un idioma entero: claves planas con puntos. */
+/** One language: flat dotted keys. */
 export type Catalogue = Readonly<Record<string, string>>;
 
-/** Catálogos por idioma, tal como los pasa quien integra. */
+/** Catalogues by language, as an integrator passes them. */
 export type Catalogues = Readonly<Record<string, Catalogue>>;
 
 /**
- * Traduce una clave.
- *
- * Las variables se escriben `{asi}`. Existen porque componer a mano
- * —`` `${behind}: ${tiempo}` ``— fija el orden de las palabras en español y
- * deja al traductor sin margen; hay idiomas donde el tiempo va delante.
+ * Translates a key. Variables are written `{like_this}`, so each language can
+ * put words in its own order.
  */
 export interface Translate {
   (key: string, vars?: Readonly<Record<string, string | number>>): string;
-  /** Idioma resuelto, para quien necesite pasárselo a `Intl`. */
+  /** The resolved language, to pass to `Intl`. */
   readonly lang: string;
 }
 
-/** Idioma al que se cae cuando no hay nada mejor. */
-export const IDIOMA_BASE = 'es';
+/** The language to fall back to. */
+export const BASE_LANGUAGE = 'es';
 
-/** `es-MX` también sirve un catálogo `es`. */
-function candidatos(lang: string): string[] {
-  const limpio = (lang || '').trim();
-  if (!limpio) return [IDIOMA_BASE];
-  const corto = limpio.slice(0, 2).toLowerCase();
-  const lista = [limpio.toLowerCase()];
-  if (corto !== limpio.toLowerCase()) lista.push(corto);
-  if (!lista.includes(IDIOMA_BASE)) lista.push(IDIOMA_BASE);
-  return lista;
+/** `es-MX` is also served by an `es` catalogue. */
+function candidates(lang: string): string[] {
+  const clean = (lang || '').trim();
+  if (!clean) return [BASE_LANGUAGE];
+  const short = clean.slice(0, 2).toLowerCase();
+  const list = [clean.toLowerCase()];
+  if (short !== clean.toLowerCase()) list.push(short);
+  if (!list.includes(BASE_LANGUAGE)) list.push(BASE_LANGUAGE);
+  return list;
 }
 
-function interpolar(
-  plantilla: string,
+function interpolate(
+  template: string,
   vars?: Readonly<Record<string, string | number>>,
 ): string {
-  if (!vars) return plantilla;
-  return plantilla.replace(/\{(\w+)\}/g, (entero, nombre: string) =>
-    nombre in vars ? String(vars[nombre]) : entero);
+  if (!vars) return template;
+  return template.replace(/\{(\w+)\}/g, (whole, name: string) =>
+    name in vars ? String(vars[name]) : whole);
 }
 
-/**
- * Dónde se juntan los catálogos de todos los paquetes.
- *
- * Es una clase y no un objeto suelto para poder tener instancias aisladas en
- * las pruebas, igual que `PluginRegistry`.
- */
+/** Where every package's catalogue meets. A class so tests can isolate instances. */
 export class StringRegistry {
-  readonly #catalogos = new Map<string, Record<string, string>>();
+  readonly #catalogues = new Map<string, Record<string, string>>();
 
-  /**
-   * Aporta las cadenas de un paquete. Lo llama el propio paquete al cargarse.
-   *
-   * Registrar dos veces el mismo idioma **fusiona** en vez de reemplazar: los
-   * paquetes se cargan en cualquier orden y ninguno debería pisar al anterior.
-   */
+  /** Registering a language twice merges: packages load in any order. */
   register(lang: string, catalogue: Catalogue): void {
-    const clave = lang.toLowerCase();
-    const actual = this.#catalogos.get(clave) ?? {};
-    Object.assign(actual, catalogue);
-    this.#catalogos.set(clave, actual);
+    const key = lang.toLowerCase();
+    const current = this.#catalogues.get(key) ?? {};
+    Object.assign(current, catalogue);
+    this.#catalogues.set(key, current);
   }
 
-  /** Idiomas con al menos una cadena registrada. */
   get languages(): string[] {
-    return [...this.#catalogos.keys()];
+    return [...this.#catalogues.keys()];
   }
 
-  /** Si hay catálogo para ese idioma, aunque sea parcial. */
   has(lang: string): boolean {
-    return this.#catalogos.has(lang.toLowerCase());
+    return this.#catalogues.has(lang.toLowerCase());
   }
 
-  /**
-   * Las claves registradas para un idioma. Vacío si no hay catálogo.
-   *
-   * Existe para poder comprobar que una traducción está completa: comparar
-   * contra el idioma base es lo que evita que entre un idioma a medias y nadie
-   * se entere hasta que un botón aparece sin nombre. Le sirve igual a quien
-   * añada un idioma por `strings` sin tocar el proyecto.
-   */
+  /** Keys registered for a language, to check a translation is complete. */
   keys(lang: string): string[] {
-    const c = this.#catalogos.get(lang.toLowerCase());
+    const c = this.#catalogues.get(lang.toLowerCase());
     return c ? Object.keys(c) : [];
   }
 
   /**
-   * Una función de traducción atada a un idioma.
-   *
-   * `overrides` manda sobre todo lo registrado, y por eso añadir un idioma o
-   * cambiar una palabra es configuración y no un parche. El caso real no es
-   * traducir: es que una universidad quiera «Pizarra» donde pone
-   * «Diapositivas», y eso no debería acabar nunca en un PR al proyecto.
+   * A translate function bound to a language. `overrides` win over everything
+   * registered, so adding a language or changing one word is configuration.
    */
   translator(lang: string, overrides?: Catalogues): Translate {
-    const orden = candidatos(lang);
-    const sobre = overrides
+    const order = candidates(lang);
+    const own = overrides
       ? new Map(Object.entries(overrides).map(([k, v]) => [k.toLowerCase(), v]))
       : null;
 
     const t = ((key, vars) => {
-      for (const idioma of orden) {
-        const propio = sobre?.get(idioma)?.[key];
-        if (propio !== undefined) return interpolar(propio, vars);
-        const registrado = this.#catalogos.get(idioma)?.[key];
-        if (registrado !== undefined) return interpolar(registrado, vars);
+      for (const language of order) {
+        const overridden = own?.get(language)?.[key];
+        if (overridden !== undefined) return interpolate(overridden, vars);
+        const registered = this.#catalogues.get(language)?.[key];
+        if (registered !== undefined) return interpolate(registered, vars);
       }
       return key;
     }) as (key: string, vars?: Readonly<Record<string, string | number>>) => string;
 
-    /*
-     * `lang` se resuelve al leerlo, no al crear el traductor.
-     *
-     * Los paquetes registran sus cadenas al importarse y nadie garantiza que
-     * eso ocurra antes de construir el reproductor. Calculándolo de antemano,
-     * un traductor creado pronto se quedaría con el idioma de respaldo para
-     * siempre, y los tiempos hablados saldrían en un idioma distinto del de
-     * los botones.
-     */
+    // Resolved on read: packages may register after the translator is created,
+    // and a precomputed value would stick to the fallback language.
     Object.defineProperty(t, 'lang', {
-      get: () => orden.find((l) => this.#catalogos.has(l)) ?? orden[0] ?? IDIOMA_BASE,
+      get: () => order.find((l) => this.#catalogues.has(l)) ?? order[0] ?? BASE_LANGUAGE,
       enumerable: true,
     });
     return t as Translate;
   }
 }
 
-/** Registro compartido: donde los paquetes dejan sus cadenas al cargarse. */
+/** The shared registry packages register their strings in. */
 export const strings = new StringRegistry();

@@ -1,29 +1,12 @@
 /**
- * Validación del manifiesto, escrita a mano y sin dependencias.
- *
- * Sin librería de esquemas, y **no por ahorrar kilobytes** — hay opciones que
- * pesan poco. Por dos motivos que no dependen del tamaño:
- *
- *   1. Cero dependencias en tiempo de ejecución. Esto acaba incrustado en
- *      aplicaciones ajenas, y los conflictos de versiones los paga quien
- *      integra, no quien publica.
- *   2. Los mensajes de error llevan razonamiento de dominio dentro. Un
- *      validador genérico diría "esperaba 1, recibí 2"; aquí interesa explicar
- *      *por qué* dos pistas de audio rompen en iOS.
- *
- * El riesgo real de hacerlo a mano es que los tipos y las comprobaciones se
- * separen con el tiempo. Se ataca de frente con el guardián de deriva de
- * `test/manifest-drift.test.ts`, que deja de compilar si se añade un campo sin
- * decidir qué hacer con él.
- *
- * Las reglas no son burocracia: varias codifican lo medido en los spikes, y
- * saltarse cualquiera de ellas produce un reproductor que falla en runtime en
- * un dispositivo concreto y no en el de quien lo integra.
+ * Hand-written manifest validation, with no runtime dependency: messages carry
+ * domain reasoning (why two audio tracks break iOS), and
+ * `test/manifest-drift.test.ts` keeps types and checks from drifting apart.
  */
 import type { Manifest } from './manifest.js';
 
 export interface ValidationIssue {
-  /** Ruta tipo `streams[1].sources[0].src`, para poder ir al sitio. */
+  /** A path like `streams[1].sources[0].src`, to find the spot. */
   path: string;
   message: string;
 }
@@ -99,7 +82,6 @@ export function validateManifest(input: unknown): ValidationResult {
       if (s['kind'] !== undefined && s['kind'] !== 'video' && s['kind'] !== 'audio') {
         err(`${at}.kind`, 'Must be either "video" or "audio"');
       }
-      // Un stream sin imagen que además no lleva sonido no reproduce nada.
       if (s['kind'] === 'audio' && s['audio'] === false) {
         err(at, 'An audio-only stream with `audio: false` contributes nothing');
       }
@@ -107,10 +89,8 @@ export function validateManifest(input: unknown): ValidationResult {
       checkSources(s['sources'], `${at}.sources`);
     });
 
-    // Regla central del modelo maestro/esclavo. Medido en los spikes:
-    //   S1 — al stream con audio no se le puede alterar el playbackRate sin
-    //        que se oiga, así que es forzosamente el maestro del reloj.
-    //   S2 — iPhone no reproduce dos audios a la vez (dualAudio: false).
+    // Exactly one audio stream: it is the clock master (S1), and iPhone cannot
+    // play two. see docs/browser-quirks.md#ios-single-audio
     if (withAudio === 0) {
       err('streams', 'No stream carries audio: the synchronisation clock master is missing');
     } else if (withAudio > 1) {
@@ -120,14 +100,9 @@ export function validateManifest(input: unknown): ValidationResult {
     }
   }
 
-  // --- cabecera y cola ----------------------------------------------------
-  // Independientes: cualquiera de las dos puede faltar. Si una se puede saltar
-  // no se valida porque no se declara: lo decide su papel, no el manifiesto.
-  //
-  // En directo se rechazan las dos. Mientras suena la cabecera la emisión
-  // avanza y se llega tarde al borde, y la cola depende de que la emisión
-  // termine, algo que el directo no garantiza (S6 §7). Es más fácil
-  // permitirlo el día que esté resuelto que retirarlo cuando ya se use.
+  // --- intro and outro ----------------------------------------------------
+  // Rejected on live streams: the broadcast moves on during the intro, and
+  // nothing guarantees it ends for the outro (S6 §7).
   for (const key of ['intro', 'outro'] as const) {
     const b = input[key];
     if (b === undefined) continue;
@@ -141,7 +116,7 @@ export function validateManifest(input: unknown): ValidationResult {
     checkSources(b['sources'], `${key}.sources`);
   }
 
-  // --- anotaciones --------------------------------------------------------
+  // --- annotations --------------------------------------------------------
   const annotations = input['annotations'];
   if (annotations !== undefined) {
     if (!Array.isArray(annotations)) {
@@ -179,7 +154,7 @@ export function validateManifest(input: unknown): ValidationResult {
     }
   }
 
-  // --- pistas de texto ----------------------------------------------------
+  // --- text tracks --------------------------------------------------------
   const textTracks = input['textTracks'];
   if (textTracks !== undefined) {
     if (!Array.isArray(textTracks)) {
@@ -201,7 +176,7 @@ export function validateManifest(input: unknown): ValidationResult {
   return { ok: true, manifest: input as unknown as Manifest, warnings };
 }
 
-/** Envoltorio que lanza. Cómodo cuando un manifiesto inválido no es recuperable. */
+/** Throwing wrapper, for when an invalid manifest is not recoverable. */
 export function parseManifest(input: unknown): Manifest {
   const r = validateManifest(input);
   if (!r.ok) {

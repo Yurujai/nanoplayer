@@ -1,10 +1,6 @@
 /**
- * Si cada flujo de un directo está emitiendo, y los reintentos cuando no.
- *
- * La espera crece entre intentos: un evento que empieza dos horas tarde serían
- * miles de peticiones inútiles por espectador. Con tope, porque una espera sin
- * límite tardaría minutos en enterarse de que ya ha empezado. Cómo se reconecta
- * un flujo no es cosa de esta clase: se lo dice quien la usa.
+ * Whether each stream of a live event is on air, and the retries when not.
+ * How a stream reconnects is up to the caller.
  */
 import type { CoreEvents } from './core-events.js';
 import type { EventBus } from './events.js';
@@ -13,13 +9,13 @@ import { LiveTracker, type LiveStatus, type RetryPolicy } from './live.js';
 export interface LiveBroadcastOptions {
   bus: EventBus<CoreEvents>;
   retry?: RetryPolicy;
-  /** Vuelve a intentar un flujo. Si falla, debe volver a marcarlo y reintentar. */
+  /** Retries a stream. On failure it must mark it unavailable and retry again. */
   reconnect: (streamId: string) => void;
 }
 
 export class LiveBroadcast {
   readonly #tracker = new LiveTracker();
-  readonly #esperas = new Map<string, ReturnType<typeof setTimeout>>();
+  readonly #timers = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(private readonly options: LiveBroadcastOptions) {}
 
@@ -32,25 +28,25 @@ export class LiveBroadcast {
   }
 
   markLive(streamId: string): void {
-    if (this.#tracker.markLive(streamId)) this.#anunciar(streamId);
+    if (this.#tracker.markLive(streamId)) this.#announce(streamId);
   }
 
   markUnavailable(streamId: string): void {
-    if (this.#tracker.markUnavailable(streamId)) this.#anunciar(streamId);
+    if (this.#tracker.markUnavailable(streamId)) this.#announce(streamId);
   }
 
   retryLater(streamId: string): void {
-    clearTimeout(this.#esperas.get(streamId));
-    const espera = this.#tracker.nextDelay(streamId, this.options.retry);
-    this.#esperas.set(streamId, setTimeout(() => {
-      this.#esperas.delete(streamId);
+    clearTimeout(this.#timers.get(streamId));
+    const delay = this.#tracker.nextDelay(streamId, this.options.retry);
+    this.#timers.set(streamId, setTimeout(() => {
+      this.#timers.delete(streamId);
       this.options.reconnect(streamId);
-    }, espera));
+    }, delay));
   }
 
   cancelRetries(): void {
-    for (const t of this.#esperas.values()) clearTimeout(t);
-    this.#esperas.clear();
+    for (const t of this.#timers.values()) clearTimeout(t);
+    this.#timers.clear();
   }
 
   reset(): void {
@@ -58,7 +54,7 @@ export class LiveBroadcast {
     this.#tracker.reset();
   }
 
-  #anunciar(streamId: string): void {
+  #announce(streamId: string): void {
     const status = this.#tracker.status(streamId);
     if (status === 'unknown') return;
     this.options.bus.emit('live:status', {

@@ -7,14 +7,14 @@ import {
   type Scheduler, type SyncProfile,
 } from '../src/sync.js';
 
-/** Motor de mentira con el tiempo bajo control, para poder provocar derivas. */
-function motorFalso(t = 0) {
+/** Fake engine with time under control, to cause drift. */
+function fakeEngine(t = 0) {
   let currentTime = t;
   let rate = 1;
   let seeking = false;
   const seeks: number[] = [];
   return {
-    name: 'falso',
+    name: 'fake',
     get element() { return { seeking } as HTMLVideoElement; },
     get attached() { return true; },
     attach: async () => {},
@@ -27,13 +27,13 @@ function motorFalso(t = 0) {
     get paused() { return false; },
     get ended() { return false; },
     get buffered() { return null; },
-        get seekable() { return null; },
+    get seekable() { return null; },
     getPlaybackRate: () => rate,
     setPlaybackRate(r: number) { rate = r; },
     setVolume: () => {},
     setMuted: () => {},
     destroy: () => {},
-    // Ayudas de prueba
+    // Test helpers
     _set(s: number) { currentTime = s; },
     _seeking(v: boolean) { seeking = v; },
     _seeks: seeks,
@@ -42,138 +42,134 @@ function motorFalso(t = 0) {
 
 const P: SyncProfile = SYNC_PROFILES.blink;
 
-let maestro: ReturnType<typeof motorFalso>;
-let esclavo: ReturnType<typeof motorFalso>;
+let master: ReturnType<typeof fakeEngine>;
+let slave: ReturnType<typeof fakeEngine>;
 
-const sinc = (profile: SyncProfile = P, scheduler?: Scheduler) =>
+const sync = (profile: SyncProfile = P, scheduler?: Scheduler) =>
   new Synchronizer({
-    master: { id: 'cam', engine: maestro },
-    slaves: [{ id: 'slides', engine: esclavo }],
+    master: { id: 'cam', engine: master },
+    slaves: [{ id: 'slides', engine: slave }],
     profile,
     ...(scheduler ? { scheduler } : {}),
   });
 
 beforeEach(() => {
-  maestro = motorFalso(10);
-  esclavo = motorFalso(10);
+  master = fakeEngine(10);
+  slave = fakeEngine(10);
 });
 
-describe('perfiles por motor', () => {
-  it('WebKit baja el umbral de salto duro, no sube la ganancia', () => {
-    // S2 midió en iPhone buena mediana con excursiones severas. Eso no se
-    // arregla con más ganancia: se arregla corrigiendo antes las excursiones.
+describe('per-engine profiles', () => {
+  it('WebKit lowers the hard-seek threshold, not the gain', () => {
+    // see docs/browser-quirks.md#sync-profiles
     expect(SYNC_PROFILES.webkit.hardSeek).toBeLessThan(SYNC_PROFILES.blink.hardSeek);
     expect(SYNC_PROFILES.webkit.gain).toBe(SYNC_PROFILES.blink.gain);
   });
 
-  it('detecta WebKit por ManagedMediaSource', () => {
+  it('detects WebKit by ManagedMediaSource', () => {
     const g = globalThis as { ManagedMediaSource?: unknown };
-    const previo = g.ManagedMediaSource;
+    const previous = g.ManagedMediaSource;
     g.ManagedMediaSource = function () {};
     expect(detectProfile()).toBe('webkit');
-    if (previo === undefined) delete g.ManagedMediaSource;
-    else g.ManagedMediaSource = previo;
+    if (previous === undefined) delete g.ManagedMediaSource;
+    else g.ManagedMediaSource = previous;
   });
 });
 
-describe('Synchronizer · corrección', () => {
-  it('no toca al maestro: su audio se oiría', () => {
-    esclavo._set(10.2);
-    sinc().tick();
-    expect(maestro.getPlaybackRate()).toBe(1);
+describe('Synchronizer · correction', () => {
+  it('does not touch the master: its audio would be heard', () => {
+    slave._set(10.2);
+    sync().tick();
+    expect(master.getPlaybackRate()).toBe(1);
   });
 
-  it('dentro de la zona muerta no corrige', () => {
-    esclavo._set(10 + P.deadZone / 2);
-    const [m] = sinc().tick();
+  it('does not correct inside the dead zone', () => {
+    slave._set(10 + P.deadZone / 2);
+    const [m] = sync().tick();
     expect(m!.action).toBe('ok');
-    expect(esclavo.getPlaybackRate()).toBe(1);
+    expect(slave.getPlaybackRate()).toBe(1);
   });
 
-  it('acelera al esclavo que va por detrás', () => {
-    esclavo._set(9.9);            // 100 ms por detrás
-    const [m] = sinc().tick();
+  it('speeds up a slave that lags behind', () => {
+    slave._set(9.9);            // 100 ms behind
+    const [m] = sync().tick();
     expect(m!.action).toBe('correcting');
-    expect(esclavo.getPlaybackRate()).toBeGreaterThan(1);
+    expect(slave.getPlaybackRate()).toBeGreaterThan(1);
   });
 
-  it('frena al esclavo que va por delante', () => {
-    esclavo._set(10.1);
-    sinc().tick();
-    expect(esclavo.getPlaybackRate()).toBeLessThan(1);
+  it('slows down a slave that runs ahead', () => {
+    slave._set(10.1);
+    sync().tick();
+    expect(slave.getPlaybackRate()).toBeLessThan(1);
   });
 
-  it('no supera el techo de velocidad', () => {
-    esclavo._set(10 - P.hardSeek * 0.9);   // deriva grande pero sin salto
-    sinc().tick();
-    expect(esclavo.getPlaybackRate()).toBeLessThanOrEqual(1 + P.maxRateDelta);
+  it('does not exceed the rate cap', () => {
+    slave._set(10 - P.hardSeek * 0.9);   // large drift, but no seek
+    sync().tick();
+    expect(slave.getPlaybackRate()).toBeLessThanOrEqual(1 + P.maxRateDelta);
   });
 
-  it('salta en duro cuando la deriva se dispara', () => {
-    esclavo._set(10 + P.hardSeek + 0.1);
-    const s = sinc();
+  it('hard-seeks when drift spikes', () => {
+    slave._set(10 + P.hardSeek + 0.1);
+    const s = sync();
     const [m] = s.tick();
     expect(m!.action).toBe('hard-seek');
-    expect(esclavo.currentTime).toBe(10);
-    expect(esclavo.getPlaybackRate()).toBe(1);
+    expect(slave.currentTime).toBe(10);
+    expect(slave.getPlaybackRate()).toBe(1);
     expect(s.hardSeeks).toBe(1);
   });
 
-  it('no mide durante un salto: la lectura no significa nada', () => {
-    esclavo._set(9.5);
-    esclavo._seeking(true);
-    const [m] = sinc().tick();
+  it('does not measure during a seek: the reading means nothing', () => {
+    slave._set(9.5);
+    slave._seeking(true);
+    const [m] = sync().tick();
     expect(m!.action).toBe('waiting');
-    expect(esclavo._seeks).toHaveLength(0);
+    expect(slave._seeks).toHaveLength(0);
   });
 
-  // --- histéresis: lo que evita el offset permanente ---------------------
-
-  it('sigue corrigiendo entre el umbral de suelta y el de enganche', () => {
-    // Sin histéresis se pararía al entrar en la zona muerta, dejando casi un
-    // frame de offset fijo. Medido en S1: 28,8 ms permanentes.
-    const s = sinc();
-    esclavo._set(10 - 0.1);        // engancha
+  it('keeps correcting between the release and engage thresholds', () => {
+    // Without hysteresis it stops in the dead zone with a fixed offset (S1: 28.8 ms).
+    const s = sync();
+    slave._set(10 - 0.1);        // engages
     expect(s.tick()[0]!.action).toBe('correcting');
 
-    esclavo._set(10 - 0.02);       // dentro de deadZone, fuera de releaseZone
-    expect(s.tick()[0]!.action, 'debe seguir corrigiendo').toBe('correcting');
+    slave._set(10 - 0.02);       // inside deadZone, outside releaseZone
+    expect(s.tick()[0]!.action, 'must keep correcting').toBe('correcting');
 
-    esclavo._set(10 - 0.004);      // por debajo de releaseZone
+    slave._set(10 - 0.004);      // below releaseZone
     expect(s.tick()[0]!.action).toBe('ok');
   });
 
-  it('tras soltar no vuelve a enganchar hasta superar el umbral', () => {
-    const s = sinc();
-    esclavo._set(10 - 0.1); s.tick();
-    esclavo._set(10 - 0.001); s.tick();          // suelta
-    esclavo._set(10 - 0.02);                     // por debajo de deadZone
+  it('after releasing it does not engage again until past the threshold', () => {
+    const s = sync();
+    slave._set(10 - 0.1); s.tick();
+    slave._set(10 - 0.001); s.tick();          // releases
+    slave._set(10 - 0.02);                     // below deadZone
     expect(s.tick()[0]!.action).toBe('ok');
   });
 
-  it('respeta la velocidad del maestro al corregir', () => {
-    maestro.setPlaybackRate(2);
-    esclavo._set(9.9);
-    sinc().tick();
-    expect(esclavo.getPlaybackRate()).toBeGreaterThan(2);
-    expect(esclavo.getPlaybackRate()).toBeLessThanOrEqual(2 + P.maxRateDelta);
+  it('respects the master\'s rate when correcting', () => {
+    master.setPlaybackRate(2);
+    slave._set(9.9);
+    sync().tick();
+    expect(slave.getPlaybackRate()).toBeGreaterThan(2);
+    expect(slave.getPlaybackRate()).toBeLessThanOrEqual(2 + P.maxRateDelta);
   });
 });
 
-describe('Synchronizer · ciclo de vida', () => {
-  const agendador = () => {
+describe('Synchronizer · lifecycle', () => {
+  const manualScheduler = () => {
     let tick: (() => void) | null = null;
-    const s: Scheduler & { paso(): void } = {
+    const s: Scheduler & { step(): void } = {
       start(t) { tick = t; },
       stop() { tick = null; },
-      paso() { tick?.(); },
+      step() { tick?.(); },
     };
     return s;
   };
 
-  it('start y stop encienden y apagan el lazo', () => {
-    const ag = agendador();
-    const s = sinc(P, ag);
+  it('start and stop switch the loop on and off', () => {
+    const ag = manualScheduler();
+    const s = sync(P, ag);
     expect(s.running).toBe(false);
     s.start();
     expect(s.running).toBe(true);
@@ -181,106 +177,100 @@ describe('Synchronizer · ciclo de vida', () => {
     expect(s.running).toBe(false);
   });
 
-  it('start es idempotente', () => {
-    const ag = agendador();
+  it('start is idempotent', () => {
+    const ag = manualScheduler();
     const spy = vi.spyOn(ag, 'start');
-    const s = sinc(P, ag);
+    const s = sync(P, ag);
     s.start(); s.start();
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
-  it('al parar devuelve al esclavo su velocidad natural', () => {
-    // Dejarlo corriendo a 1,25× tras apagar el lazo sería un fallo silencioso.
-    const ag = agendador();
-    const s = sinc(P, ag);
+  it('stopping restores the slave\'s natural rate', () => {
+    const ag = manualScheduler();
+    const s = sync(P, ag);
     s.start();
-    esclavo._set(9.8);
-    ag.paso();
-    expect(esclavo.getPlaybackRate()).not.toBe(1);
+    slave._set(9.8);
+    ag.step();
+    expect(slave.getPlaybackRate()).not.toBe(1);
     s.stop();
-    expect(esclavo.getPlaybackRate()).toBe(1);
+    expect(slave.getPlaybackRate()).toBe(1);
   });
 
-  it('sin esclavos no arranca: no hay nada que sincronizar', () => {
+  it('does not start without slaves: nothing to sync', () => {
     const s = new Synchronizer({
-      master: { id: 'cam', engine: maestro }, slaves: [], profile: P,
+      master: { id: 'cam', engine: master }, slaves: [], profile: P,
     });
     s.start();
     expect(s.running).toBe(false);
   });
 
-  it('align cuadra los esclavos de golpe', () => {
-    // Hace falta al arrancar: enganchar y reproducir en secuencia deja unos
-    // 70 ms de retraso de partida que no es deriva y nada corregiría solo.
-    esclavo._set(9.3);
-    esclavo.setPlaybackRate(1.2);
-    sinc().align();
-    expect(esclavo.currentTime).toBe(10);
-    expect(esclavo.getPlaybackRate()).toBe(1);
+  it('align snaps the slaves at once', () => {
+    slave._set(9.3);
+    slave.setPlaybackRate(1.2);
+    sync().align();
+    expect(slave.currentTime).toBe(10);
+    expect(slave.getPlaybackRate()).toBe(1);
   });
 });
 
-describe('Synchronizer · varios esclavos', () => {
-  it('corrige cada uno con su propio estado', () => {
-    const b = motorFalso(10);
+describe('Synchronizer · several slaves', () => {
+  it('corrects each with its own state', () => {
+    const b = fakeEngine(10);
     const s = new Synchronizer({
-      master: { id: 'cam', engine: maestro },
-      slaves: [{ id: 'a', engine: esclavo }, { id: 'b', engine: b }],
+      master: { id: 'cam', engine: master },
+      slaves: [{ id: 'a', engine: slave }, { id: 'b', engine: b }],
       profile: P,
     });
-    esclavo._set(9.9);   // necesita corrección
-    b._set(10.001);      // está bien
-    const muestras = s.tick();
-    expect(muestras.map((m) => m.action)).toEqual(['correcting', 'ok']);
-    expect(muestras.map((m) => m.stream)).toEqual(['a', 'b']);
+    slave._set(9.9);   // needs correcting
+    b._set(10.001);      // fine
+    const samples = s.tick();
+    expect(samples.map((m) => m.action)).toEqual(['correcting', 'ok']);
+    expect(samples.map((m) => m.stream)).toEqual(['a', 'b']);
   });
 });
 
-/* ---------------------------------------------------------- modo directo -- */
+/* ---------------------------------------------------------------- live -- */
 
-/** Motor de mentira que además sabe decir su hora absoluta. */
-function motorConHora(currentTime: number, hora: number | null) {
-  const m = motorFalso(currentTime) as ReturnType<typeof motorFalso> & {
+/** Fake engine that also reports its absolute time. */
+function engineWithClock(currentTime: number, clock: number | null) {
+  const m = fakeEngine(currentTime) as ReturnType<typeof fakeEngine> & {
     getProgramTime(): number | null;
-    _hora(h: number | null): void;
+    _clock(h: number | null): void;
   };
-  let h = hora;
+  let h = clock;
   m.getProgramTime = () => h;
-  m._hora = (v: number | null) => { h = v; };
+  m._clock = (v: number | null) => { h = v; };
   return m;
 }
 
-describe('Synchronizer · directo', () => {
+describe('Synchronizer · live', () => {
   const T0 = 1_700_000_000_000;
 
-  it('mide por hora absoluta, no por currentTime', () => {
-    /*
-     * El caso que midió S5: dos flujos SINCRONIZADOS cuyos currentTime difieren
-     * en 20 s por haberse cargado con esa separación. Medir por currentTime
-     * daría un salto duro y destrozaría una reproducción correcta.
-     */
-    const maestro = motorConHora(30, T0);
-    const esclavo = motorConHora(10, T0);      // 20 s de diferencia en currentTime
+  it('measures by absolute time, not currentTime', () => {
+    // Synced streams whose currentTime differs by 20 s.
+    // see docs/browser-quirks.md#live-currenttime-origin
+    const master = engineWithClock(30, T0);
+    const slave = engineWithClock(10, T0);      // 20 s apart in currentTime
     const s = new Synchronizer({
-      master: { id: 'cam', engine: maestro },
-      slaves: [{ id: 'slides', engine: esclavo }],
+      master: { id: 'cam', engine: master },
+      slaves: [{ id: 'slides', engine: slave }],
       live: true, profile: P,
     });
 
     expect(s.mode).toBe('program');
     const [m] = s.tick();
     expect(m!.drift).toBe(0);
-    expect(m!.action, 'no debe corregir nada').toBe('ok');
-    expect(esclavo._seeks, 'ni un salto').toHaveLength(0);
+    expect(m!.action, 'must correct nothing').toBe('ok');
+    expect(slave._seeks, 'not a single seek').toHaveLength(0);
   });
 
-  it('detecta la deriva real aunque los currentTime coincidan', () => {
-    // El caso inverso: currentTime idénticos pero tres segundos de desfase real.
-    const maestro = motorConHora(30, T0);
-    const esclavo = motorConHora(30, T0 - 3000);
+  it('detects real drift even when currentTime matches', () => {
+    // The reverse: identical currentTime but three seconds of real offset.
+    const master = engineWithClock(30, T0);
+    const slave = engineWithClock(30, T0 - 3000);
     const s = new Synchronizer({
-      master: { id: 'cam', engine: maestro },
-      slaves: [{ id: 'slides', engine: esclavo }],
+      master: { id: 'cam', engine: master },
+      slaves: [{ id: 'slides', engine: slave }],
       live: true, profile: P,
     });
     const [m] = s.tick();
@@ -288,193 +278,184 @@ describe('Synchronizer · directo', () => {
     expect(m!.action).toBe('hard-seek');
   });
 
-  it('el salto duro cuadra por hora, no copiando la posición del maestro', () => {
-    // Copiar el currentTime del maestro sería saltar a otra timeline.
-    const maestro = motorConHora(30, T0);
-    const esclavo = motorConHora(100, T0 - 3000);
+  it('the hard seek aligns by clock, not by copying the master\'s position', () => {
+    // Copying the master's currentTime would jump to another timeline.
+    const master = engineWithClock(30, T0);
+    const slave = engineWithClock(100, T0 - 3000);
     new Synchronizer({
-      master: { id: 'cam', engine: maestro },
-      slaves: [{ id: 'slides', engine: esclavo }],
+      master: { id: 'cam', engine: master },
+      slaves: [{ id: 'slides', engine: slave }],
       live: true, profile: P,
     }).tick();
-    // 100 - (-3) = 103, no 30.
-    expect(esclavo._seeks[0]).toBeCloseTo(103, 2);
+    // 100 - (-3) = 103, not 30.
+    expect(slave._seeks[0]).toBeCloseTo(103, 2);
   });
 
-  it('sin hora absoluta NO corrige, y avisa una sola vez', () => {
-    // Conclusión de S5: fingir una sincronización que no se puede medir es peor
-    // que no ofrecerla.
+  it('without absolute time it does NOT correct, and warns once', () => {
+    // S5: faking sync that cannot be measured is worse than not offering it.
     const bus = new EventBus<CoreEvents>({ onListenerError: () => {} });
-    const avisos: string[] = [];
-    bus.on('sync:unavailable', ({ reason }) => avisos.push(reason));
+    const warnings: string[] = [];
+    bus.on('sync:unavailable', ({ reason }) => warnings.push(reason));
 
-    const maestro = motorConHora(30, null);
-    const esclavo = motorConHora(10, null);
+    const master = engineWithClock(30, null);
+    const slave = engineWithClock(10, null);
     const s = new Synchronizer({
-      master: { id: 'cam', engine: maestro },
-      slaves: [{ id: 'slides', engine: esclavo }],
+      master: { id: 'cam', engine: master },
+      slaves: [{ id: 'slides', engine: slave }],
       live: true, profile: P, bus,
     });
 
-    expect(s.mode).toBe('imposible');
+    expect(s.mode).toBe('impossible');
     s.tick(); s.tick(); s.tick();
 
-    expect(esclavo._seeks, 'no debe tocar nada').toHaveLength(0);
-    expect(esclavo.getPlaybackRate()).toBe(1);
-    expect(avisos).toHaveLength(1);
-    expect(avisos[0]).toMatch(/PROGRAM-DATE-TIME/);
+    expect(slave._seeks, 'must touch nothing').toHaveLength(0);
+    expect(slave.getPlaybackRate()).toBe(1);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/PROGRAM-DATE-TIME/);
   });
 
-  it('align tampoco toca nada si no se puede medir', () => {
-    const maestro = motorConHora(30, null);
-    const esclavo = motorConHora(10, null);
+  it('align touches nothing either if it cannot measure', () => {
+    const master = engineWithClock(30, null);
+    const slave = engineWithClock(10, null);
     new Synchronizer({
-      master: { id: 'cam', engine: maestro },
-      slaves: [{ id: 'slides', engine: esclavo }],
+      master: { id: 'cam', engine: master },
+      slaves: [{ id: 'slides', engine: slave }],
       live: true, profile: P,
     }).align();
-    expect(esclavo._seeks).toHaveLength(0);
+    expect(slave._seeks).toHaveLength(0);
   });
 
-  it('bajo demanda sigue midiendo por currentTime', () => {
-    // El modo directo no debe cambiar el comportamiento del resto.
-    const maestro = motorConHora(30, T0);
-    const esclavo = motorConHora(29.9, T0);
+  it('on demand it still measures by currentTime', () => {
+    const master = engineWithClock(30, T0);
+    const slave = engineWithClock(29.9, T0);
     const s = new Synchronizer({
-      master: { id: 'cam', engine: maestro },
-      slaves: [{ id: 'slides', engine: esclavo }],
-      profile: P,                       // sin `live`
+      master: { id: 'cam', engine: master },
+      slaves: [{ id: 'slides', engine: slave }],
+      profile: P,                       // no `live`
     });
     expect(s.mode).toBe('timeline');
     expect(s.tick()[0]!.drift).toBeCloseTo(-0.1, 3);
   });
 
-  it('un esclavo sin hora momentáneamente no rompe el lazo', () => {
-    // Puede pasar al recargar la lista.
-    const maestro = motorConHora(30, T0);
-    const esclavo = motorConHora(30, null);
+  it('a slave briefly without a clock does not break the loop', () => {
+    // It can happen while the playlist reloads.
+    const master = engineWithClock(30, T0);
+    const slave = engineWithClock(30, null);
     const s = new Synchronizer({
-      master: { id: 'cam', engine: maestro },
-      slaves: [{ id: 'slides', engine: esclavo }],
+      master: { id: 'cam', engine: master },
+      slaves: [{ id: 'slides', engine: slave }],
       live: true, profile: P,
     });
     const [m] = s.tick();
     expect(m!.action).toBe('waiting');
-    expect(esclavo._seeks).toHaveLength(0);
+    expect(slave._seeks).toHaveLength(0);
   });
 });
 
-describe('Synchronizer · enfriamiento tras un salto', () => {
-  const conReloj = (t: { valor: number }) => new Synchronizer({
-    master: { id: 'cam', engine: maestro },
-    slaves: [{ id: 'slides', engine: esclavo }],
+describe('Synchronizer · cooldown after a seek', () => {
+  const withClock = (t: { value: number }) => new Synchronizer({
+    master: { id: 'cam', engine: master },
+    slaves: [{ id: 'slides', engine: slave }],
     profile: P,
-    now: () => t.valor,
+    now: () => t.value,
   });
 
-  it('no mide mientras el salto se asienta', () => {
-    /*
-     * Un salto obliga a decodificar desde el keyframe anterior, y las lecturas
-     * de ese rato no significan nada. Medido en directo sin esto: tras
-     * retroceder, el lazo se quedaba en 270 ms corrigiendo sin parar y saltando
-     * en duro cada pocos segundos, en vez de converger. Con enfriamiento: 0 ms.
-     */
-    const t = { valor: 1000 };
-    const s = conReloj(t);
+  it('does not measure while the seek settles', () => {
+    // Without it, after seeking back live the loop sat at 270 ms, hard-seeking
+    // every few seconds instead of converging. With it: 0 ms.
+    const t = { value: 1000 };
+    const s = withClock(t);
     s.align();
 
-    esclavo._set(9.5);                       // media segundo de desfase
-    expect(s.tick()[0]!.action, 'no debe reaccionar todavía').toBe('waiting');
-    expect(esclavo._seeks.length, 'ni saltar').toBeLessThanOrEqual(1);
+    slave._set(9.5);                       // half a second off
+    expect(s.tick()[0]!.action, 'must not react yet').toBe('waiting');
+    expect(slave._seeks.length, 'nor seek').toBeLessThanOrEqual(1);
 
-    t.valor += 2000;                          // pasado el enfriamiento
+    t.value += 2000;                          // past the cooldown
     expect(s.tick()[0]!.action).not.toBe('waiting');
   });
 
-  it('un salto duro también enfría, para no encadenarlos', () => {
-    const t = { valor: 1000 };
-    const s = conReloj(t);
-    esclavo._set(10 + P.hardSeek + 0.5);
+  it('a hard seek also cools down, so they do not chain', () => {
+    const t = { value: 1000 };
+    const s = withClock(t);
+    slave._set(10 + P.hardSeek + 0.5);
     expect(s.tick()[0]!.action).toBe('hard-seek');
     expect(s.hardSeeks).toBe(1);
 
-    // Inmediatamente después, aunque siga desviado, no encadena otro salto.
-    esclavo._set(10 + P.hardSeek + 0.5);
+    // Right after, even if still off, it does not chain another seek.
+    slave._set(10 + P.hardSeek + 0.5);
     expect(s.tick()[0]!.action).toBe('waiting');
-    expect(s.hardSeeks, 'sigue habiendo uno solo').toBe(1);
+    expect(s.hardSeeks, 'still just one').toBe(1);
 
-    t.valor += 1000;
+    t.value += 1000;
     expect(s.tick()[0]!.action).toBe('hard-seek');
   });
 
-  it('el enfriamiento no altera el régimen estable', () => {
-    const t = { valor: 100000 };
-    const s = conReloj(t);
-    esclavo._set(9.9);
+  it('the cooldown does not alter the steady state', () => {
+    const t = { value: 100000 };
+    const s = withClock(t);
+    slave._set(9.9);
     expect(s.tick()[0]!.action).toBe('correcting');
   });
 });
 
-describe('Synchronizer · esclavo atascado', () => {
-  const conReloj = (t: { valor: number }, bus?: EventBus<CoreEvents>) => new Synchronizer({
-    master: { id: 'cam', engine: maestro },
-    slaves: [{ id: 'slides', engine: esclavo }],
+describe('Synchronizer · stuck slave', () => {
+  const withClock = (t: { value: number }, bus?: EventBus<CoreEvents>) => new Synchronizer({
+    master: { id: 'cam', engine: master },
+    slaves: [{ id: 'slides', engine: slave }],
     profile: P,
-    now: () => t.valor,
+    now: () => t.value,
     ...(bus ? { bus } : {}),
   });
 
-  it('publica la espera como espera, no como ok', () => {
-    /*
-     * En WebKit un salto largo en directo dejó al esclavo en `seeking` para
-     * siempre, y el bus dijo "ok" más de 200 veces en 12 segundos. Nada
-     * podía detectar que las diapositivas estaban congeladas.
-     */
+  it('reports waiting as waiting, not ok', () => {
+    // WebKit left a slave `seeking` forever while the bus said "ok" 200 times.
+    // see docs/browser-quirks.md#webkit-hls-seek
     const bus = new EventBus<CoreEvents>();
-    const acciones: string[] = [];
-    bus.on('sync:drift', ({ action }) => acciones.push(action));
-    const s = conReloj({ valor: 1000 }, bus);
-    esclavo._seeking(true);
+    const actions: string[] = [];
+    bus.on('sync:drift', ({ action }) => actions.push(action));
+    const s = withClock({ value: 1000 }, bus);
+    slave._seeking(true);
     s.tick();
-    expect(acciones).toEqual(['waiting']);
+    expect(actions).toEqual(['waiting']);
   });
 
-  it('pasado el margen, obliga al esclavo a recolocarse', () => {
-    const t = { valor: 1000 };
-    const s = conReloj(t);
-    esclavo._seeking(true);
+  it('past the margin, forces the slave to reposition', () => {
+    const t = { value: 1000 };
+    const s = withClock(t);
+    slave._seeking(true);
     expect(s.tick()[0]!.action).toBe('waiting');
-    t.valor += 3000;
-    expect(s.tick()[0]!.action, 'aún dentro del margen').toBe('waiting');
-    expect(esclavo._seeks).toEqual([]);
+    t.value += 3000;
+    expect(s.tick()[0]!.action, 'still within the margin').toBe('waiting');
+    expect(slave._seeks).toEqual([]);
 
-    t.valor += 1500;
+    t.value += 1500;
     expect(s.tick()[0]!.action).toBe('recover');
-    // A su propia posición: es lo que reactiva la carga en el motor.
-    expect(esclavo._seeks).toEqual([10]);
+    // To its own position: that restarts loading in the engine.
+    expect(slave._seeks).toEqual([10]);
   });
 
-  it('si el maestro también está saltando, esperar es lo normal', () => {
-    const t = { valor: 1000 };
-    const s = conReloj(t);
-    esclavo._seeking(true);
-    maestro._seeking(true);
+  it('if the master is seeking too, waiting is normal', () => {
+    const t = { value: 1000 };
+    const s = withClock(t);
+    slave._seeking(true);
+    master._seeking(true);
     s.tick();
-    t.valor += 10_000;
+    t.value += 10_000;
     expect(s.tick()[0]!.action).toBe('waiting');
-    expect(esclavo._seeks).toEqual([]);
+    expect(slave._seeks).toEqual([]);
   });
 
-  it('una medida buena reinicia la cuenta', () => {
-    const t = { valor: 1000 };
-    const s = conReloj(t);
-    esclavo._seeking(true);
+  it('a good measurement resets the count', () => {
+    const t = { value: 1000 };
+    const s = withClock(t);
+    slave._seeking(true);
     s.tick();
-    t.valor += 3000;
-    esclavo._seeking(false);
+    t.value += 3000;
+    slave._seeking(false);
     s.tick();
-    esclavo._seeking(true);
-    t.valor += 3000;
-    expect(s.tick()[0]!.action, 'la cuenta empezó de nuevo').toBe('waiting');
+    slave._seeking(true);
+    t.value += 3000;
+    expect(s.tick()[0]!.action, 'the count started over').toBe('waiting');
   });
 });

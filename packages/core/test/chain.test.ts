@@ -1,49 +1,49 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ANTICIPACION_MS } from '../src/chain.js';
+import { CHAIN_LEAD_MS } from '../src/chain.js';
 import type { EngineFactory, MediaEngine } from '../src/engine.js';
 import { Player } from '../src/player.js';
 
-type Falso = MediaEngine & {
+type Fake = MediaEngine & {
   _set(t: number): void;
   _cb(): any;
   _muted(): boolean;
   _plays: number;
 };
 
-const DURACIONES: Record<string, number> = { intro: 5, outro: 4 };
+const DURATIONS: Record<string, number> = { intro: 5, outro: 4 };
 
 /**
- * Motor de mentira. Cada flujo tiene su duración, el tiempo se mueve a mano y
- * el primer fotograma llega un tic después del `play()`, como en un navegador:
- * es lo que permite comprobar que el cambio espera a la imagen.
+ * Fake engine. Each stream has its duration, time moves by hand, and the first
+ * frame arrives a tick after `play()`, as in a browser, so the switch can be
+ * checked to wait for the picture.
  */
-function factoriaFalsa(opts: { fallan?: string[] } = {}) {
-  const porId = new Map<string, Falso>();
+function fakeFactory(opts: { failing?: string[] } = {}) {
+  const byId = new Map<string, Fake>();
   const factory: EngineFactory = {
-    name: 'falso',
+    name: 'fake',
     canPlay: () => 'probably',
     create() {
-      let currentTime = 0, paused = true, muted = false, duracion = 60;
+      let currentTime = 0, paused = true, muted = false, duration = 60;
       let cb: any = {};
-      let fotogramas: Array<() => void> = [];
+      let frames: Array<() => void> = [];
       const element = {
         seeking: false,
         videoWidth: 640,
-        requestVideoFrameCallback(f: () => void) { fotogramas.push(f); return 1; },
+        requestVideoFrameCallback(f: () => void) { frames.push(f); return 1; },
       };
       const e = {
-        name: 'falso',
+        name: 'fake',
         get element() { return element as unknown as HTMLVideoElement; },
         attached: true,
         async attach(container: HTMLElement, s: { id: string }, o: any) {
-          if (opts.fallan?.includes(s.id)) throw new Error(`no carga ${s.id}`);
+          if (opts.failing?.includes(s.id)) throw new Error(`cannot load ${s.id}`);
           cb = o?.callbacks ?? {};
           muted = !!o?.muted;
-          duracion = DURACIONES[s.id] ?? 60;
+          duration = DURATIONS[s.id] ?? 60;
           if (o?.startAt) currentTime = o.startAt;
           container.appendChild(document.createElement('video'));
-          porId.set(s.id, e as never);
+          byId.set(s.id, e as never);
         },
         detach() {},
         async play() {
@@ -53,14 +53,14 @@ function factoriaFalsa(opts: { fallan?: string[] } = {}) {
           cb.onPlaying?.();
           setTimeout(() => {
             if (paused) return;
-            const f = fotogramas; fotogramas = [];
+            const f = frames; frames = [];
             f.forEach((x) => x());
           }, 10);
         },
         pause() { if (paused) return; paused = true; cb.onPause?.(); },
         seek(t: number) { currentTime = t; },
         get currentTime() { return currentTime; },
-        get duration() { return duracion; },
+        get duration() { return duration; },
         get paused() { return paused; },
         get ended() { return false; },
         get buffered() { return null; },
@@ -70,7 +70,7 @@ function factoriaFalsa(opts: { fallan?: string[] } = {}) {
         setVolume() {},
         setMuted(m: boolean) { muted = m; },
         destroy() {},
-        _set(t: number) { currentTime = t; cb.onTime?.(t, duracion); },
+        _set(t: number) { currentTime = t; cb.onTime?.(t, duration); },
         _cb: () => cb,
         _muted: () => muted,
         _plays: 0,
@@ -78,11 +78,11 @@ function factoriaFalsa(opts: { fallan?: string[] } = {}) {
       return e as never;
     },
   };
-  return { factory, porId };
+  return { factory, byId };
 }
 
-const fuente = (src: string) => ({ sources: [{ src, type: 'video/mp4' }] });
-const contenido = (over: Record<string, unknown> = {}) => ({
+const bumper = (src: string) => ({ sources: [{ src, type: 'video/mp4' }] });
+const content = (over: Record<string, unknown> = {}) => ({
   id: 'c', duration: 60,
   streams: [{ id: 'cam', role: 'presenter', audio: true,
               sources: [{ src: 'cam.mp4', type: 'video/mp4' }] }],
@@ -91,20 +91,20 @@ const contenido = (over: Record<string, unknown> = {}) => ({
 
 let container: HTMLElement;
 
-const nuevo = (manifest: unknown, opts: { fallan?: string[] } = {}) => {
-  const { factory, porId } = factoriaFalsa(opts);
+const setup = (manifest: unknown, opts: { failing?: string[] } = {}) => {
+  const { factory, byId } = fakeFactory(opts);
   const p = new Player({ container, manifest: manifest as never, engines: [factory] });
-  const motor = (id: string) => porId.get(id)!;
-  const fases: Array<{ from: string; to: string; skipped: boolean }> = [];
-  p.on('chain:phase', (x) => fases.push(x));
-  const finales: number[] = [];
-  p.on('ended', ({ at }) => finales.push(at));
-  return { p, motor, fases, finales };
+  const engine = (id: string) => byId.get(id)!;
+  const phases: Array<{ from: string; to: string; skipped: boolean }> = [];
+  p.on('chain:phase', (x) => phases.push(x));
+  const ends: number[] = [];
+  p.on('ended', ({ at }) => ends.push(at));
+  return { p, engine, phases, ends };
 };
 
-/** Lleva la pieza a `antes` segundos de su final y deja correr la vigilancia. */
-async function acercarAlFinal(e: Falso, antes: number) {
-  e._set(e.duration - antes);
+/** Moves the piece to `before` seconds from its end and lets the watcher run. */
+async function nearEnd(e: Fake, before: number) {
+  e._set(e.duration - before);
   await vi.advanceTimersByTimeAsync(100);
 }
 
@@ -116,112 +116,112 @@ beforeEach(() => {
 });
 afterEach(() => { vi.useRealTimers(); });
 
-describe('cadena · sin cabecera ni cola', () => {
-  it('empieza y se queda en el contenido', async () => {
-    const { p, fases } = nuevo(contenido());
+describe('chain · no intro or outro', () => {
+  it('starts and stays in the content', async () => {
+    const { p, phases } = setup(content());
     await p.play();
     expect(p.phase).toBe('main');
     expect(container.querySelector('[data-bumper]')).toBeNull();
-    expect(fases).toEqual([]);
+    expect(phases).toEqual([]);
   });
 });
 
-describe('cadena · cabecera', () => {
-  it('suena la cabecera y el contenido espera detrás, mudo y parado', async () => {
-    const { p, motor } = nuevo(contenido({ intro: fuente('intro.mp4') }));
+describe('chain · intro', () => {
+  it('the intro plays while the content waits behind, muted and stopped', async () => {
+    const { p, engine } = setup(content({ intro: bumper('intro.mp4') }));
     await p.play();
     expect(p.phase).toBe('intro');
     expect(container.dataset['phase']).toBe('intro');
-    expect(motor('intro').paused).toBe(false);
-    expect(motor('intro')._muted()).toBe(false);
-    expect(motor('cam').paused).toBe(true);
-    expect(motor('cam')._muted()).toBe(true);
+    expect(engine('intro').paused).toBe(false);
+    expect(engine('intro')._muted()).toBe(false);
+    expect(engine('cam').paused).toBe(true);
+    expect(engine('cam')._muted()).toBe(true);
     expect(p.state).toBe('active');
     expect(p.paused).toBe(false);
   });
 
-  it('desbloquea el contenido y la cola en el arranque, sin dejarlos sonando', async () => {
-    const { p, motor } = nuevo(contenido({ intro: fuente('intro.mp4'), outro: fuente('outro.mp4') }));
+  it('unlocks content and outro at start-up, without leaving them playing', async () => {
+    const { p, engine } = setup(content({ intro: bumper('intro.mp4'), outro: bumper('outro.mp4') }));
     await p.play();
     for (const id of ['cam', 'outro']) {
-      expect(motor(id)._plays, id).toBe(1);
-      expect(motor(id).paused, id).toBe(true);
+      expect(engine(id)._plays, id).toBe(1);
+      expect(engine(id).paused, id).toBe(true);
     }
   });
 
-  it('no cambia antes de la ventana de anticipación', async () => {
-    const { p, motor } = nuevo(contenido({ intro: fuente('intro.mp4') }));
+  it('does not switch before the lead window', async () => {
+    const { p, engine } = setup(content({ intro: bumper('intro.mp4') }));
     await p.play();
-    await acercarAlFinal(motor('intro'), 1.5);
+    await nearEnd(engine('intro'), 1.5);
     expect(p.phase).toBe('intro');
-    expect(motor('cam').paused).toBe(true);
+    expect(engine('cam').paused).toBe(true);
   });
 
-  it('arranca el contenido antes del final y cambia en su primer fotograma', async () => {
-    const { p, motor, fases } = nuevo(contenido({ intro: fuente('intro.mp4') }));
+  it('starts the content before the end and switches on its first frame', async () => {
+    const { p, engine, phases } = setup(content({ intro: bumper('intro.mp4') }));
     await p.play();
-    motor('intro')._set(5 - ANTICIPACION_MS / 1000 + 0.1);
+    engine('intro')._set(5 - CHAIN_LEAD_MS / 1000 + 0.1);
     await vi.advanceTimersByTimeAsync(50);
-    // Ya arrancado, pero todavía no a la vista: falta su primer fotograma.
-    expect(motor('cam').paused).toBe(false);
-    expect(motor('cam')._muted()).toBe(true);
+    // Started, but not yet shown: its first frame is missing.
+    expect(engine('cam').paused).toBe(false);
+    expect(engine('cam')._muted()).toBe(true);
     expect(p.phase).toBe('intro');
 
     await vi.advanceTimersByTimeAsync(20);
     expect(p.phase).toBe('main');
     expect(container.dataset['phase']).toBe('main');
-    expect(motor('cam')._muted()).toBe(false);
-    expect(motor('intro').paused).toBe(true);
-    expect(fases).toEqual([{ from: 'intro', to: 'main', skipped: false }]);
+    expect(engine('cam')._muted()).toBe(false);
+    expect(engine('intro').paused).toBe(true);
+    expect(phases).toEqual([{ from: 'intro', to: 'main', skipped: false }]);
     expect(p.state).toBe('active');
   });
 
-  it('no emite pause ni play en el cambio: para quien mira no se ha parado', async () => {
-    const { p, motor } = nuevo(contenido({ intro: fuente('intro.mp4') }));
+  it('emits no pause or play on the switch: to the viewer it never stopped', async () => {
+    const { p, engine } = setup(content({ intro: bumper('intro.mp4') }));
     await p.play();
-    const vistos: string[] = [];
-    p.on('play', () => vistos.push('play'));
-    p.on('pause', () => vistos.push('pause'));
-    await acercarAlFinal(motor('intro'), 0.3);
+    const seen: string[] = [];
+    p.on('play', () => seen.push('play'));
+    p.on('pause', () => seen.push('pause'));
+    await nearEnd(engine('intro'), 0.3);
     expect(p.phase).toBe('main');
-    expect(vistos).toEqual([]);
+    expect(seen).toEqual([]);
   });
 
-  it('el progreso de la cabecera va por chain:time, no por time', async () => {
-    const { p, motor } = nuevo(contenido({ intro: fuente('intro.mp4') }));
+  it('intro progress goes through chain:time, not time', async () => {
+    const { p, engine } = setup(content({ intro: bumper('intro.mp4') }));
     const time = vi.fn(), chain = vi.fn();
     p.on('time', time);
     p.on('chain:time', chain);
     await p.play();
-    motor('intro')._set(2);
+    engine('intro')._set(2);
     expect(chain).toHaveBeenCalledWith({ phase: 'intro', current: 2, duration: 5 });
     expect(time).not.toHaveBeenCalled();
     expect(p.currentTime).toBe(0);
   });
 
-  it('si la vigilancia no llega, el final de la cabecera fuerza el cambio', async () => {
-    const { p, motor } = nuevo(contenido({ intro: fuente('intro.mp4') }));
+  it('if the watcher misses it, the intro\'s end forces the switch', async () => {
+    const { p, engine } = setup(content({ intro: bumper('intro.mp4') }));
     await p.play();
-    motor('intro')._cb().onEnded();
+    engine('intro')._cb().onEnded();
     await vi.advanceTimersByTimeAsync(20);
     expect(p.phase).toBe('main');
   });
 });
 
-describe('cadena · saltar', () => {
-  it('saltar la cabecera cambia al contenido sin esperar a su final', async () => {
-    const { p, motor, fases } = nuevo(contenido({ intro: fuente('intro.mp4') }));
+describe('chain · skipping', () => {
+  it('skipping the intro switches to the content without waiting for its end', async () => {
+    const { p, engine, phases } = setup(content({ intro: bumper('intro.mp4') }));
     await p.play();
     expect(p.canSkip).toBe(true);
     p.skipIntro();
     await vi.advanceTimersByTimeAsync(20);
     expect(p.phase).toBe('main');
-    expect(motor('cam').paused).toBe(false);
-    expect(fases).toEqual([{ from: 'intro', to: 'main', skipped: true }]);
+    expect(engine('cam').paused).toBe(false);
+    expect(phases).toEqual([{ from: 'intro', to: 'main', skipped: true }]);
   });
 
-  it('saltarla antes de reproducir ni siquiera la engancha', async () => {
-    const { p } = nuevo(contenido({ intro: fuente('intro.mp4') }));
+  it('skipping it before playing does not even attach it', async () => {
+    const { p } = setup(content({ intro: bumper('intro.mp4') }));
     await p.resolve();
     p.skipIntro();
     await p.play();
@@ -229,8 +229,8 @@ describe('cadena · saltar', () => {
     expect(container.querySelector('[data-bumper="intro"]')).toBeNull();
   });
 
-  it('saltarla en pausa arranca el contenido y el estado lo refleja', async () => {
-    const { p } = nuevo(contenido({ intro: fuente('intro.mp4') }));
+  it('skipping it while paused starts the content and the state shows it', async () => {
+    const { p } = setup(content({ intro: bumper('intro.mp4') }));
     await p.play();
     p.pause();
     expect(p.state).toBe('attached');
@@ -242,177 +242,177 @@ describe('cadena · saltar', () => {
     expect(play).toHaveBeenCalledTimes(1);
   });
 
-  it('en el contenido y en la cola no hay nada que saltar', async () => {
-    const { p, motor } = nuevo(contenido({ outro: fuente('outro.mp4') }));
+  it('there is nothing to skip in the content or the outro', async () => {
+    const { p, engine } = setup(content({ outro: bumper('outro.mp4') }));
     await p.play();
     expect(p.canSkip).toBe(false);
     p.skipIntro();
     expect(p.phase).toBe('main');
-    await acercarAlFinal(motor('cam'), 0.3);
+    await nearEnd(engine('cam'), 0.3);
     expect(p.phase).toBe('outro');
     expect(p.canSkip).toBe(false);
   });
 });
 
-describe('cadena · cola', () => {
-  it('entra antes del final del contenido y el ended llega al acabar ella', async () => {
-    const { p, motor, fases, finales } = nuevo(contenido({ outro: fuente('outro.mp4') }));
+describe('chain · outro', () => {
+  it('enters before the content ends, and ended arrives when it finishes', async () => {
+    const { p, engine, phases, ends } = setup(content({ outro: bumper('outro.mp4') }));
     await p.play();
-    await acercarAlFinal(motor('cam'), 0.3);
+    await nearEnd(engine('cam'), 0.3);
     expect(p.phase).toBe('outro');
-    expect(fases).toEqual([{ from: 'main', to: 'outro', skipped: false }]);
-    expect(motor('outro')._muted()).toBe(false);
-    expect(motor('cam').paused).toBe(true);
-    expect(finales).toEqual([]);
+    expect(phases).toEqual([{ from: 'main', to: 'outro', skipped: false }]);
+    expect(engine('outro')._muted()).toBe(false);
+    expect(engine('cam').paused).toBe(true);
+    expect(ends).toEqual([]);
     expect(p.currentTime).toBe(60);
 
-    motor('outro').pause();
-    motor('outro')._cb().onEnded();
-    expect(finales).toEqual([60]);
+    engine('outro').pause();
+    engine('outro')._cb().onEnded();
+    expect(ends).toEqual([60]);
   });
 
-  it('con recorte, anticipa respecto al final del recorte', async () => {
-    const { p, motor, finales } = nuevo(contenido({
-      outro: fuente('outro.mp4'),
+  it('with a trim, the lead counts from the trim\'s end', async () => {
+    const { p, engine, ends } = setup(content({
+      outro: bumper('outro.mp4'),
       annotations: [{ kind: 'trim', start: 10, end: 40 }],
     }));
     await p.play();
-    motor('cam')._set(39.8);
+    engine('cam')._set(39.8);
     await vi.advanceTimersByTimeAsync(100);
     expect(p.phase).toBe('outro');
-    expect(finales).toEqual([]);
+    expect(ends).toEqual([]);
   });
 
-  it('al llegar al final del recorte se para ahí mientras entra la cola', async () => {
-    const { p, motor } = nuevo(contenido({
-      outro: fuente('outro.mp4'),
+  it('at the trim\'s end it stops there while the outro enters', async () => {
+    const { p, engine } = setup(content({
+      outro: bumper('outro.mp4'),
       annotations: [{ kind: 'trim', start: 10, end: 40 }],
     }));
     await p.play();
-    motor('cam')._set(40);
-    expect(motor('cam').paused).toBe(true);
+    engine('cam')._set(40);
+    expect(engine('cam').paused).toBe(true);
     expect(p.state).toBe('active');
     await vi.advanceTimersByTimeAsync(20);
     expect(p.phase).toBe('outro');
   });
 
-  it('hacia delante no se puede salir de la cola', async () => {
-    const { p, motor } = nuevo(contenido({ outro: fuente('outro.mp4') }));
+  it('the outro cannot be left forward', async () => {
+    const { p, engine } = setup(content({ outro: bumper('outro.mp4') }));
     await p.play();
-    await acercarAlFinal(motor('cam'), 0.3);
+    await nearEnd(engine('cam'), 0.3);
     p.seek(60);
     p.seek(999);
     expect(p.phase).toBe('outro');
-    expect(motor('outro').paused).toBe(false);
+    expect(engine('outro').paused).toBe(false);
   });
 
-  it('retroceder vuelve al contenido, y al llegar otra vez al final la cola suena de nuevo', async () => {
-    const { p, motor, fases } = nuevo(contenido({ outro: fuente('outro.mp4') }));
+  it('seeking back returns to the content, and the outro plays again at the end', async () => {
+    const { p, engine, phases } = setup(content({ outro: bumper('outro.mp4') }));
     await p.play();
-    await acercarAlFinal(motor('cam'), 0.3);
+    await nearEnd(engine('cam'), 0.3);
     p.seek(30);
     await vi.advanceTimersByTimeAsync(0);
     expect(p.phase).toBe('main');
-    expect(motor('outro').paused).toBe(true);
-    expect(motor('cam').paused).toBe(false);
-    expect(motor('cam')._muted()).toBe(false);
+    expect(engine('outro').paused).toBe(true);
+    expect(engine('cam').paused).toBe(false);
+    expect(engine('cam')._muted()).toBe(false);
     expect(p.currentTime).toBe(30);
 
-    await acercarAlFinal(motor('cam'), 0.3);
+    await nearEnd(engine('cam'), 0.3);
     expect(p.phase).toBe('outro');
-    expect(fases.map((f) => f.to)).toEqual(['outro', 'main', 'outro']);
+    expect(phases.map((f) => f.to)).toEqual(['outro', 'main', 'outro']);
   });
 
-  it('dar al play con todo visto vuelve al contenido, sin repetir la cabecera', async () => {
-    const { p, motor } = nuevo(contenido({ intro: fuente('intro.mp4'), outro: fuente('outro.mp4') }));
+  it('play after the whole chain returns to the content, without the intro', async () => {
+    const { p, engine } = setup(content({ intro: bumper('intro.mp4'), outro: bumper('outro.mp4') }));
     await p.play();
-    await acercarAlFinal(motor('intro'), 0.3);
-    await acercarAlFinal(motor('cam'), 0.3);
-    motor('outro').pause();
-    motor('outro')._cb().onEnded();
+    await nearEnd(engine('intro'), 0.3);
+    await nearEnd(engine('cam'), 0.3);
+    engine('outro').pause();
+    engine('outro')._cb().onEnded();
 
     await p.play();
     expect(p.phase).toBe('main');
     expect(p.currentTime).toBe(0);
-    expect(motor('cam').paused).toBe(false);
+    expect(engine('cam').paused).toBe(false);
   });
 });
 
-describe('cadena · cancelar', () => {
-  it('pausar durante el cambio lo cancela y la pieza entrante se para', async () => {
-    const { p, motor } = nuevo(contenido({ intro: fuente('intro.mp4') }));
+describe('chain · cancelling', () => {
+  it('pausing during the switch cancels it and stops the incoming piece', async () => {
+    const { p, engine } = setup(content({ intro: bumper('intro.mp4') }));
     await p.play();
-    motor('intro')._set(4.6);
+    engine('intro')._set(4.6);
     await vi.advanceTimersByTimeAsync(50);
-    expect(motor('cam').paused).toBe(false);
+    expect(engine('cam').paused).toBe(false);
     p.pause();
     await vi.advanceTimersByTimeAsync(50);
     expect(p.phase).toBe('intro');
-    expect(motor('cam').paused).toBe(true);
+    expect(engine('cam').paused).toBe(true);
     expect(p.state).toBe('attached');
 
-    // Al reanudar, la vigilancia lo vuelve a disparar.
+    // On resume, the watcher fires it again.
     await p.play();
     await vi.advanceTimersByTimeAsync(100);
     expect(p.phase).toBe('main');
   });
 
-  it('retroceder mientras entra la cola la deja para después', async () => {
-    const { p, motor } = nuevo(contenido({ outro: fuente('outro.mp4') }));
+  it('seeking back while the outro enters defers it', async () => {
+    const { p, engine } = setup(content({ outro: bumper('outro.mp4') }));
     await p.play();
-    motor('cam')._set(59.6);
+    engine('cam')._set(59.6);
     await vi.advanceTimersByTimeAsync(50);
-    expect(motor('outro').paused).toBe(false);
+    expect(engine('outro').paused).toBe(false);
     p.seek(20);
     await vi.advanceTimersByTimeAsync(50);
     expect(p.phase).toBe('main');
-    expect(motor('outro').paused).toBe(true);
-    expect(motor('cam').paused).toBe(false);
+    expect(engine('outro').paused).toBe(true);
+    expect(engine('cam').paused).toBe(false);
   });
 });
 
-describe('cadena · sonido', () => {
-  it('silenciar durante la cabecera se mantiene al pasar al contenido', async () => {
-    const { p, motor } = nuevo(contenido({ intro: fuente('intro.mp4') }));
+describe('chain · sound', () => {
+  it('muting during the intro carries over to the content', async () => {
+    const { p, engine } = setup(content({ intro: bumper('intro.mp4') }));
     await p.play();
     p.setMuted(true);
-    expect(motor('intro')._muted()).toBe(true);
-    await acercarAlFinal(motor('intro'), 0.3);
+    expect(engine('intro')._muted()).toBe(true);
+    await nearEnd(engine('intro'), 0.3);
     expect(p.phase).toBe('main');
-    expect(motor('cam')._muted()).toBe(true);
+    expect(engine('cam')._muted()).toBe(true);
   });
 });
 
-describe('cadena · piezas que fallan', () => {
-  it('una cabecera que no carga se omite y el contenido suena', async () => {
-    const { p, motor } = nuevo(contenido({ intro: fuente('intro.mp4') }), { fallan: ['intro'] });
-    const perdidas = vi.fn();
-    p.on('chain:unavailable', perdidas);
+describe('chain · failing pieces', () => {
+  it('an intro that fails to load is skipped and the content plays', async () => {
+    const { p, engine } = setup(content({ intro: bumper('intro.mp4') }), { failing: ['intro'] });
+    const lost = vi.fn();
+    p.on('chain:unavailable', lost);
     await p.play();
     expect(p.phase).toBe('main');
-    expect(motor('cam').paused).toBe(false);
-    expect(perdidas).toHaveBeenCalledWith(expect.objectContaining({ phase: 'intro' }));
+    expect(engine('cam').paused).toBe(false);
+    expect(lost).toHaveBeenCalledWith(expect.objectContaining({ phase: 'intro' }));
   });
 
-  it('sin la cola, el contenido termina como siempre', async () => {
-    const { p, motor, finales } = nuevo(contenido({ outro: fuente('outro.mp4') }), { fallan: ['outro'] });
+  it('without the outro, the content ends as usual', async () => {
+    const { p, engine, ends } = setup(content({ outro: bumper('outro.mp4') }), { failing: ['outro'] });
     await p.play();
-    await acercarAlFinal(motor('cam'), 0.3);
+    await nearEnd(engine('cam'), 0.3);
     expect(p.phase).toBe('main');
-    motor('cam')._cb().onEnded();
-    expect(finales).toHaveLength(1);
+    engine('cam')._cb().onEnded();
+    expect(ends).toHaveLength(1);
   });
 });
 
-describe('cadena · desalojo', () => {
-  it('soltar durante la cabecera la repite desde el principio al volver', async () => {
-    const { p, motor } = nuevo(contenido({ intro: fuente('intro.mp4') }));
+describe('chain · eviction', () => {
+  it('detaching during the intro replays it from the start on return', async () => {
+    const { p, engine } = setup(content({ intro: bumper('intro.mp4') }));
     await p.play();
-    motor('intro')._set(3);
+    engine('intro')._set(3);
     p.detach();
     expect(container.querySelector('[data-bumper]')).toBeNull();
     await p.play();
     expect(p.phase).toBe('intro');
-    expect(motor('intro').currentTime).toBe(0);
+    expect(engine('intro').currentTime).toBe(0);
   });
 });

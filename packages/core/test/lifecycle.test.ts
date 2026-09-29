@@ -4,16 +4,16 @@ import { EventBus } from '../src/events.js';
 import { Lifecycle } from '../src/lifecycle.js';
 import { TRANSITIONS, canTransition, type PlayerState } from '../src/state.js';
 
-const ESTADOS = Object.keys(TRANSITIONS) as PlayerState[];
+const STATES = Object.keys(TRANSITIONS) as PlayerState[];
 
-const nuevo = () => {
+const fresh = () => {
   const bus = new EventBus<CoreEvents>({ onListenerError: () => {} });
   return { bus, lc: new Lifecycle(bus) };
 };
 
-/** Lleva el ciclo de vida hasta un estado por el camino legítimo. */
-const llevarA = (lc: Lifecycle, destino: PlayerState) => {
-  const ruta: Record<PlayerState, PlayerState[]> = {
+/** Takes the lifecycle to a state along the legitimate path. */
+const driveTo = (lc: Lifecycle, target: PlayerState) => {
+  const path: Record<PlayerState, PlayerState[]> = {
     idle: [],
     resolving: ['resolving'],
     resolved: ['resolving', 'resolved'],
@@ -22,84 +22,84 @@ const llevarA = (lc: Lifecycle, destino: PlayerState) => {
     active: ['resolving', 'resolved', 'attaching', 'attached', 'active'],
     destroyed: ['destroyed'],
   };
-  for (const paso of ruta[destino]) lc.transition(paso);
+  for (const step of path[target]) lc.transition(step);
 };
 
-describe('tabla de transiciones', () => {
-  it('todo estado alcanzable está declarado en la tabla', () => {
-    for (const [from, destinos] of Object.entries(TRANSITIONS)) {
-      for (const to of destinos) {
-        expect(ESTADOS, `${from} → ${to}`).toContain(to);
+describe('transition table', () => {
+  it('every reachable state is declared in the table', () => {
+    for (const [from, targets] of Object.entries(TRANSITIONS)) {
+      for (const to of targets) {
+        expect(STATES, `${from} → ${to}`).toContain(to);
       }
     }
   });
 
-  it('destroyed es terminal', () => {
+  it('destroyed is terminal', () => {
     expect(TRANSITIONS.destroyed).toEqual([]);
-    for (const to of ESTADOS) {
+    for (const to of STATES) {
       expect(canTransition('destroyed', to)).toBe(false);
     }
   });
 
-  it('cualquier estado puede ser destruido', () => {
-    for (const from of ESTADOS) {
+  it('any state can be destroyed', () => {
+    for (const from of STATES) {
       if (from === 'destroyed') continue;
       expect(canTransition(from, 'destroyed'), from).toBe(true);
     }
   });
 
-  it('active no puede soltar el motor sin pausar antes', () => {
-    // Deliberado: obliga a desalojar en dos pasos explícitos en lugar de
-    // arrancarle el motor a una reproducción en curso.
+  it('active cannot release the engine without pausing first', () => {
+    // On purpose: eviction takes two explicit steps instead of pulling the
+    // engine from under a playback in progress.
     expect(canTransition('active', 'resolved')).toBe(false);
     expect(canTransition('active', 'attached')).toBe(true);
     expect(canTransition('attached', 'resolved')).toBe(true);
   });
 
-  it('no se puede saltar etapas del ciclo perezoso', () => {
+  it('stages of the lazy cycle cannot be skipped', () => {
     expect(canTransition('idle', 'attached')).toBe(false);
     expect(canTransition('idle', 'active')).toBe(false);
     expect(canTransition('resolved', 'active')).toBe(false);
   });
 
-  it('ningún estado se declara como transición hacia sí mismo', () => {
-    for (const from of ESTADOS) {
+  it('no state is declared as a transition to itself', () => {
+    for (const from of STATES) {
       expect(canTransition(from, from), from).toBe(false);
     }
   });
 });
 
 describe('Lifecycle', () => {
-  it('empieza en idle, sin manifiesto ni motor', () => {
-    const { lc } = nuevo();
+  it('starts in idle, with no manifest or engine', () => {
+    const { lc } = fresh();
     expect(lc.state).toBe('idle');
     expect(lc.hasManifest).toBe(false);
     expect(lc.hasEngine).toBe(false);
     expect(lc.resumeAt).toBe(0);
   });
 
-  it('emite state:change con origen y destino', () => {
-    const { bus, lc } = nuevo();
+  it('emits state:change with origin and target', () => {
+    const { bus, lc } = fresh();
     const fn = vi.fn();
     bus.on('state:change', fn);
     lc.transition('resolving');
     expect(fn).toHaveBeenCalledWith({ from: 'idle', to: 'resolving' });
   });
 
-  it('lanza ante una transición inválida, y no cambia de estado', () => {
-    const { lc } = nuevo();
+  it('throws on an invalid transition, and does not change state', () => {
+    const { lc } = fresh();
     expect(() => lc.transition('active')).toThrow(/Invalid transition/);
     expect(lc.state).toBe('idle');
   });
 
-  it('el mensaje de error dice qué transiciones sí valen', () => {
-    const { lc } = nuevo();
+  it('the error message lists the valid transitions', () => {
+    const { lc } = fresh();
     expect(() => lc.transition('attached')).toThrow(/resolving/);
   });
 
-  it('hasManifest y hasEngine siguen al estado', () => {
-    const { lc } = nuevo();
-    llevarA(lc, 'resolved');
+  it('hasManifest and hasEngine follow the state', () => {
+    const { lc } = fresh();
+    driveTo(lc, 'resolved');
     expect(lc.hasManifest).toBe(true);
     expect(lc.hasEngine).toBe(false);
 
@@ -108,36 +108,33 @@ describe('Lifecycle', () => {
     expect(lc.hasEngine).toBe(true);
   });
 
-  // --- lo que hace tolerable el desalojo ----------------------------------
+  it('keeps the position when releasing the engine', () => {
+    const { lc } = fresh();
+    driveTo(lc, 'active');
 
-  it('conserva la posición al soltar el motor', () => {
-    const { lc } = nuevo();
-    llevarA(lc, 'active');
-
-    lc.transition('attached');       // pausa
+    lc.transition('attached');       // pause
     lc.rememberPosition(137.5);
-    lc.transition('resolved');       // desalojo
+    lc.transition('resolved');       // eviction
 
     expect(lc.state).toBe('resolved');
     expect(lc.hasEngine).toBe(false);
     expect(lc.resumeAt).toBe(137.5);
 
-    // Y al volver a enganchar sigue ahí.
     lc.transition('attaching');
     lc.transition('attached');
     expect(lc.resumeAt).toBe(137.5);
   });
 
-  it('volver a idle es un reinicio: descarta la posición', () => {
-    const { lc } = nuevo();
-    llevarA(lc, 'resolved');
+  it('going back to idle is a reset: the position is dropped', () => {
+    const { lc } = fresh();
+    driveTo(lc, 'resolved');
     lc.rememberPosition(90);
     lc.transition('idle');
     expect(lc.resumeAt).toBe(0);
   });
 
-  it('ignora posiciones absurdas en vez de guardarlas', () => {
-    const { lc } = nuevo();
+  it('ignores nonsensical positions instead of storing them', () => {
+    const { lc } = fresh();
     lc.rememberPosition(42);
     lc.rememberPosition(-1);
     lc.rememberPosition(Number.NaN);
@@ -145,10 +142,8 @@ describe('Lifecycle', () => {
     expect(lc.resumeAt).toBe(42);
   });
 
-  // --- destrucción --------------------------------------------------------
-
-  it('destroy() emite el evento y marca destruido', () => {
-    const { bus, lc } = nuevo();
+  it('destroy() emits the event and marks it destroyed', () => {
+    const { bus, lc } = fresh();
     const fn = vi.fn();
     bus.on('destroy', fn);
     lc.destroy();
@@ -157,8 +152,8 @@ describe('Lifecycle', () => {
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
-  it('destroy() es idempotente', () => {
-    const { bus, lc } = nuevo();
+  it('destroy() is idempotent', () => {
+    const { bus, lc } = fresh();
     const fn = vi.fn();
     bus.on('destroy', fn);
     lc.destroy();
@@ -166,48 +161,46 @@ describe('Lifecycle', () => {
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
-  it('destruir desde reproduciendo funciona sin pasos intermedios', () => {
-    const { lc } = nuevo();
-    llevarA(lc, 'active');
+  it('destroying while playing works without intermediate steps', () => {
+    const { lc } = fresh();
+    driveTo(lc, 'active');
     expect(() => lc.destroy()).not.toThrow();
   });
 
-  it('no se sale de destroyed', () => {
-    const { lc } = nuevo();
+  it('there is no way out of destroyed', () => {
+    const { lc } = fresh();
     lc.destroy();
     expect(() => lc.transition('idle')).toThrow(/terminal state/);
   });
 
-  // --- recorrido completo -------------------------------------------------
+  it('the full lazy cycle emits the changes in order', () => {
+    const { bus, lc } = fresh();
+    const seen: string[] = [];
+    bus.on('state:change', ({ to }) => { seen.push(to); });
 
-  it('el ciclo perezoso completo emite los cambios en orden', () => {
-    const { bus, lc } = nuevo();
-    const vistos: string[] = [];
-    bus.on('state:change', ({ to }) => { vistos.push(to); });
-
-    llevarA(lc, 'active');           // idle → … → active
-    lc.transition('attached');       // pausa
-    lc.transition('resolved');       // desalojo
-    lc.transition('attaching');      // vuelve
+    driveTo(lc, 'active');           // idle → … → active
+    lc.transition('attached');       // pause
+    lc.transition('resolved');       // eviction
+    lc.transition('attaching');      // back
     lc.transition('attached');
     lc.destroy();
 
-    expect(vistos).toEqual([
+    expect(seen).toEqual([
       'resolving', 'resolved', 'attaching', 'attached', 'active',
       'attached', 'resolved', 'attaching', 'attached', 'destroyed',
     ]);
   });
 
-  it('el fallo al resolver devuelve a idle', () => {
-    const { lc } = nuevo();
+  it('a failure while resolving goes back to idle', () => {
+    const { lc } = fresh();
     lc.transition('resolving');
     expect(() => lc.transition('idle')).not.toThrow();
     expect(lc.state).toBe('idle');
   });
 
-  it('el fallo al enganchar devuelve a resolved, conservando el manifiesto', () => {
-    const { lc } = nuevo();
-    llevarA(lc, 'attaching');
+  it('a failure while attaching goes back to resolved, keeping the manifest', () => {
+    const { lc } = fresh();
+    driveTo(lc, 'attaching');
     lc.transition('resolved');
     expect(lc.hasManifest).toBe(true);
     expect(lc.hasEngine).toBe(false);

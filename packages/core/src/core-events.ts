@@ -1,14 +1,7 @@
 /**
- * Catálogo de eventos del núcleo.
- *
- * Es deliberadamente **completo desde el primer día**, aunque el MVP no
- * implemente analítica: un destino de analítica se enchufa con `bus.onAny()` y
- * solo puede reportar lo que el núcleo emita. Un evento que falta hoy es un
- * rediseño mañana, mientras que uno que nadie escucha no cuesta nada.
- *
- * Convención de nombres: `sujeto:verbo`, y las operaciones que pueden fallar se
- * parten en `:start` / `:ok` / `:fail`. Así la analítica puede medir duraciones
- * y tasas de error sin instrumentación adicional.
+ * The core event catalogue. Complete from day one: an analytics sink plugs in
+ * with `bus.onAny()` and can only report what the core emits. Naming is
+ * `subject:verb`, and fallible operations split into `:start` / `:ok` / `:fail`.
  */
 import type { BumperPhase, ChainPhase } from './chain.js';
 import type { Empty } from './events.js';
@@ -18,26 +11,26 @@ import type { PlayerState } from './state.js';
 import type { SyncAction } from './sync.js';
 
 export interface CoreEvents {
-  // --- ciclo de vida ------------------------------------------------------
+  // --- lifecycle ------------------------------------------------------------
   'state:change': { from: PlayerState; to: PlayerState };
   'destroy': Empty;
-  /** Hay una interfaz montada y sus anclajes están disponibles. */
+  /** A UI is mounted and its slots are available. */
   'ui:ready': Empty;
 
-  // --- manifiesto ---------------------------------------------------------
+  // --- manifest -------------------------------------------------------------
   'manifest:resolve:start': Empty;
   'manifest:resolve:ok': { manifest: Manifest };
   'manifest:resolve:fail': { error: PlayerError };
 
-  // --- motor --------------------------------------------------------------
+  // --- engines --------------------------------------------------------------
   'engine:attach:start': Empty;
-  /** `resumeAt` es la posición recuperada de un desalojo previo. */
+  /** `resumeAt` is the position recovered from a previous eviction. */
   'engine:attach:ok': { engine: string; resumeAt: number };
   'engine:attach:fail': { error: PlayerError };
-  /** Desalojo. `at` es la posición conservada para el siguiente enganche. */
+  /** Eviction. `at` is the position kept for the next attach. */
   'engine:detach': { at: number };
 
-  // --- reproducción -------------------------------------------------------
+  // --- playback -------------------------------------------------------------
   'play': { at: number };
   'pause': { at: number };
   'ended': { at: number };
@@ -47,54 +40,37 @@ export interface CoreEvents {
   'ratechange': { rate: number };
   'volumechange': { volume: number; muted: boolean };
 
-  // --- cabecera y cola ----------------------------------------------------
-  /**
-   * Cambió la pieza que se ve. Se emite en el instante del cambio visible, no
-   * al pedirlo: entre uno y otro pasa la anticipación.
-   */
+  // --- intro and outro ------------------------------------------------------
+  /** The visible piece changed. Emitted at the visible switch, not when requested. */
   'chain:phase': { from: ChainPhase; to: ChainPhase; skipped: boolean };
-  /**
-   * Progreso de la cabecera o la cola. Va aparte de `time` porque la barra de
-   * progreso solo enseña el contenido: mezclarlos la haría saltar.
-   */
+  /** Intro/outro progress, apart from `time`, which belongs to the content only. */
   'chain:time': { phase: BumperPhase; current: number; duration: number };
-  /**
-   * Una cabecera o cola no se pudo reproducir y se ha omitido. No es un
-   * `error`: el contenido sigue, y una cabecera rota no debe impedir verlo.
-   */
+  /** An intro or outro could not play and was skipped. Not an `error`: the content goes on. */
   'chain:unavailable': { phase: BumperPhase; error: PlayerError };
 
-  // --- multi-stream -------------------------------------------------------
+  // --- multi-stream ---------------------------------------------------------
   /**
-   * Deriva medida entre un esclavo y el maestro. Lo emite el sincronizador.
-   * Se publica porque es la señal que permitirá diagnosticar en producción lo
-   * que S2 detectó en iPhone: buena mediana con excursiones puntuales severas.
-   */
-  /**
-   * `waiting`: ahora no se puede medir —el esclavo salta o no tiene hora— y no
-   * se corrige. `recover`: llevaba demasiado así y se le ha obligado a
-   * recolocarse. Separarlos de `ok` es lo que permite ver un esclavo atascado.
+   * Drift between a slave and the master. `waiting`: cannot be measured now
+   * (the slave is seeking or has no clock); `recover`: it stayed that way too
+   * long and was forced to reposition.
    */
   'sync:drift': { stream: string; drift: number; action: SyncAction };
   'layout:change': { layout: string };
-  /**
-   * La sincronización entre flujos no se puede medir, así que no se corrige.
-   * Hoy ocurre con directos sin `EXT-X-PROGRAM-DATE-TIME`.
-   */
+  /** Drift cannot be measured, so it is not corrected: a live stream without EXT-X-PROGRAM-DATE-TIME. */
   'sync:unavailable': { reason: string };
 
-  // --- directo ------------------------------------------------------------
-  /** Cambió el estado de emisión de un flujo. `retryInMs` si se va a reintentar. */
+  // --- live -----------------------------------------------------------------
+  /** A stream's broadcast status changed. `retryInMs` when a retry is scheduled. */
   'live:status': {
     stream: string;
     status: 'waiting' | 'live' | 'interrupted';
     retryInMs?: number;
   };
 
-  // --- red y buffering ----------------------------------------------------
+  // --- network and buffering ------------------------------------------------
   'stall:start': { stream: string };
   'stall:end': { stream: string; durationMs: number };
 
-  // --- errores ------------------------------------------------------------
+  // --- errors ---------------------------------------------------------------
   'error': { error: PlayerError };
 }

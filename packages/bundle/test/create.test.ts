@@ -3,9 +3,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { plugins, type Manifest } from '@nanoplayer/core';
 import { create, NanoPlayer } from '../src/index.js';
 
-const MANIFIESTO: Manifest = {
-  id: 'clase-1',
-  title: 'Una clase',
+const MANIFEST: Manifest = {
+  id: 'lecture-1',
+  title: 'A lecture',
   streams: [{
     id: 'cam', role: 'presenter', audio: true,
     sources: [{ src: 'cam.mp4', type: 'video/mp4' }],
@@ -22,86 +22,71 @@ beforeEach(() => {
   document.body.appendChild(host);
 });
 
-describe('create con pilas incluidas', () => {
-  it('monta los controles sin pedirlo', () => {
-    /*
-     * Es la diferencia entera con el `create` del núcleo, que es headless. Lo
-     * que había antes de este paquete era una etiqueta <script> que daba un
-     * reproductor sin un solo botón.
-     */
-    create('#player', { manifest: MANIFIESTO });
+describe('create, batteries included', () => {
+  it('attaches the controls without being asked', () => {
+    create('#player', { manifest: MANIFEST });
     expect(host.querySelector('.np__bar')).not.toBeNull();
     expect(host.querySelectorAll('button').length).toBeGreaterThan(0);
   });
 
-  it('los botones llevan nombre accesible', () => {
-    create('#player', { manifest: MANIFIESTO });
-    const botones = [...host.querySelectorAll('button')];
-    expect(botones.every((b) => (b.getAttribute('aria-label') ?? '').length > 0)).toBe(true);
+  it('every button has an accessible name', () => {
+    create('#player', { manifest: MANIFEST });
+    const buttons = [...host.querySelectorAll('button')];
+    expect(buttons.every((b) => (b.getAttribute('aria-label') ?? '').length > 0)).toBe(true);
   });
 
-  it('acepta un elemento además de un selector', () => {
-    create(host, { manifest: MANIFIESTO });
+  it('accepts an element as well as a selector', () => {
+    create(host, { manifest: MANIFEST });
     expect(host.querySelector('.np__bar')).not.toBeNull();
   });
 
-  it('`controls: false` deja el reproductor pelado', () => {
-    // Para quien quiera su propia interfaz encima de este mismo bundle.
-    create('#player', { manifest: MANIFIESTO, controls: false });
+  it('`controls: false` leaves the player bare', () => {
+    create('#player', { manifest: MANIFEST, controls: false });
     expect(host.querySelector('.np__bar')).toBeNull();
   });
 
-  it('`controls` con objeto configura la barra', () => {
-    create('#player', { manifest: MANIFIESTO, controls: { lang: 'en' } });
-    const etiquetas = [...host.querySelectorAll('button')]
-      .map((b) => b.getAttribute('aria-label'));
-    expect(etiquetas).toContain('Play');
+  it('`controls` as an object configures the bar', () => {
+    create('#player', { manifest: MANIFEST, controls: { lang: 'en' } });
+    const labels = [...host.querySelectorAll('button')].map((b) => b.getAttribute('aria-label'));
+    expect(labels).toContain('Play');
   });
 
-  it('el idioma se dice una vez y lo hereda la barra', () => {
-    create('#player', { manifest: MANIFIESTO, lang: 'en' });
-    const etiquetas = [...host.querySelectorAll('button')]
-      .map((b) => b.getAttribute('aria-label'));
-    expect(etiquetas).toContain('Play');
+  it('the language is set once and the bar inherits it', () => {
+    create('#player', { manifest: MANIFEST, lang: 'en' });
+    const labels = [...host.querySelectorAll('button')].map((b) => b.getAttribute('aria-label'));
+    expect(labels).toContain('Play');
   });
 
-  it('no descarga nada: el ciclo perezoso sigue intacto', () => {
-    // Montar la interfaz no puede arrastrar medios. Es el principio 2, y es lo
-    // primero que se rompería al juntar los paquetes sin mirar.
-    const p = create('#player', { manifest: MANIFIESTO });
+  it('downloads nothing: the lazy lifecycle is intact', () => {
+    const p = create('#player', { manifest: MANIFEST });
     expect(host.querySelectorAll('video').length).toBe(0);
     expect(p.state).toBe('idle');
   });
 
-  it('trae el plugin de subtítulos ya registrado', () => {
+  it('ships the captions plugin already registered', () => {
     expect(plugins.has('captions')).toBe(true);
   });
 });
 
-describe('la global del caso <script>', () => {
-  it('lleva lo que hace falta en el primer nivel', () => {
+describe('the <script> global', () => {
+  it('has what is needed at the top level', () => {
     for (const k of ['create', 'attachControls', 'registry', 'plugins', 'VERSION']) {
-      expect(NanoPlayer, `falta ${k}`).toHaveProperty(k);
+      expect(NanoPlayer, `missing ${k}`).toHaveProperty(k);
     }
   });
 
-  it('su create es el que trae controles, no el headless del núcleo', () => {
-    NanoPlayer.create('#player', { manifest: MANIFIESTO });
+  it('its create is the one with controls, not the headless core one', () => {
+    NanoPlayer.create('#player', { manifest: MANIFEST });
     expect(host.querySelector('.np__bar')).not.toBeNull();
   });
 });
 
-describe('superficie del bundle', () => {
-  it('reexporta todo lo que el núcleo exporta en tiempo de ejecución', async () => {
-    /*
-     * La lista de reexportaciones está escrita a mano, y se quedó atrás: al
-     * añadir el encadenado, `firstFrame` y `ANTICIPACION_MS` estaban en el
-     * núcleo y no en el bundle, sin que nada avisara. Quien usa la etiqueta
-     * `<script>` no tiene otra forma de llegar a ellos.
-     */
-    const nucleo = await import('@nanoplayer/core');
+describe('bundle surface', () => {
+  it('re-exports every runtime export of the core', async () => {
+    // The list is hand-written and once fell behind silently (firstFrame, the chain lead).
+    const core = await import('@nanoplayer/core');
     const bundle = await import('../src/index.js');
-    const faltan = Object.keys(nucleo).filter((k) => !(k in bundle));
-    expect(faltan).toEqual([]);
+    const missing = Object.keys(core).filter((k) => !(k in bundle));
+    expect(missing).toEqual([]);
   });
 });

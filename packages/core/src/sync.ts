@@ -1,57 +1,32 @@
 /**
- * Sincronización multi-stream: maestro/esclavo con corrección de deriva.
- *
- * Modelo, tal como lo validó el spike S1:
- *
- *   - El **maestro** es el stream que lleva el audio, y **nunca se le toca el
- *     `playbackRate`**: alterar la velocidad del audio se oye, y un reproductor
- *     que hace "wow" en la voz del ponente es inaceptable.
- *   - Los **esclavos** persiguen al maestro. Toda la corrección recae en ellos,
- *     que además van silenciados — S2 midió que iOS no reproduce dos pistas de
- *     audio a la vez.
- *
- * Dos regímenes:
- *   - Deriva pequeña → control proporcional sobre `playbackRate`. Invisible.
- *   - Deriva grande  → salto duro. Se nota, pero recupera en decenas de ms.
- *
- * La **histéresis no es opcional**: sin separar el umbral de enganche del de
- * suelta, el controlador se para al entrar en la zona muerta y deja un offset
- * permanente. Medido en S1: 28,8 ms fijos sin histéresis, 9,8 ms con ella.
+ * Multi-stream sync: master/slave with drift correction, as validated in S1.
+ * The **master** carries the audio and its playbackRate is never touched (it
+ * would be heard); the muted **slaves** chase it. Small drift → proportional
+ * control on playbackRate; large drift → hard seek. Hysteresis is required:
+ * without separate engage/release thresholds the controller stops inside the
+ * dead zone and leaves a fixed offset (S1: 28.8 ms without, 9.8 ms with).
  */
 import type { CoreEvents } from './core-events.js';
 import type { MediaEngine } from './engine.js';
 import type { EventBus } from './events.js';
 
 export interface SyncProfile {
-  /** Umbral de ENGANCHE: por debajo no se empieza a corregir. */
+  /** ENGAGE threshold: below it correction does not start. */
   deadZone: number;
-  /** Umbral de SUELTA: una vez enganchado, se corrige hasta bajar de aquí. */
+  /** RELEASE threshold: once engaged, correct until below it. */
   releaseZone: number;
-  /** Ganancia del control proporcional. Gobierna el tiempo de recuperación. */
+  /** Proportional gain. It governs recovery time. */
   gain: number;
-  /** Techo de desviación de velocidad del esclavo. */
+  /** Cap on the slave's rate deviation. */
   maxRateDelta: number;
-  /** Por encima de esto, salto duro en vez de corrección suave. */
+  /** Above this, a hard seek instead of smooth correction. */
   hardSeek: number;
 }
 
 /**
- * Perfiles por motor.
- *
- * No son un capricho: S2 midió la misma configuración dando resultados muy
- * distintos según el motor, y fallando de formas distintas.
- *
- * | Motor            | mediana | p95    | máx    |
- * |------------------|---------|--------|--------|
- * | Blink            |  7,8 ms |  15 ms |  39 ms |
- * | WebKit (Mac)     | 30,6 ms |  54 ms | 118 ms |
- * | WebKit (iPhone)  | 28,1 ms | 209 ms | 405 ms |
- *
- * La firma de WebKit en móvil es la interesante: mediana buena con
- * **excursiones puntuales severas**. Eso no es un desajuste de ganancia —si lo
- * fuera, la mediana también estaría mal— sino saltos ocasionales. Por eso el
- * perfil de WebKit no sube la ganancia sino que **baja el umbral de salto
- * duro**, para que una excursión de 200 ms se corrija en vez de quedarse.
+ * Per-engine profiles. WebKit keeps a good median with severe one-off
+ * excursions, so its profile lowers the hard-seek threshold instead of raising
+ * the gain. see docs/browser-quirks.md#sync-profiles
  */
 export const SYNC_PROFILES = {
   blink: {
@@ -64,48 +39,32 @@ export const SYNC_PROFILES = {
 
 export type SyncProfileName = keyof typeof SYNC_PROFILES;
 
-/**
- * Detecta el perfil por motor.
- *
- * En iOS todos los navegadores están obligados a usar WebKit, así que Chrome de
- * iPhone también entra aquí. Se mira `ManagedMediaSource` —que solo existe en
- * WebKit reciente— antes de recurrir a la cadena de agente de usuario.
- */
+/** Every iOS browser is WebKit; `ManagedMediaSource` is checked before the UA string. */
 export function detectProfile(): SyncProfileName {
   const g = globalThis as { ManagedMediaSource?: unknown; navigator?: Navigator };
   if (g.ManagedMediaSource !== undefined) return 'webkit';
   const ua = g.navigator?.userAgent ?? '';
   if (/iPhone|iPad|iPod/.test(ua)) return 'webkit';
-  // La UA de Chrome contiene "Safari", así que hay que descartarlo antes.
+  // Chrome's UA contains "Safari", so it is ruled out first.
   if (/Safari/.test(ua) && !/Chrome|Chromium|Edg|OPR/.test(ua)) return 'webkit';
   return 'blink';
 }
 
+/** No measuring after a hard seek, in ms, while the position settles. */
+const SEEK_COOLDOWN_MS = 700;
+
+/** The same after aligning everything, which moves more pieces. */
+const ALIGN_COOLDOWN_MS = 1200;
+
 /**
- * Cuánto se deja de medir tras un salto duro, en milisegundos.
- *
- * Tiempo para que el navegador decodifique desde el keyframe y la posición se
- * estabilice. Sin esto el lazo mide el asentamiento y reacciona a él.
+ * How long a slave may stay unmeasurable while the master plays before it is
+ * taken as stuck, in ms. Generous: a normal seek on a slow network takes seconds.
  */
-const ENFRIAMIENTO_SALTO = 700;
-
-/** Igual tras cuadrar todos a la vez, que mueve más piezas. */
-const ENFRIAMIENTO_ALINEADO = 1200;
+const STUCK_MS = 4000;
 
 /**
- * Cuánto puede un esclavo seguir sin poder medirse, con el maestro avanzando,
- * antes de darlo por atascado, en ms.
- *
- * Esperar mientras un esclavo salta o recarga su lista es lo correcto, pero
- * esperar para siempre no: en WebKit un salto largo en directo dejaba al
- * esclavo en `seeking` indefinidamente, y el lazo lo daba por bueno sin fin.
- * Holgado a propósito, porque un salto normal con red lenta tarda segundos.
- */
-const ATASCO_MS = 4000;
-
-/**
- * `waiting` — el esclavo no se puede medir ahora (salta, o no tiene hora).
- * `recover` — llevaba demasiado así y se le ha obligado a recolocarse.
+ * `waiting` — the slave cannot be measured now (it is seeking or has no clock).
+ * `recover` — it stayed that way too long and was forced to reposition.
  */
 export type SyncAction = 'ok' | 'correcting' | 'hard-seek' | 'waiting' | 'recover';
 
@@ -120,8 +79,8 @@ interface Slave {
   id: string;
   engine: MediaEngine;
   correcting: boolean;
-  /** Desde cuándo no se puede medir, con el maestro avanzando. */
-  sinMedirDesde: number | null;
+  /** Since when it cannot be measured while the master plays. */
+  unmeasuredSince: number | null;
 }
 
 export interface SynchronizerOptions {
@@ -129,56 +88,49 @@ export interface SynchronizerOptions {
   slaves: ReadonlyArray<{ id: string; engine: MediaEngine }>;
   profile?: SyncProfile;
   /**
-   * Si el contenido es un directo.
-   *
-   * Cambia de dónde sale la medida, no el modelo. En directo `currentTime` no
-   * es comparable entre flujos —su origen lo fija cuándo empezó a cargar cada
-   * reproductor— así que hay que usar la hora absoluta. Si no se puede, **no se
-   * corrige**: ver `#modo`.
+   * Live content measures by absolute time, not `currentTime`, and does not
+   * correct when that is impossible. see docs/browser-quirks.md#live-currenttime-origin
    */
   live?: boolean;
   bus?: EventBus<CoreEvents>;
-  /** Inyectable para las pruebas; por defecto rVFC con recurso a rAF. */
+  /** Injectable for tests; rVFC falling back to rAF by default. */
   scheduler?: Scheduler;
-  /** Inyectable para las pruebas; por defecto `performance.now`. */
+  /** Injectable for tests; `performance.now` by default. */
   now?: () => number;
 }
 
-/** Cómo se agenda el lazo de control. Abstraído para poder probarlo sin navegador. */
+/** How the control loop is scheduled, abstracted to test it without a browser. */
 export interface Scheduler {
   start(tick: () => void): void;
   stop(): void;
 }
 
 /**
- * Agendador por defecto: `requestVideoFrameCallback` cuando existe.
- *
- * Se dispara con la presentación real del fotograma en lugar de con el
- * repintado, que es una medida más fiel de dónde va el vídeo. Recurre a
- * `requestAnimationFrame` donde no esté disponible.
+ * `requestVideoFrameCallback` when available: it fires on actual frame
+ * presentation. `requestAnimationFrame` otherwise.
  */
 export function defaultScheduler(video: HTMLVideoElement | null): Scheduler {
-  let vivo = false;
+  let running = false;
   let handle = 0;
-  const conRVFC = video !== null && 'requestVideoFrameCallback' in video;
+  const withRvfc = video !== null && 'requestVideoFrameCallback' in video;
 
   return {
     start(tick) {
-      vivo = true;
-      const paso = () => {
-        if (!vivo) return;
+      running = true;
+      const step = () => {
+        if (!running) return;
         tick();
-        if (!vivo) return;
-        handle = conRVFC
-          ? (video as HTMLVideoElement).requestVideoFrameCallback(paso)
-          : requestAnimationFrame(paso);
+        if (!running) return;
+        handle = withRvfc
+          ? (video as HTMLVideoElement).requestVideoFrameCallback(step)
+          : requestAnimationFrame(step);
       };
-      paso();
+      step();
     },
     stop() {
-      vivo = false;
+      running = false;
       if (!handle) return;
-      if (conRVFC) (video as HTMLVideoElement).cancelVideoFrameCallback?.(handle);
+      if (withRvfc) (video as HTMLVideoElement).cancelVideoFrameCallback?.(handle);
       else cancelAnimationFrame(handle);
       handle = 0;
     },
@@ -192,29 +144,29 @@ export class Synchronizer {
   readonly #bus: EventBus<CoreEvents> | undefined;
   readonly #scheduler: Scheduler;
   readonly #live: boolean;
-  readonly #ahora: () => number;
-  #corriendo = false;
-  #saltosDuros = 0;
-  #avisado = false;
-  #enfriarHasta = 0;
+  readonly #now: () => number;
+  #running = false;
+  #hardSeeks = 0;
+  #warned = false;
+  #coolUntil = 0;
 
   constructor(options: SynchronizerOptions) {
     this.#master = options.master;
-    this.#slaves = options.slaves.map((s) => ({ ...s, correcting: false, sinMedirDesde: null }));
+    this.#slaves = options.slaves.map((s) => ({ ...s, correcting: false, unmeasuredSince: null }));
     this.#profile = options.profile ?? SYNC_PROFILES[detectProfile()];
     this.#bus = options.bus;
     this.#live = options.live === true;
-    this.#ahora = options.now ?? (() => performance.now());
+    this.#now = options.now ?? (() => performance.now());
     this.#scheduler = options.scheduler
       ?? defaultScheduler(options.master.engine.element);
   }
 
   get running(): boolean {
-    return this.#corriendo;
+    return this.#running;
   }
 
   get hardSeeks(): number {
-    return this.#saltosDuros;
+    return this.#hardSeeks;
   }
 
   get profile(): SyncProfile {
@@ -222,58 +174,47 @@ export class Synchronizer {
   }
 
   /**
-   * De dónde sale la medida ahora mismo.
-   *
-   *   - `timeline`   — diferencia de `currentTime`. Válido bajo demanda, donde
-   *                    ambos flujos comparten origen.
-   *   - `program`    — diferencia de hora absoluta. La vía del directo.
-   *   - `imposible`  — es un directo y los flujos no traen hora absoluta.
-   *
-   * El tercer caso **no corrige nada**, y es deliberado. S5 midió dos flujos
-   * sincronizados a 28 ms cuyos `currentTime` diferían en 20 segundos por
-   * haberse cargado con esa separación: corregir sobre esa lectura daría un
-   * salto duro que destrozaría una reproducción correcta. Fingir una
-   * sincronización que no se puede medir es peor que no ofrecerla.
+   * Where the measurement comes from: `timeline` (currentTime difference, on
+   * demand), `program` (absolute time, live), or `impossible` (live without
+   * absolute time: nothing is corrected, since S5 saw synced streams whose
+   * currentTime differed by 20 s).
    */
-  get mode(): 'timeline' | 'program' | 'imposible' {
+  get mode(): 'timeline' | 'program' | 'impossible' {
     if (!this.#live) return 'timeline';
-    return this.#horaDe(this.#master.engine) !== null ? 'program' : 'imposible';
+    return this.#clockOf(this.#master.engine) !== null ? 'program' : 'impossible';
   }
 
-  #horaDe(engine: MediaEngine): number | null {
+  #clockOf(engine: MediaEngine): number | null {
     const t = engine.getProgramTime?.();
     return typeof t === 'number' && Number.isFinite(t) ? t : null;
   }
 
   start(): void {
-    if (this.#corriendo || this.#slaves.length === 0) return;
-    this.#corriendo = true;
+    if (this.#running || this.#slaves.length === 0) return;
+    this.#running = true;
     this.#scheduler.start(() => this.tick());
   }
 
   stop(): void {
-    if (!this.#corriendo) return;
-    this.#corriendo = false;
+    if (!this.#running) return;
+    this.#running = false;
     this.#scheduler.stop();
-    // Devolver a los esclavos su velocidad natural: dejarlos corriendo al
-    // 1,25× tras parar el lazo sería un fallo silencioso y desconcertante.
+    // Slaves must not keep running at 1.25× once the loop stops.
     for (const s of this.#slaves) {
       s.correcting = false;
       s.engine.setPlaybackRate(this.#master.engine.getPlaybackRate());
     }
   }
 
-  /** Un paso del lazo de control. Público para poder probarlo paso a paso. */
+  /** One step of the control loop. Public to test it step by step. */
   tick(): SyncSample[] {
-    const maestro = this.#master.engine;
-    const base = maestro.getPlaybackRate();
-    const muestras: SyncSample[] = [];
+    const master = this.#master.engine;
+    const base = master.getPlaybackRate();
+    const samples: SyncSample[] = [];
 
-    if (this.mode === 'imposible') {
-      // Sin hora absoluta en un directo no hay nada que medir. Se avisa una vez
-      // para que la interfaz pueda decirlo, y se deja de corregir.
-      if (!this.#avisado) {
-        this.#avisado = true;
+    if (this.mode === 'impossible') {
+      if (!this.#warned) {
+        this.#warned = true;
         this.#bus?.emit('sync:unavailable', {
           reason: 'The live stream has no EXT-X-PROGRAM-DATE-TIME: drift between '
             + 'streams cannot be measured, so it is not corrected',
@@ -282,19 +223,9 @@ export class Synchronizer {
       return [];
     }
 
-    /*
-     * Enfriamiento tras un salto.
-     *
-     * Un salto obliga al navegador a decodificar desde el keyframe anterior, y
-     * las lecturas de ese rato no significan nada. Corregir sobre ellas hace
-     * que el lazo trabaje contra sí mismo: medido tras retroceder en un
-     * directo, se quedaba en 270 ms corrigiendo sin parar y saltando en duro
-     * cada pocos segundos, en vez de converger.
-     *
-     * Es la misma razón por la que ya se ignoran las lecturas mientras
-     * `seeking` está activo; solo que el asentamiento dura más que la bandera.
-     */
-    if (this.#ahora() < this.#enfriarHasta) {
+    // Readings while a seek settles mean nothing; correcting on them kept the
+    // loop at 270 ms, hard-seeking every few seconds (test: cooldown after a seek).
+    if (this.#now() < this.#coolUntil) {
       return this.#slaves.map((s) => ({
         stream: s.id, drift: 0, action: 'waiting' as const,
         rate: s.engine.getPlaybackRate(),
@@ -302,72 +233,51 @@ export class Synchronizer {
     }
 
     for (const s of this.#slaves) {
-      const muestra = this.#corregir(s, maestro.currentTime, base);
-      muestras.push(muestra);
+      const sample = this.#correct(s, master.currentTime, base);
+      samples.push(sample);
       this.#bus?.emit('sync:drift', {
-        stream: muestra.stream,
-        drift: muestra.drift,
-        action: muestra.action,
+        stream: sample.stream,
+        drift: sample.drift,
+        action: sample.action,
       });
     }
-    return muestras;
+    return samples;
   }
 
-  /**
-   * Deriva del esclavo respecto al maestro, en segundos.
-   *
-   * En directo se compara la **hora absoluta** de cada posición. El desfase
-   * entre hora y `currentTime` es constante en cada flujo, así que la
-   * diferencia de horas es la deriva real aunque los `currentTime` no tengan
-   * nada que ver entre sí.
-   */
-  #deriva(s: Slave, tiempoMaestro: number): number | null {
+  /** Slave drift from the master, in seconds; by absolute time when live. */
+  #drift(s: Slave, masterTime: number): number | null {
     if (this.mode === 'program') {
-      const hm = this.#horaDe(this.#master.engine);
-      const hs = this.#horaDe(s.engine);
+      const hm = this.#clockOf(this.#master.engine);
+      const hs = this.#clockOf(s.engine);
       if (hm === null || hs === null) return null;
       return (hs - hm) / 1000;
     }
-    return s.engine.currentTime - tiempoMaestro;
+    return s.engine.currentTime - masterTime;
   }
 
-  #corregir(s: Slave, tiempoMaestro: number, base: number): SyncSample {
+  #correct(s: Slave, masterTime: number, base: number): SyncSample {
     const p = this.#profile;
-    const medida = this.#deriva(s, tiempoMaestro);
-    if (medida === null) {
-      // Un esclavo puede quedarse sin hora un instante al recargar la lista.
-      return this.#esperar(s, 0);
-    }
-    const drift = medida;
+    const measured = this.#drift(s, masterTime);
+    if (measured === null) return this.#wait(s, 0);
+    const drift = measured;
     const a = Math.abs(drift);
 
-    // Durante un salto la medida no significa nada: el navegador está entre
-    // dos posiciones y corregir sobre eso amplifica el error.
     if (this.#master.engine.element?.seeking || s.engine.element?.seeking) {
-      return this.#esperar(s, drift);
+      return this.#wait(s, drift);
     }
-    s.sinMedirDesde = null;
+    s.unmeasuredSince = null;
 
     if (a > p.hardSeek) {
-      /*
-       * En directo no se puede saltar al `currentTime` del maestro: son
-       * timelines distintas. Se salta **restando la deriva** a la propia
-       * posición, que es válido en ambos modos porque el desfase entre hora y
-       * posición es constante dentro de cada flujo.
-       *
-       * Y el salto duro es lo correcto aquí: S5 midió que un corte de 3 s deja
-       * 3 s de desfase permanente, y absorberlos al 25 % de velocidad extra
-       * tardaría doce segundos.
-       */
+      // Seek by subtracting the drift from its own position: live timelines
+      // differ between streams, so the master's currentTime cannot be copied.
       s.engine.seek(s.engine.currentTime - drift);
       s.engine.setPlaybackRate(base);
       s.correcting = false;
-      this.#saltosDuros++;
-      this.#enfriarHasta = this.#ahora() + ENFRIAMIENTO_SALTO;
+      this.#hardSeeks++;
+      this.#coolUntil = this.#now() + SEEK_COOLDOWN_MS;
       return { stream: s.id, drift, action: 'hard-seek', rate: base };
     }
 
-    // Histéresis: engancha en deadZone, suelta en releaseZone.
     if (!s.correcting && a > p.deadZone) s.correcting = true;
     else if (s.correcting && a < p.releaseZone) s.correcting = false;
 
@@ -376,7 +286,6 @@ export class Synchronizer {
       return { stream: s.id, drift, action: 'ok', rate: base };
     }
 
-    // Control proporcional: si el esclavo va por detrás (drift < 0), acelera.
     const delta = Math.max(-p.maxRateDelta, Math.min(p.maxRateDelta, -p.gain * drift));
     const rate = base + delta;
     s.engine.setPlaybackRate(rate);
@@ -384,54 +293,44 @@ export class Synchronizer {
   }
 
   /**
-   * El esclavo no se puede medir ahora: se espera, pero no para siempre.
-   *
-   * Solo cuenta el tiempo con el maestro avanzando: si el maestro está parado
-   * o saltando, que el esclavo espere es lo normal. Pasado `ATASCO_MS`, se le
-   * pide que salte a su propia posición. Parece no hacer nada, y es lo que
-   * reactiva la carga en un motor que se había quedado sin enterarse del
-   * salto anterior.
+   * The slave cannot be measured now: wait, but not forever. Past `STUCK_MS`
+   * with the master playing, it is asked to seek to its own position, which
+   * restarts loading in an engine that missed the previous seek.
+   * see docs/browser-quirks.md#webkit-hls-seek
    */
-  #esperar(s: Slave, drift: number): SyncSample {
+  #wait(s: Slave, drift: number): SyncSample {
     const rate = s.engine.getPlaybackRate();
-    const maestro = this.#master.engine;
-    if (maestro.paused || maestro.element?.seeking) {
-      s.sinMedirDesde = null;
+    const master = this.#master.engine;
+    if (master.paused || master.element?.seeking) {
+      s.unmeasuredSince = null;
       return { stream: s.id, drift, action: 'waiting', rate };
     }
-    const ahora = this.#ahora();
-    s.sinMedirDesde ??= ahora;
-    if (ahora - s.sinMedirDesde < ATASCO_MS) {
+    const now = this.#now();
+    s.unmeasuredSince ??= now;
+    if (now - s.unmeasuredSince < STUCK_MS) {
       return { stream: s.id, drift, action: 'waiting', rate };
     }
-    s.sinMedirDesde = null;
+    s.unmeasuredSince = null;
     s.engine.seek(s.engine.currentTime);
-    this.#enfriarHasta = ahora + ENFRIAMIENTO_SALTO;
+    this.#coolUntil = now + SEEK_COOLDOWN_MS;
     return { stream: s.id, drift, action: 'recover', rate };
   }
 
   /**
-   * Alinea los esclavos con el maestro de golpe, sin corrección suave.
-   *
-   * Se usa cuando la corrección gradual no tiene sentido: tras un salto del
-   * usuario, o al arrancar. La demo mostró por qué hace falta al arrancar —
-   * enganchar y reproducir en secuencia deja un desfase de unos 70 ms que no
-   * es deriva acumulada sino retraso de partida, y nada lo corregiría solo.
+   * Snaps the slaves to the master, without smooth correction: after a user
+   * seek, or at start, where playing in sequence leaves ~70 ms of start-up lag.
    */
   align(): void {
-    if (this.mode === 'imposible') return;
-    // Tras cuadrar, dar tiempo a que ambos asienten antes de volver a medir.
-    this.#enfriarHasta = this.#ahora() + ENFRIAMIENTO_ALINEADO;
+    if (this.mode === 'impossible') return;
+    this.#coolUntil = this.#now() + ALIGN_COOLDOWN_MS;
     const t = this.#master.engine.currentTime;
     const base = this.#master.engine.getPlaybackRate();
     for (const s of this.#slaves) {
-      const d = this.#deriva(s, t);
-      // En directo cada flujo tiene su propia timeline: se cuadra restando la
-      // deriva medida, no copiando la posición del maestro.
+      const d = this.#drift(s, t);
       s.engine.seek(d === null ? t : s.engine.currentTime - d);
       s.engine.setPlaybackRate(base);
       s.correcting = false;
-      s.sinMedirDesde = null;
+      s.unmeasuredSince = null;
     }
   }
 }

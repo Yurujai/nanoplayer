@@ -1,54 +1,29 @@
 /**
- * Anclajes: por dónde un plugin aporta interfaz.
+ * UI slots: how a plugin contributes interface. The contract lives in the core
+ * and the UI layer implements it, so a plugin depends on `@nanoplayer/core`
+ * only. **The plugin declares; the UI builds**: plugins never inject DOM into
+ * the bar, or tab order and accessibility guarantees would go with the first
+ * third-party plugin.
  *
- * El contrato vive en el núcleo y lo implementa la capa de interfaz. Así un
- * plugin se escribe dependiendo solo de `@nanoplayer/core`, y sigue funcionando
- * con una interfaz distinta de la de serie.
- *
- * **El plugin declara; la interfaz construye.** Nunca se le entrega un nodo del
- * DOM para que pinte lo que quiera. No es purismo: si los plugins inyectan DOM
- * libremente en la barra, el orden de tabulación se vuelve impredecible y las
- * garantías de accesibilidad se evaporan en cuanto alguien instale uno de
- * terceros. Construyendo la interfaz a partir de una declaración, el contrato
- * se mantiene.
- *
- * Dónde va cada cosa se decide por **frecuencia y forma de la interacción**,
- * nunca por qué plugin la implementa:
- *
- * | Anclaje    | Qué va                                   |
- * |------------|------------------------------------------|
- * | `bar`      | Binario, frecuente, con estado visible    |
- * | `settings` | Elección entre varias opciones, ocasional |
- * | `timeline` | Tramos con nombre sobre la barra de progreso |
- *
- * Un mismo plugin puede aportar en varios. Los subtítulos son el caso claro:
- * interruptor en la barra *y* panel en ajustes para elegir idioma.
+ * | Slot       | What goes there                              |
+ * |------------|----------------------------------------------|
+ * | `bar`      | Binary, frequent, with visible state          |
+ * | `settings` | A choice among options, occasional            |
+ * | `timeline` | Named segments on the progress bar            |
  */
 
-/** Un botón de la barra de controles. */
 export interface BarControlDecl {
   id: string;
-  /** SVG en línea. Puede depender del estado actual. */
+  /** Inline SVG. May depend on the current state. */
   icon: string | (() => string);
-  /** Nombre accesible. Puede depender del estado actual. */
+  /** Accessible name. May depend on the current state. */
   label: string | (() => string);
   onActivate: () => void;
-  /**
-   * Estado de conmutador. Si se define, el botón expone `aria-pressed`, que es
-   * lo que hace que un lector anuncie "activado" en vez de leer solo el nombre.
-   */
+  /** Toggle state: when set, the button exposes `aria-pressed`. */
   pressed?: () => boolean;
-  /**
-   * Si el control aplica ahora mismo. Un botón que no puede hacer nada es
-   * ruido, y en la barra el sitio es escaso: Chromecast solo si hay
-   * dispositivo, subtítulos solo si el manifiesto trae pistas.
-   */
+  /** Whether the control applies right now: a button that can do nothing is noise. */
   available?: () => boolean;
-  /**
-   * Menor va antes, y **manda cuando no cabe todo**. La barra admite cuatro o
-   * cinco controles en móvil; lo que no entra se desborda al menú de ajustes
-   * en lugar de apretujarse.
-   */
+  /** Lower goes first, and wins when not everything fits: the rest overflows to settings. */
   priority?: number;
 }
 
@@ -57,7 +32,6 @@ export interface SettingsOptionDecl {
   label: string;
 }
 
-/** Un panel del menú de ajustes. */
 export interface SettingsPanelDecl {
   id: string;
   label: string;
@@ -68,75 +42,50 @@ export interface SettingsPanelDecl {
 }
 
 /**
- * Un tramo con nombre en la barra de progreso: un capítulo, una actividad.
- *
- * Los tiempos van **en tiempo del medio**, igual que las anotaciones del
- * manifiesto de las que salen. Si hay recorte, la interfaz los remapea y
- * descarta lo que cae fuera: así ningún plugin tiene que acordarse de restar.
+ * A named segment on the progress bar: a chapter, an activity. Times are in
+ * **media time**, like the manifest annotations; the UI remaps them to the trim.
  */
 export interface TimelineMarkerDecl {
   start: number;
-  /** Si falta, el tramo llega hasta el siguiente o hasta el final. */
+  /** Without it, the segment runs to the next one or to the end. */
   end?: number;
-  /** Nombre del tramo. Se enseña y se anuncia: es texto accesible. */
+  /** Shown and announced: accessible text. */
   label: string;
 }
 
-/** Un conjunto de marcas que aporta un plugin. */
 export interface TimelineMarkersDecl {
   id: string;
   markers: readonly TimelineMarkerDecl[];
 }
 
-/** Una capa de contenido sobre el vídeo. */
 export interface OverlayDecl {
   id: string;
   /**
-   * Dónde se coloca:
-   *   - `captions` — franja inferior, por encima de la barra de controles
-   *   - `center`   — centrado
-   *   - `fill`     — ocupa el reproductor entero
+   * - `captions` — bottom band, above the control bar
+   * - `center`   — centred
+   * - `fill`     — the whole player
    */
   position?: 'captions' | 'center' | 'fill';
 }
 
 export interface OverlayHandle {
-  /** Nodo que el plugin puede rellenar libremente. */
+  /** A node the plugin may fill freely. */
   element: HTMLElement;
   remove(): void;
 }
 
-/**
- * Lo que la interfaz ofrece a los plugins.
- *
- * Cada método devuelve la forma de retirar lo añadido, de modo que desactivar
- * un plugin deje la interfaz como estaba.
- */
+/** What the UI offers plugins. Every method returns how to undo what it added. */
 export interface UiSlots {
   addBarControl(control: BarControlDecl): () => void;
   addSettingsPanel(panel: SettingsPanelDecl): () => void;
-  /**
-   * Marca tramos con nombre en la barra de progreso.
-   *
-   * Igual que en `bar` y `settings`, **el plugin declara y la interfaz
-   * construye**: marcas, el nombre del tramo actual y lo que anuncia el lector
-   * de pantalla al moverse por la barra. Los capítulos son el primer uso; las
-   * actividades H5P, el siguiente.
-   */
+  /** Named segments on the progress bar; the UI builds marks and announcements. */
   addTimelineMarkers(decl: TimelineMarkersDecl): () => void;
   /**
-   * Reserva una capa sobre el vídeo y devuelve el nodo para rellenarlo.
-   *
-   * Aquí sí se entrega DOM, al contrario que en `bar` y `settings`, y la
-   * distinción es deliberada: lo que va en esas dos son **controles
-   * interactivos**, donde el orden de tabulación y las semánticas ARIA son
-   * responsabilidad de la interfaz. Una capa es **contenido** —el texto de un
-   * subtítulo, una actividad H5P—, y ahí el plugin sí sabe mejor qué pintar.
-   *
-   * Un plugin que meta controles interactivos dentro de una capa se sale del
-   * contrato y se lleva por delante las garantías de accesibilidad.
+   * Reserves a layer over the video. Unlike `bar` and `settings`, this hands out
+   * DOM: a layer is **content** (a caption, an activity), not interactive
+   * controls, which must stay under the UI's control.
    */
   addOverlay(decl: OverlayDecl): OverlayHandle;
-  /** Fuerza un repintado cuando cambia el estado de un control. */
+  /** Repaints after a control's state changes. */
   refresh(): void;
 }

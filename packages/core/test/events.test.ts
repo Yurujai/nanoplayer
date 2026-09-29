@@ -4,13 +4,13 @@ import { EventBus } from '../src/events.js';
 interface TestEvents {
   ping: { n: number };
   pong: { s: string };
-  vacio: Record<string, never>;
+  empty: Record<string, never>;
 }
 
 const bus = () => new EventBus<TestEvents>({ onListenerError: () => {} });
 
 describe('EventBus', () => {
-  it('entrega la carga útil a los suscriptores', () => {
+  it('delivers the payload to subscribers', () => {
     const b = bus();
     const fn = vi.fn();
     b.on('ping', fn);
@@ -18,7 +18,7 @@ describe('EventBus', () => {
     expect(fn).toHaveBeenCalledWith({ n: 1 });
   });
 
-  it('no mezcla tipos de evento', () => {
+  it('does not mix event types', () => {
     const b = bus();
     const ping = vi.fn();
     b.on('ping', ping);
@@ -26,7 +26,7 @@ describe('EventBus', () => {
     expect(ping).not.toHaveBeenCalled();
   });
 
-  it('la función devuelta por on() da de baja', () => {
+  it('the function returned by on() unsubscribes', () => {
     const b = bus();
     const fn = vi.fn();
     const un = b.on('ping', fn);
@@ -35,7 +35,7 @@ describe('EventBus', () => {
     expect(fn).not.toHaveBeenCalled();
   });
 
-  it('once() solo recibe una vez', () => {
+  it('once() receives only once', () => {
     const b = bus();
     const fn = vi.fn();
     b.once('ping', fn);
@@ -45,7 +45,7 @@ describe('EventBus', () => {
     expect(b.listenerCount('ping')).toBe(0);
   });
 
-  it('once() se puede cancelar antes de dispararse', () => {
+  it('once() can be cancelled before it fires', () => {
     const b = bus();
     const fn = vi.fn();
     b.once('ping', fn)();
@@ -53,78 +53,71 @@ describe('EventBus', () => {
     expect(fn).not.toHaveBeenCalled();
   });
 
-  // --- aislamiento de fallos ---------------------------------------------
-
-  it('un oyente que lanza no impide que los demás reciban', () => {
+  it('a throwing listener does not stop the others', () => {
     const b = bus();
-    const orden: string[] = [];
-    b.on('ping', () => { orden.push('a'); });
-    b.on('ping', () => { throw new Error('plugin roto'); });
-    b.on('ping', () => { orden.push('c'); });
+    const order: string[] = [];
+    b.on('ping', () => { order.push('a'); });
+    b.on('ping', () => { throw new Error('broken plugin'); });
+    b.on('ping', () => { order.push('c'); });
 
     expect(() => b.emit('ping', { n: 1 })).not.toThrow();
-    expect(orden).toEqual(['a', 'c']);
+    expect(order).toEqual(['a', 'c']);
   });
 
-  it('reporta el fallo con el tipo de evento, en vez de tragárselo', () => {
+  it('reports the failure with the event type instead of swallowing it', () => {
     const onListenerError = vi.fn();
     const b = new EventBus<TestEvents>({ onListenerError });
-    const boom = new Error('plugin roto');
+    const boom = new Error('broken plugin');
     b.on('ping', () => { throw boom; });
     b.emit('ping', { n: 1 });
     expect(onListenerError).toHaveBeenCalledWith({ type: 'ping', error: boom });
   });
 
-  it('aísla también los fallos de onAny', () => {
+  it('isolates onAny failures too', () => {
     const b = bus();
     const fn = vi.fn();
-    b.onAny(() => { throw new Error('analítica rota'); });
+    b.onAny(() => { throw new Error('broken analytics'); });
     b.on('ping', fn);
     expect(() => b.emit('ping', { n: 1 })).not.toThrow();
     expect(fn).toHaveBeenCalled();
   });
 
-  // --- mutación durante la emisión ---------------------------------------
-
-  it('darse de baja dentro de un manejador no se salta a los siguientes', () => {
+  it('unsubscribing inside a handler does not skip the next ones', () => {
     const b = bus();
-    const visto: string[] = [];
-    const un = b.on('ping', () => { visto.push('primero'); un(); });
-    b.on('ping', () => { visto.push('segundo'); });
+    const seen: string[] = [];
+    const un = b.on('ping', () => { seen.push('first'); un(); });
+    b.on('ping', () => { seen.push('second'); });
 
     b.emit('ping', { n: 1 });
-    expect(visto).toEqual(['primero', 'segundo']);
+    expect(seen).toEqual(['first', 'second']);
 
-    // Y en la siguiente emisión el primero ya no está.
-    visto.length = 0;
+    seen.length = 0;
     b.emit('ping', { n: 2 });
-    expect(visto).toEqual(['segundo']);
+    expect(seen).toEqual(['second']);
   });
 
-  it('suscribirse dentro de un manejador no afecta a la emisión en curso', () => {
+  it('subscribing inside a handler does not affect the emit in progress', () => {
     const b = bus();
-    const nuevo = vi.fn();
-    b.on('ping', () => { b.on('ping', nuevo); });
+    const added = vi.fn();
+    b.on('ping', () => { b.on('ping', added); });
     b.emit('ping', { n: 1 });
-    expect(nuevo).not.toHaveBeenCalled();
+    expect(added).not.toHaveBeenCalled();
     b.emit('ping', { n: 2 });
-    expect(nuevo).toHaveBeenCalledTimes(1);
+    expect(added).toHaveBeenCalledTimes(1);
   });
 
-  // --- onAny: el cimiento de la analítica --------------------------------
-
-  it('onAny recibe todos los eventos con su nombre', () => {
+  it('onAny receives every event with its name', () => {
     const b = bus();
-    const visto: Array<[string, unknown]> = [];
-    b.onAny((type, payload) => { visto.push([type, payload]); });
+    const seen: Array<[string, unknown]> = [];
+    b.onAny((type, payload) => { seen.push([type, payload]); });
 
     b.emit('ping', { n: 1 });
     b.emit('pong', { s: 'x' });
 
-    expect(visto).toEqual([['ping', { n: 1 }], ['pong', { s: 'x' }]]);
+    expect(seen).toEqual([['ping', { n: 1 }], ['pong', { s: 'x' }]]);
   });
 
-  it('onAny se puede dar de baja', () => {
+  it('onAny can be unsubscribed', () => {
     const b = bus();
     const fn = vi.fn();
     b.onAny(fn)();
@@ -132,9 +125,7 @@ describe('EventBus', () => {
     expect(fn).not.toHaveBeenCalled();
   });
 
-  // --- contabilidad y limpieza -------------------------------------------
-
-  it('cuenta oyentes por tipo y en total', () => {
+  it('counts listeners per type and in total', () => {
     const b = bus();
     b.on('ping', () => {});
     b.on('ping', () => {});
@@ -145,13 +136,13 @@ describe('EventBus', () => {
     expect(b.listenerCount()).toBe(4);
   });
 
-  it('no deja rastro tras dar de baja al último oyente de un tipo', () => {
+  it('leaves no trace after the last listener of a type unsubscribes', () => {
     const b = bus();
     b.on('ping', () => {})();
     expect(b.listenerCount()).toBe(0);
   });
 
-  it('clear() suelta todo, incluidos los onAny', () => {
+  it('clear() drops everything, onAny included', () => {
     const b = bus();
     b.on('ping', () => {});
     b.onAny(() => {});
@@ -159,7 +150,7 @@ describe('EventBus', () => {
     expect(b.listenerCount()).toBe(0);
   });
 
-  it('el mismo oyente registrado dos veces solo se guarda una', () => {
+  it('the same listener registered twice is kept once', () => {
     const b = bus();
     const fn = vi.fn();
     b.on('ping', fn);
@@ -168,7 +159,7 @@ describe('EventBus', () => {
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
-  it('emitir sin oyentes no falla', () => {
-    expect(() => bus().emit('vacio', {})).not.toThrow();
+  it('emitting with no listeners does not fail', () => {
+    expect(() => bus().emit('empty', {})).not.toThrow();
   });
 });
