@@ -13,12 +13,8 @@ export default defineConfig({
       formats: ['es'],
       fileName: () => 'index.js',
     },
-    // hls.js queda fuera del bundle: es dependencia de pares y se carga en
-    // diferido, así que quien no reproduzca HLS no la descarga.
-    //
-    // El núcleo, por lo mismo que en los demás paquetes: sin externalizarlo, el
-    // alias al código fuente hace que se copie dentro y el motor acabaría
-    // registrándose en un registro distinto del que usa el reproductor.
+    // hls.js: a lazy peer dependency. The core: without externalising it, the
+    // source alias copies it in and the engine registers in a different registry.
     rollupOptions: { external: ['hls.js', '@nanoplayer/core'] },
     sourcemap: true,
     target: 'es2022',

@@ -4,19 +4,19 @@ import { nativeEngineFactory, selectEngine, type Stream } from '@nanoplayer/core
 import { enginesWithHls, hlsEngineFactory } from '../src/index.js';
 
 const g = globalThis as { MediaSource?: unknown; ManagedMediaSource?: unknown };
-const previo = { ms: g.MediaSource, mms: g.ManagedMediaSource };
+const previous = { ms: g.MediaSource, mms: g.ManagedMediaSource };
 
-const conMse = () => { g.MediaSource = function () {}; };
-const conManagedMse = () => {
+const withMse = () => { g.MediaSource = function () {}; };
+const withManagedMse = () => {
   delete g.MediaSource;
   g.ManagedMediaSource = function () {};
 };
-const sinMse = () => { delete g.MediaSource; delete g.ManagedMediaSource; };
+const withoutMse = () => { delete g.MediaSource; delete g.ManagedMediaSource; };
 
 afterEach(() => {
-  if (previo.ms === undefined) delete g.MediaSource; else g.MediaSource = previo.ms;
-  if (previo.mms === undefined) delete g.ManagedMediaSource;
-  else g.ManagedMediaSource = previo.mms;
+  if (previous.ms === undefined) delete g.MediaSource; else g.MediaSource = previous.ms;
+  if (previous.mms === undefined) delete g.ManagedMediaSource;
+  else g.ManagedMediaSource = previous.mms;
 });
 
 const HLS = { src: 'a.m3u8', type: 'application/vnd.apple.mpegurl' };
@@ -26,32 +26,31 @@ const stream = (sources: Array<{ src: string; type: string }>): Stream => ({
   id: 'cam', role: 'presenter', audio: true, sources,
 });
 
-describe('hlsEngineFactory · qué dice que puede reproducir', () => {
-  it('solo HLS: no se ofrece para MP4', () => {
-    conMse();
+describe('hlsEngineFactory · what it claims it can play', () => {
+  it('only HLS: not offered for MP4', () => {
+    withMse();
     expect(hlsEngineFactory.canPlay(MP4)).toBe('no');
     expect(hlsEngineFactory.canPlay({ src: 'a.webm', type: 'video/webm' })).toBe('no');
   });
 
-  it('con MSE afirma que sí', () => {
-    conMse();
+  it('with MSE it says yes', () => {
+    withMse();
     expect(hlsEngineFactory.canPlay(HLS)).toBe('probably');
   });
 
-  it('ManagedMediaSource también vale', () => {
-    // Es la variante que introdujo Safari 17 y que S2 encontró en iOS 26. Sin
-    // reconocerla, en iPhone no habría forma de usar hls.js.
-    conManagedMse();
+  it('ManagedMediaSource counts too', () => {
+    // Safari 17+'s variant, found on iOS 26 by S2: without it hls.js never runs on iPhone.
+    withManagedMse();
     expect(hlsEngineFactory.canPlay(HLS)).toBe('probably');
   });
 
-  it('sin MSE dice que no, en vez de intentarlo y fallar', () => {
-    sinMse();
+  it('without MSE it says no instead of trying and failing', () => {
+    withoutMse();
     expect(hlsEngineFactory.canPlay(HLS)).toBe('no');
   });
 
-  it('reconoce las variantes del tipo MIME', () => {
-    conMse();
+  it('recognises MIME type variants', () => {
+    withMse();
     for (const type of ['application/x-mpegURL', 'APPLICATION/VND.APPLE.MPEGURL',
                         'application/vnd.apple.mpegurl; charset=utf-8']) {
       expect(hlsEngineFactory.canPlay({ src: 'a.m3u8', type }), type).toBe('probably');
@@ -59,33 +58,31 @@ describe('hlsEngineFactory · qué dice que puede reproducir', () => {
   });
 });
 
-describe('reparto con el motor nativo', () => {
-  it('con MSE gana hls.js', () => {
-    // El nativo se rebaja a `maybe` para HLS porque `canPlayType` miente; este
-    // afirma `probably`. El reparto sale solo de ahí.
-    conMse();
-    const elegido = selectEngine(enginesWithHls(nativeEngineFactory), stream([HLS]));
-    expect(elegido?.name).toBe('hls.js');
+describe('split with the native engine', () => {
+  it('with MSE hls.js wins', () => {
+    // The native engine says `maybe` for HLS. See docs/browser-quirks.md#canplaytype-hls
+    withMse();
+    const chosen = selectEngine(enginesWithHls(nativeEngineFactory), stream([HLS]));
+    expect(chosen?.name).toBe('hls.js');
   });
 
-  it('sin MSE gana el nativo, que es la única vía en iOS', () => {
-    sinMse();
-    const elegido = selectEngine(enginesWithHls(nativeEngineFactory), stream([HLS]));
-    expect(elegido?.name).toBe('native');
+  it('without MSE the native engine wins, the only way on iOS', () => {
+    withoutMse();
+    const chosen = selectEngine(enginesWithHls(nativeEngineFactory), stream([HLS]));
+    expect(chosen?.name).toBe('native');
   });
 
-  it('para MP4 nunca se mete por medio', () => {
-    conMse();
-    const elegido = selectEngine(enginesWithHls(nativeEngineFactory), stream([MP4]));
-    expect(elegido?.name).not.toBe('hls.js');
+  it('never gets in the way of MP4', () => {
+    withMse();
+    const chosen = selectEngine(enginesWithHls(nativeEngineFactory), stream([MP4]));
+    expect(chosen?.name).not.toBe('hls.js');
   });
 
-  it('el reparto no necesita condicionales fuera de canPlay', () => {
-    // Toda la decisión vive en canPlay: registrar el motor delante basta.
-    conMse();
-    const soloNativo = selectEngine([nativeEngineFactory], stream([HLS]));
-    const conHls = selectEngine(enginesWithHls(nativeEngineFactory), stream([HLS]));
-    expect(soloNativo?.name).toBe('native');
-    expect(conHls?.name).toBe('hls.js');
+  it('registering it first is enough: no conditionals outside canPlay', () => {
+    withMse();
+    const nativeOnly = selectEngine([nativeEngineFactory], stream([HLS]));
+    const withHls = selectEngine(enginesWithHls(nativeEngineFactory), stream([HLS]));
+    expect(nativeOnly?.name).toBe('native');
+    expect(withHls?.name).toBe('hls.js');
   });
 });

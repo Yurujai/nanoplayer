@@ -1,8 +1,8 @@
 # @nanoplayer/engine-hls
 
-Motor HLS sobre [hls.js](https://github.com/video-dev/hls.js). Segunda
-implementación de `MediaEngine`, y prueba de que la abstracción aguanta: se
-registra y ya, sin tocar el núcleo.
+HLS engine on top of [hls.js](https://github.com/video-dev/hls.js). It is the
+second `MediaEngine` implementation, and proof the abstraction holds: you
+register it and that is all, without touching the core.
 
 ```ts
 import { createPlayer, nativeEngineFactory } from '@nanoplayer/core';
@@ -15,37 +15,45 @@ createPlayer({
 });
 ```
 
-## hls.js se carga en diferido
+## hls.js is loaded lazily
 
-Es dependencia de pares y solo se descarga la **primera vez que hay que
-reproducir HLS**. Verificado en navegador: cargar la página y hasta resolver el
-manifiesto, la librería no se pide; aparece al enganchar el motor.
+It is a peer dependency, and it is only downloaded **the first time HLS has to
+play**. Checked in the browser: loading the page and resolving the manifest
+never request the library; it appears when the engine attaches.
 
-Quien reproduzca MP4 no paga nada, que es lo que hace compatible una etiqueta
-`<script>` con no arrastrar la librería por si acaso.
+Whoever plays MP4 pays nothing, which is what lets a `<script>` tag coexist
+with not dragging the library along just in case.
 
-## Cómo se reparte con el motor nativo
+## How it splits with the native engine
 
-| | `canPlay` para HLS | Gana |
+| | `canPlay` for HLS | Winner |
 |---|---|---|
-| Con MSE o ManagedMediaSource | `probably` | **hls.js** |
-| Sin MSE (iOS antiguo) | `no` | nativo |
+| With MSE or ManagedMediaSource | `probably` | **hls.js** |
+| Without MSE (older iOS) | `no` | native |
 
-Toda la decisión vive en `canPlay`. Registrar este motor delante basta; no hay
-condicionales repartidos por el código.
+The whole decision lives in `canPlay`. Registering this engine first is
+enough; there are no conditionals scattered through the code.
 
-**Nunca se decide por `canPlayType`.** El spike S2 midió que devuelve `"maybe"`
-para el MIME de HLS en los cinco navegadores probados, incluido Chrome de
-escritorio, que no reproduce HLS nativo. Es la trampa clásica.
+**It never decides from `canPlayType`.** Spike S2 measured that it returns
+`"maybe"` for the HLS MIME type in all five browsers tested, including desktop
+Chrome, which does not play HLS natively. See
+[docs/browser-quirks.md](../../docs/browser-quirks.md#canplaytype-hls).
 
-## Recuperación ante errores
+## Error recovery
 
-Es la razón práctica de preferirlo donde se puede elegir: ante un error fatal se
-reintenta —`startLoad()` para red, `recoverMediaError()` para decodificación— y
-solo se avisa al consumidor cuando ya no queda nada que intentar.
+This is the practical reason to prefer it where there is a choice: on a fatal
+error it retries —`startLoad()` for network, `recoverMediaError()` for
+decoding— and only tells the consumer once there is nothing left to try.
 
-## Al soltar el motor, la instancia muere
+## Seeking outside the buffer
 
-`hls.destroy()` no es opcional: sin él la instancia sigue pidiendo segmentos
-aunque el elemento haya desaparecido del DOM. Comprobado en el ciclo completo —
-tras soltar el motor, cero peticiones de segmento.
+In WebKit hls.js does not notice a seek outside what it has buffered: it stays
+idle and the video stays `seeking` forever. The engine calls `startLoad()` at
+the new position whenever the target is not buffered. See
+[docs/browser-quirks.md](../../docs/browser-quirks.md#webkit-hls-seek).
+
+## Detaching kills the instance
+
+`hls.destroy()` is not optional: without it the instance keeps requesting
+segments even after the element has left the DOM. Checked through the full
+cycle: after detaching, zero segment requests.
