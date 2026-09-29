@@ -1,57 +1,43 @@
-/**
- * Demo de directo.
- *
- * GitHub Pages solo sirve ficheros estáticos, así que el directo es de fuera:
- * el canal público de pruebas de ireplay.tv, que emite 24/7 con ventana DVR de
- * unos 25 minutos, CORS abierto y `EXT-X-PROGRAM-DATE-TIME`, que es lo que hace
- * falta para sincronizar dos directos (S5). Sus condiciones piden enlazarlo
- * donde se use, y la página lo hace.
- *
- * Los dos flujos salen del mismo canal: la lista principal, con audio, hace de
- * cámara, y una variante de solo vídeo, de diapositivas. No es realista, pero
- * precisamente por eso la sincronización se ve a simple vista: las dos mitades
- * tienen que enseñar el mismo fotograma.
- */
 import { create, nativeEngineFactory } from '@nanoplayer/core';
 import { enginesWithHls } from '@nanoplayer/engine-hls';
 import { attachControls } from '@nanoplayer/ui';
 
+/*
+ * GitHub Pages only serves static files, so the stream comes from ireplay.tv's
+ * public 24/7 test channel (open CORS, EXT-X-PROGRAM-DATE-TIME; its terms ask
+ * for a link, which the page carries). Both streams come from the same channel,
+ * so being in sync means both halves show the same frame.
+ */
 const HLS = 'application/vnd.apple.mpegurl';
-const FUENTES = {
+const SOURCES = {
   camera: 'https://ireplay.tv/test/blender.m3u8',
   slides: 'https://ireplay.tv/test/rate_2_28.m3u8',
 };
-const TITULO = 'Live lecture';
+const TITLE = 'Live lecture';
 
 const player = create('#player', {
   lang: 'en',
-  // hls.js delante: fuera de Safari es lo único que reproduce HLS.
   engines: enginesWithHls(nativeEngineFactory),
   manifest: {
     id: 'demo-live',
-    title: TITULO,
+    title: TITLE,
     live: true,
     poster: '../media/poster.jpg',
     streams: [
       { id: 'camera', role: 'presenter', label: 'Camera', audio: true,
-        sources: [{ src: FUENTES.camera, type: HLS }] },
+        sources: [{ src: SOURCES.camera, type: HLS }] },
       { id: 'slides', role: 'presentation', label: 'Slides', audio: false,
-        sources: [{ src: FUENTES.slides, type: HLS }] },
+        sources: [{ src: SOURCES.slides, type: HLS }] },
     ],
   },
 });
-attachControls(player, { label: TITULO });
+attachControls(player, { label: TITLE });
 
-/*
- * El canal declara `EXT-X-START:TIME-OFFSET=36`: empezar a los 36 s del
- * principio de la ventana, casi 25 minutos por detrás del directo. El
- * reproductor lo respeta, porque es lo que dice el estándar, pero una demo de
- * directo tiene que abrir en directo. Se salta al borde una sola vez, en
- * cuanto se sabe dónde está; después, retroceder es cosa de quien mira.
- */
-let enBorde = false;
+// The channel declares EXT-X-START:TIME-OFFSET=36, almost 25 minutes behind
+// live. The player honours it, but a live demo must open live: jump once.
+let atEdge = false;
 player.on('time', () => {
-  if (enBorde || player.liveEdge <= 0) return;
-  enBorde = true;
+  if (atEdge || player.liveEdge <= 0) return;
+  atEdge = true;
   player.seekToLive();
 });

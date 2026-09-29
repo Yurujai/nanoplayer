@@ -65,7 +65,7 @@ const waitPhase = (page, target, timeout) => page
 /** Opens the video demo with intro and outro turned on, and presses play. */
 async function start(page) {
   await page.goto(PAGE, { waitUntil: 'load' });
-  await page.click('label:has(#cadena)');
+  await page.click('label:has(#bumpers)');
   await page.waitForSelector('#player .np__poster-play');
   await page.click('#player .np__poster-play');
 }

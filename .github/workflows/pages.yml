@@ -1,22 +1,20 @@
-name: Publicar la web y los spikes
+name: Publish the site and the spikes
 
-# Publica en GitHub Pages la web del proyecto y los spikes:
+# Publishes to GitHub Pages:
 #
-#   /                        portada: qué es, por qué y casos de uso
-#   /video/                  demo de vídeo (MP4, mono y dual)
-#   /live/                   demo de directo (sin directo enlazado todavía)
-#   /bench/                  banco de pruebas del núcleo
-#   /demo/                   redirecciones desde las direcciones antiguas
-#   /spikes/s1-dual-sync/    spike de sincronización dual-stream
-#   /spikes/s6-chaining/     spike de encadenado de cabecera y cola
-#   /probe/                  sonda de diagnóstico de dispositivo (S2)
+#   /                        landing page
+#   /video/                  video demo (MP4, single and dual)
+#   /live/                   live demo
+#   /bench/                  core test bench
+#   /demo/                   redirects from the old addresses
+#   /spikes/s1-dual-sync/    dual-stream sync spike
+#   /spikes/s6-chaining/     intro and outro chaining spike
+#   /probe/                  device diagnostic probe (S2)
 #
-# Los medios NO se versionan: se generan aquí con ffmpeg. Con la calidad de
-# trabajo local pesarían unos 40 MB, así que para publicar se usa una versión
-# reducida — de ahí SIZE y CRF.
+# Media is NOT versioned: it is generated here with ffmpeg, in a lighter
+# version than local work (hence SIZE and CRF).
 #
-# Requiere repositorio PÚBLICO en plan gratuito: Pages desde repo privado es de
-# planes de pago.
+# Needs a PUBLIC repository on the free plan: Pages from a private repo is paid.
 
 on:
   push:
@@ -35,15 +33,12 @@ permissions:
 
 concurrency:
   group: pages
-  # NO cancelar en curso. Es lo contrario de lo que conviene en el resto de
-  # workflows, y aquí es deliberado: cancelar una publicación a medias deja el
-  # servicio de Pages con un despliegue colgado, y el siguiente expira con
-  # "Timeout reached, aborting!". Pasó de verdad con b7ad27f.
+  # Do NOT cancel in progress: a half-cancelled publish leaves Pages with a hung
+  # deployment and the next one times out ("Timeout reached, aborting!", b7ad27f).
   cancel-in-progress: false
 
 env:
-  # Medios ligeros para publicar. En local se usan los valores por defecto de
-  # cada gen-media.sh, que son de más calidad.
+  # Light media for publishing; locally each gen-media.sh uses higher quality.
   SIZE: 960x540
   CRF: '32'
 
@@ -62,18 +57,18 @@ jobs:
           node-version: '20'
           cache: pnpm
 
-      # fonts-dejavu-core aporta la tipografía del timecode incrustado.
-      - name: Instalar ffmpeg
+      # fonts-dejavu-core provides the font of the burned-in timecode.
+      - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
 
-      - name: Instalar dependencias
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Preparar el sitio
+      - name: Prepare the site
         run: mkdir -p _site
 
-      # --- S2: sonda de diagnóstico ---------------------------------------
-      - name: Construir la sonda de diagnóstico
+      # --- S2: diagnostic probe -------------------------------------------
+      - name: Build the diagnostic probe
         working-directory: spikes/s2-device-matrix
         run: |
           ./gen-media.sh
@@ -81,8 +76,8 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/_site/probe"
           cp dist/nanoplayer-probe.html "$GITHUB_WORKSPACE/_site/probe/index.html"
 
-      # --- S1: banco de sincronización ------------------------------------
-      - name: Preparar el spike de sincronización
+      # --- S1: sync bench -------------------------------------------------
+      - name: Prepare the sync spike
         working-directory: spikes/s1-dual-sync
         env:
           DUR: '40'
@@ -93,12 +88,10 @@ jobs:
           cp index.html sync.js "$dest/"
           cp -r media "$dest/"
 
-      # --- S6: encadenado de cabecera y cola --------------------------------
-      # Se publica sobre todo para poder abrirlo en un móvil: la pregunta que
-      # le queda abierta —si iOS deja arrancar el segundo elemento— solo se
-      # contesta en un iPhone, y pedir que levanten un servidor en su red local
-      # es pedir demasiado.
-      - name: Preparar el spike de encadenado
+      # --- S6: intro and outro chaining -----------------------------------
+      # Published so it can be opened on a phone: its iOS questions are only
+      # answered on an iPhone.
+      - name: Prepare the chaining spike
         working-directory: spikes/s6-chaining
         env:
           DUR_MAIN: '20'
@@ -109,10 +102,10 @@ jobs:
           cp index.html chain.js "$dest/"
           cp -r media "$dest/"
 
-      # --- web -------------------------------------------------------------
-      # La web ocupa la raíz. Las direcciones antiguas de la demo se
-      # redirigen para no romper los enlaces que ya se han compartido.
-      - name: Construir la web
+      # --- site ------------------------------------------------------------
+      # The site takes the root. The demo's old addresses redirect so shared
+      # links keep working.
+      - name: Build the site
         working-directory: demo
         env:
           DUR: '40'
@@ -120,15 +113,15 @@ jobs:
           ./gen-media.sh
           pnpm build
           cp -r dist/. "$GITHUB_WORKSPACE/_site/"
-          redirigir() {
+          redirect() {
             mkdir -p "$(dirname "$GITHUB_WORKSPACE/_site/$1")"
             printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=%s"><link rel="canonical" href="%s"><a href="%s">Moved</a>\n' "$2" "$2" "$2" \
               > "$GITHUB_WORKSPACE/_site/$1"
           }
-          redirigir demo/index.html ../video/
-          redirigir demo/banco.html ../bench/
+          redirect demo/index.html ../video/
+          redirect demo/banco.html ../bench/
 
-      - name: Tamaño del sitio
+      - name: Site size
         run: du -sh _site && du -sh _site/*
 
       - uses: actions/upload-pages-artifact@v3
@@ -145,6 +138,5 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@v4
         with:
-          # Por encima de los 10 minutos por defecto: el sitio ronda los 8 MB
-          # entre vídeos de prueba, y con la red de GitHub lenta se acercaba.
+          # Above the default 10 minutes: the site is about 8 MB of test videos.
           timeout: 900000

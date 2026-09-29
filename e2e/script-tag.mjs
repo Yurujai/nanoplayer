@@ -1,14 +1,7 @@
 /*
- * La promesa del objetivo O5, comprobada en un navegador de verdad.
- *
- * Una etiqueta `<script>` y tres líneas tienen que dar un reproductor **con
- * controles**. Suena a que no hace falta comprobarlo, y sin embargo es
- * exactamente lo que falló al montar el paquete: el `export *` del núcleo
- * ganaba sobre el `create` con pilas, y la global acababa trayendo el headless.
- * Los tipos, el build y los tests de unidad no dijeron nada.
- *
- * Por eso se audita el FICHERO CONSTRUIDO cargado como lo cargaría cualquiera,
- * y no el código fuente.
+ * One `<script>` tag and three lines must give a player WITH controls, checked
+ * on the built file in a real browser: a star export once made the global ship
+ * the headless `create`, and types, build and unit tests said nothing.
  *
  *   pnpm build && node script-tag.mjs
  */
@@ -17,11 +10,11 @@ import { createServer } from 'node:http';
 import { chromium } from 'playwright';
 
 const IIFE = new URL('../packages/bundle/dist/nanoplayer.min.js', import.meta.url);
-const guion = readFileSync(IIFE, 'utf8');
+const script = readFileSync(IIFE, 'utf8');
 
-// Exactamente lo que diría la documentación, sin una línea más.
-const PAGINA = `<!doctype html>
-<html lang="es">
+// Exactly what the documentation says, not one line more.
+const PAGE = `<!doctype html>
+<html lang="en">
 <meta charset="utf-8">
 <body>
 <div id="player" style="width:640px"></div>
@@ -30,64 +23,62 @@ const PAGINA = `<!doctype html>
   window.__p = NanoPlayer.create('#player', { manifest: {
     id: 'x',
     streams: [{ id: 'cam', role: 'presenter', audio: true,
-                sources: [{ src: '/no-se-descarga.mp4', type: 'video/mp4' }] }],
+                sources: [{ src: '/not-downloaded.mp4', type: 'video/mp4' }] }],
   } });
 </script>
 </body></html>`;
 
-const servidor = createServer((req, res) => {
+const server = createServer((req, res) => {
   if (req.url === '/nanoplayer.min.js') {
     res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
-    return res.end(guion);
+    return res.end(script);
   }
   res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-  res.end(PAGINA);
+  res.end(PAGE);
 });
-await new Promise((r) => servidor.listen(5201, '127.0.0.1', r));
+await new Promise((r) => server.listen(5201, '127.0.0.1', r));
 
-let fallos = 0;
-const comprobar = (ok, que, detalle = '') => {
-  console.log(`  ${ok ? '✓' : '✗'} ${que}${detalle ? ` — ${detalle}` : ''}`);
-  if (!ok) fallos++;
+let failures = 0;
+const check = (ok, what, detail = '') => {
+  console.log(`  ${ok ? '✓' : '✗'} ${what}${detail ? ` — ${detail}` : ''}`);
+  if (!ok) failures++;
 };
 
-const navegador = await chromium.launch({ channel: 'chrome' }).catch(() => chromium.launch());
-const pagina = await navegador.newPage();
+const browser = await chromium.launch({ channel: 'chrome' }).catch(() => chromium.launch());
+const page = await browser.newPage();
 
-const errores = [];
-pagina.on('pageerror', (e) => errores.push(String(e)));
-const peticiones = [];
-pagina.on('request', (r) => peticiones.push(r.url()));
+const errors = [];
+page.on('pageerror', (e) => errors.push(String(e)));
+const requests = [];
+page.on('request', (r) => requests.push(r.url()));
 
-await pagina.goto('http://127.0.0.1:5201/', { waitUntil: 'load' });
+await page.goto('http://127.0.0.1:5201/', { waitUntil: 'load' });
 
-console.log('\nUna etiqueta <script> y tres líneas');
-comprobar(errores.length === 0, 'la página no lanza errores', errores[0] ?? '');
-comprobar(await pagina.evaluate(() => typeof NanoPlayer === 'object'),
-  'define la global NanoPlayer');
-comprobar(await pagina.evaluate(() => !!window.__p), 'create() devuelve un reproductor');
+console.log('\nOne <script> tag and three lines');
+check(errors.length === 0, 'the page throws no errors', errors[0] ?? '');
+check(await page.evaluate(() => typeof NanoPlayer === 'object'), 'defines the NanoPlayer global');
+check(await page.evaluate(() => !!window.__p), 'create() returns a player');
 
-console.log('\nY trae los controles puestos');
-const barra = await pagina.locator('.np__bar').count();
-comprobar(barra === 1, 'hay barra de controles', `encontradas: ${barra}`);
+console.log('\nAnd the controls come attached');
+const bars = await page.locator('.np__bar').count();
+check(bars === 1, 'there is a control bar', `found: ${bars}`);
 
-const botones = await pagina.locator('#player button').count();
-comprobar(botones > 0, 'hay botones', `${botones}`);
+const buttons = await page.locator('#player button').count();
+check(buttons > 0, 'there are buttons', `${buttons}`);
 
-const sinNombre = await pagina.evaluate(() =>
+const unnamed = await page.evaluate(() =>
   [...document.querySelectorAll('#player button')]
     .filter((b) => !(b.getAttribute('aria-label') ?? '').trim()).length);
-comprobar(sinNombre === 0, 'todos los botones tienen nombre accesible',
-  sinNombre ? `${sinNombre} sin nombre` : '');
+check(unnamed === 0, 'every button has an accessible name', unnamed ? `${unnamed} unnamed` : '');
 
-console.log('\nSin romper el ciclo perezoso');
-const videos = await pagina.locator('#player video').count();
-comprobar(videos === 0, 'ningún <video> en el DOM antes de reproducir');
-const pidioMedios = peticiones.some((u) => u.includes('no-se-descarga.mp4'));
-comprobar(!pidioMedios, 'ni un byte de vídeo pedido');
+console.log('\nWithout breaking the lazy lifecycle');
+const videos = await page.locator('#player video').count();
+check(videos === 0, 'no <video> in the DOM before playing');
+const requestedMedia = requests.some((u) => u.includes('not-downloaded.mp4'));
+check(!requestedMedia, 'not a byte of video requested');
 
-await navegador.close();
-servidor.close();
+await browser.close();
+server.close();
 
-console.log(fallos === 0 ? '\nTodo correcto.\n' : `\n${fallos} fallo(s).\n`);
-process.exit(fallos === 0 ? 0 : 1);
+console.log(failures === 0 ? '\nAll good.\n' : `\n${failures} failure(s).\n`);
+process.exit(failures === 0 ? 0 : 1);

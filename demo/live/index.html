@@ -7,20 +7,20 @@
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="/src/site.css">
 <style>
-  .probar{margin:0;padding-left:1.2rem}
-  .probar li{margin:.3rem 0;max-width:66ch}
+  .try-list{margin:0;padding-left:1.2rem}
+  .try-list li{margin:.3rem 0;max-width:66ch}
 </style>
 </head>
 <body>
-<main class="ancho">
-  <p class="migas"><a href="../">← NanoPlayer</a></p>
+<main class="wide">
+  <p class="breadcrumb"><a href="../">← NanoPlayer</a></p>
   <h1>Live demo</h1>
   <p class="lead">
     Two live streams — camera and slides — kept in sync by the time of day
     they were broadcast.
   </p>
 
-  <p class="aviso" role="note">
+  <p class="notice" role="note">
     <strong>A public test channel stands in for a real lecture.</strong> Both
     streams come from the same 24/7 channel kindly provided by
     <a href="https://ireplay.tv/blog/hls-ejemplos-flujos-continuo-discontinuidad-vod2live-prueba-video-reproductores-aplicacion-sitios-web/">ireplay.tv</a>,
@@ -28,10 +28,10 @@
     sync looks like. If the channel is down, the demo is too.
   </p>
 
-  <div id="player" class="reproductor"></div>
+  <div id="player" class="player"></div>
 
   <h2>What to try</h2>
-  <ul class="probar">
+  <ul class="try-list">
     <li><strong>Two synced live streams.</strong> Kept together by their broadcast
         time (<code>EXT-X-PROGRAM-DATE-TIME</code>), not by when each one started
         loading. Both halves show the same frame.</li>
@@ -42,7 +42,7 @@
 
   <h2>Also handled</h2>
   <p>This channel is always on air, so it can't show these, but the player covers them:</p>
-  <ul class="probar">
+  <ul class="try-list">
     <li><strong>Before it starts.</strong> A clear notice that the broadcast hasn't
         started yet, retrying on its own until it does.</li>
     <li><strong>When one drops out.</strong> If the slides stop, the camera keeps

@@ -1,11 +1,9 @@
 import { defineConfig } from 'vite';
 import { fileURLToPath } from 'node:url';
 
-// Apunta al código fuente del núcleo, no a su build: así los cambios se ven al
-// instante y la demo sirve de banco de pruebas mientras se desarrolla.
+// Points at the packages' source, not their build, so changes show up at once.
 export default defineConfig({
-  // Rutas relativas: en GitHub Pages la web cuelga de /nanoplayer/, no de la
-  // raíz del dominio.
+  // Relative paths: on GitHub Pages the site lives under /nanoplayer/.
   base: './',
   resolve: {
     alias: {
@@ -21,8 +19,6 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      // La web entera: la portada y una carpeta por página, para que las
-      // direcciones publicadas sean /video/, /live/ y /bench/.
       input: {
         index: fileURLToPath(new URL('index.html', import.meta.url)),
         video: fileURLToPath(new URL('video/index.html', import.meta.url)),

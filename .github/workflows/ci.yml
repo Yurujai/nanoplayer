@@ -21,17 +21,13 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
 
-      # Los tests unitarios corren contra el código fuente, y la demo usa alias
-      # a fuente: ninguno de los dos mira jamás lo que se publica. Así pasó que
-      # los plugins se llevaran dentro su propia copia del núcleo y dejaran de
-      # registrarse, sin un solo error visible. Esto audita los `dist`.
+      # Unit tests and the demo run against source; this checks what is published.
+      # Plugins once bundled their own core copy and silently stopped registering.
       - run: pnpm build
       - run: node dist.mjs
         working-directory: e2e
 
-  # Bloquea el merge si la accesibilidad se degrada. La accesibilidad que no se
-  # comprueba automáticamente se pierde sin que nadie se entere: es exactamente
-  # lo que este proyecto existe para evitar.
+  # Blocks the merge if accessibility regresses.
   accesibilidad:
     runs-on: ubuntu-latest
     steps:
@@ -44,23 +40,19 @@ jobs:
           node-version: '20'
           cache: pnpm
 
-      - name: Instalar ffmpeg
+      - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
 
       - run: pnpm install --frozen-lockfile
 
-      # Google Chrome, no el Chromium que empaqueta Playwright: este último no
-      # trae códecs H.264, y sin decodificar el vídeo las pruebas de teclado
-      # —que comprueban que el espacio inicia la reproducción— no valdrían nada.
-      # Chrome del sistema para la auditoría —trae los códecs H.264 que el
-      # Chromium empaquetado no garantiza— y WebKit para el recorrido de
-      # teclado: es el motor de Safari y el único de iOS, y no tabula los
-      # botones por defecto. Sin probarlo allí, ese comportamiento no se ve.
-      - name: Instalar navegadores
+      # Google Chrome, because Playwright's Chromium may lack H.264 and the video
+      # would not decode. WebKit is Safari's and iOS's engine and does not tab to
+      # buttons by default (docs/browser-quirks.md#webkit-tab).
+      - name: Install browsers
         run: pnpm exec playwright install --with-deps chrome chromium webkit
         working-directory: e2e
 
-      - name: Generar medios de la demo
+      - name: Generate demo media
         run: ./gen-media.sh
         working-directory: demo
         env:
@@ -68,54 +60,40 @@ jobs:
           CRF: '32'
           DUR: '40'
 
-      # Se audita el BUILD, no el servidor de desarrollo. Levantar un servidor
-      # en segundo plano dentro de un paso de Actions es frágil, y auditar lo
-      # que realmente se despliega es más fiel. El propio script sirve los
-      # ficheros, así que no hay proceso suelto que pueda no sobrevivir.
-      - name: Construir la demo
+      # Audit the BUILD, served by the script itself: a background dev server
+      # inside an Actions step is fragile.
+      - name: Build the demo
         run: pnpm --filter @nanoplayer/demo build
 
-      - name: Auditar accesibilidad
+      - name: Audit accessibility
         run: node a11y.mjs --serve ../demo/dist
         working-directory: e2e
 
-      # Aparte de la auditoría porque comprueba otra cosa y en otros motores:
-      # el camino del foco DESDE EL DOCUMENTO, no desde un `focus()` puesto a
-      # mano. Ese atajo era lo que ocultaba que en WebKit el Tab no entra en
-      # los controles.
-      - name: Recorrido de teclado
-        run: node teclado.mjs --serve ../demo/dist
+      # Focus walked FROM THE DOCUMENT in two engines, not from a programmatic
+      # focus(): that shortcut hid that WebKit's Tab does not enter the controls.
+      - name: Keyboard walk
+        run: node keyboard.mjs --serve ../demo/dist
         working-directory: e2e
 
-      # The unit tests chain with fake engines that never reject a play(), so
-      # only a real browser shows whether the outro survives start-up.
+      # Unit tests chain fake engines that never reject a play(): only a real
+      # browser shows whether the outro survives start-up.
       - name: Intro and outro chaining
         run: node chaining.mjs --serve ../demo/dist
         working-directory: e2e
 
-      # El build completo, no solo el del bundle: para emitir sus tipos, tsc
-      # resuelve los paquetes hermanos contra lo construido —igual que hará
-      # quien los instale— y en este job todavía no hay ningún `dist`.
-      #
-      # En un paso aparte porque `pnpm build` con `working-directory: e2e`
-      # ejecutaría el script de ESE paquete, que no tiene ninguno.
-      - name: Construir los paquetes
+      # The full build: to emit types, tsc resolves sibling packages against their
+      # `dist`. A separate step, since `pnpm build` in e2e would run e2e's script.
+      - name: Build the packages
         run: pnpm build
 
-      # Va en este job y no en el de tests porque aquí ya hay un navegador
-      # instalado, y montarlo otra vez cuesta más que la comprobación.
-      #
-      # Se audita el fichero construido cargado como lo cargaría cualquiera.
-      # Que la etiqueta `<script>` dé un reproductor CON controles es el
-      # objetivo O5 entero, y es lo único que no pueden verificar ni los tipos
-      # ni los tests de unidad.
-      - name: Comprobar la etiqueta script
+      # Here because a browser is already installed. A `<script>` tag must give a
+      # player WITH controls, which neither types nor unit tests can verify.
+      - name: Check the script tag
         run: node script-tag.mjs
         working-directory: e2e
 
-      # Los dos caminos por los que entra el reproductor en un LMS: una CSP
-      # estricta que prohíbe los estilos en línea, y una página que ya carga
-      # RequireJS. Ninguno de los dos se puede comprobar sin navegador.
-      - name: Comprobar la integración en un LMS
-        run: node integracion.mjs
+      # The two ways into an LMS: a strict CSP that forbids inline styles, and a
+      # page that already loads RequireJS.
+      - name: Check LMS integration
+        run: node integration.mjs
         working-directory: e2e

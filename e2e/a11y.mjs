@@ -1,20 +1,10 @@
 /**
- * Comprobación de accesibilidad en navegador real.
+ * Accessibility check in a real browser, blocking in CI: axe-core's WCAG 2.1
+ * A/AA rules plus keyboard-only operation. axe catches about a third of real
+ * problems: passing does not replace a screen reader review.
  *
- * Es la pieza que convierte "queremos que sea accesible" en algo verificable.
- * Corre en CI y **bloquea el merge**, porque la accesibilidad que no se
- * comprueba automáticamente se degrada sin que nadie se entere.
- *
- * Cubre dos cosas que las herramientas automáticas sí saben medir:
- *   1. Las reglas WCAG 2.1 A y AA que axe-core puede verificar.
- *   2. Que todo control sea alcanzable y operable **solo con el teclado**.
- *
- * Lo que NO cubre, y hay que decirlo: axe detecta en torno a un tercio de los
- * problemas reales de accesibilidad. Que esto pase en verde no sustituye una
- * revisión con lector de pantalla; solo garantiza que no hay regresiones en lo
- * automatizable.
- *
- *   node a11y.mjs [url]
+ *   node a11y.mjs http://127.0.0.1:5180/     (dev server)
+ *   node a11y.mjs --serve ../demo/dist       (static build, what CI uses)
  */
 import { chromium } from 'playwright';
 import { createReadStream, readFileSync, statSync } from 'node:fs';
@@ -25,69 +15,57 @@ import { extname, join, normalize } from 'node:path';
 const require = createRequire(import.meta.url);
 const AXE = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 
-/*
- * Puede auditar una URL ya servida, o servir él mismo un directorio:
- *
- *   node a11y.mjs http://127.0.0.1:5180/     (servidor de desarrollo)
- *   node a11y.mjs --serve ../demo/dist       (build estático)
- *
- * La segunda forma es la que usa CI. Levantar un servidor de desarrollo en
- * segundo plano dentro de un paso de Actions es frágil —el proceso puede no
- * sobrevivir al paso, y Vite se ata a `localhost`, que en el runner resuelve a
- * IPv6 mientras la comprobación pregunta por 127.0.0.1— y además auditar el
- * build es más fiel: es lo que de verdad se despliega.
- */
-const TIPOS = {
+const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.mp4': 'video/mp4',
   '.vtt': 'text/vtt; charset=utf-8', '.jpg': 'image/jpeg', '.png': 'image/png',
   '.json': 'application/json; charset=utf-8', '.map': 'application/json',
 };
 
-function servir(raiz, puerto) {
-  return new Promise((listo) => {
+function serve(root, port) {
+  return new Promise((ready) => {
     const srv = createServer((req, res) => {
       const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-      let ruta = join(raiz, normalize(url).replace(/^(\.\.[/\\])+/, ''));
-      try { if (statSync(ruta).isDirectory()) ruta = join(ruta, 'index.html'); } catch { /* 404 */ }
+      let path = join(root, normalize(url).replace(/^(\.\.[/\\])+/, ''));
+      try { if (statSync(path).isDirectory()) path = join(path, 'index.html'); } catch { /* 404 below */ }
       let st;
-      try { st = statSync(ruta); } catch { res.writeHead(404); return res.end('404'); }
+      try { st = statSync(path); } catch { res.writeHead(404); return res.end('404'); }
 
-      const tipo = TIPOS[extname(ruta)] ?? 'application/octet-stream';
-      // Range: sin esto el navegador no puede buscar dentro del vídeo.
-      const rango = req.headers.range && /^bytes=(\d*)-(\d*)$/.exec(req.headers.range);
-      if (rango) {
-        const ini = Number(rango[1] || 0);
-        const fin = rango[2] ? Number(rango[2]) : st.size - 1;
+      const type = TYPES[extname(path)] ?? 'application/octet-stream';
+      // Without Range support the browser cannot seek inside the video.
+      const range = req.headers.range && /^bytes=(\d*)-(\d*)$/.exec(req.headers.range);
+      if (range) {
+        const start = Number(range[1] || 0);
+        const end = range[2] ? Number(range[2]) : st.size - 1;
         res.writeHead(206, {
-          'content-type': tipo, 'content-length': fin - ini + 1,
-          'content-range': `bytes ${ini}-${fin}/${st.size}`, 'accept-ranges': 'bytes',
+          'content-type': type, 'content-length': end - start + 1,
+          'content-range': `bytes ${start}-${end}/${st.size}`, 'accept-ranges': 'bytes',
         });
-        return createReadStream(ruta, { start: ini, end: fin }).pipe(res);
+        return createReadStream(path, { start, end }).pipe(res);
       }
       res.writeHead(200, {
-        'content-type': tipo, 'content-length': st.size, 'accept-ranges': 'bytes',
+        'content-type': type, 'content-length': st.size, 'accept-ranges': 'bytes',
       });
-      createReadStream(ruta).pipe(res);
+      createReadStream(path).pipe(res);
     });
-    srv.listen(puerto, '127.0.0.1', () => listo(srv));
+    srv.listen(port, '127.0.0.1', () => ready(srv));
   });
 }
 
 const args = process.argv.slice(2);
-let servidor = null;
-let URL_BASE;
+let server = null;
+let BASE_URL;
 if (args[0] === '--serve') {
-  const raiz = args[1];
-  if (!raiz) { console.error('Falta el directorio a servir'); process.exit(2); }
-  servidor = await servir(raiz, 5199);
-  URL_BASE = 'http://127.0.0.1:5199/';
-  console.log(`Sirviendo ${raiz}`);
+  const root = args[1];
+  if (!root) { console.error('Missing the directory to serve'); process.exit(2); }
+  server = await serve(root, 5199);
+  BASE_URL = 'http://127.0.0.1:5199/';
+  console.log(`Serving ${root}`);
 } else {
-  URL_BASE = args[0] ?? 'http://127.0.0.1:5180/';
+  BASE_URL = args[0] ?? 'http://127.0.0.1:5180/';
 }
 
-const REGLAS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'];
+const RULES = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'];
 
 const browser = await chromium.launch({
   channel: 'chrome',
@@ -96,163 +74,146 @@ const browser = await chromium.launch({
 });
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 
-const problemas = [];
-const nota = (m) => { problemas.push(m); console.log('  ✗ ' + m); };
-const bien = (m) => console.log('  ✓ ' + m);
+const problems = [];
+const fail = (m) => { problems.push(m); console.log('  ✗ ' + m); };
+const ok = (m) => console.log('  ✓ ' + m);
 
-async function auditar(etiqueta) {
+async function audit(label) {
   await page.addScriptTag({ content: AXE });
   const r = await page.evaluate(
     (tags) => window.axe.run(document, { runOnly: { type: 'tag', values: tags } }),
-    REGLAS,
+    RULES,
   );
-  const graves = r.violations.filter((v) => v.impact !== 'minor');
-  console.log(`\n[axe] ${etiqueta}: ${r.passes.length} reglas pasadas, ` +
-    `${r.violations.length} incumplidas`);
+  const serious = r.violations.filter((v) => v.impact !== 'minor');
+  console.log(`\n[axe] ${label}: ${r.passes.length} rules passed, ${r.violations.length} violated`);
   for (const v of r.violations) {
-    const linea = `${v.id} (${v.impact}) — ${v.help} · ${v.nodes.length} nodo(s)`;
-    if (graves.includes(v)) nota(`${etiqueta}: ${linea}`);
-    else console.log('  · ' + linea + '  [menor]');
+    const line = `${v.id} (${v.impact}) — ${v.help} · ${v.nodes.length} node(s)`;
+    if (serious.includes(v)) fail(`${label}: ${line}`);
+    else console.log('  · ' + line + '  [minor]');
     for (const n of v.nodes.slice(0, 2)) console.log(`      ${n.html.slice(0, 110)}`);
   }
-  if (r.violations.length === 0) bien(`${etiqueta}: sin incumplimientos`);
+  if (r.violations.length === 0) ok(`${label}: no violations`);
 }
 
-/* ------------------------------------------------------------------------- */
+const DEMO_URL = new URL('video/', BASE_URL).href;
+console.log(`Auditing ${DEMO_URL}\n`);
+await page.goto(DEMO_URL, { waitUntil: 'load' });
 
-// El reproductor vive en la demo de vídeo; la portada es solo texto.
-const URL_DEMO = new URL('video/', URL_BASE).href;
-console.log(`Auditando ${URL_DEMO}\n`);
-await page.goto(URL_DEMO, { waitUntil: 'load' });
+await audit('initial state (poster)');
 
-// Estado inicial: solo el póster. Es el que ve la mayoría de visitantes, y
-// el que más se olvida de auditar.
-await auditar('estado inicial (póster)');
-
-const posterAccesible = await page.evaluate(() => {
+const posterButton = await page.evaluate(() => {
   const b = document.querySelector('.np__poster-play');
   return b ? { tag: b.tagName.toLowerCase(), label: b.getAttribute('aria-label') } : null;
 });
-if (posterAccesible?.tag === 'button' && posterAccesible.label) {
-  bien(`el botón del póster es accesible ("${posterAccesible.label}")`);
+if (posterButton?.tag === 'button' && posterButton.label) {
+  ok(`the poster button is accessible ("${posterButton.label}")`);
 } else {
-  nota('el botón de reproducción del póster no es un button con nombre accesible');
+  fail('the poster play button is not a button with an accessible name');
 }
 
-// Que el póster no descargue vídeo no es solo rendimiento: es el objetivo O7.
-const mp4Antes = await page.evaluate(() => performance.getEntriesByType('resource')
+const mp4Before = await page.evaluate(() => performance.getEntriesByType('resource')
   .filter((r) => r.name.endsWith('.mp4')).length);
-if (mp4Antes === 0) bien('con el póster visible no se ha descargado vídeo');
-else nota(`${mp4Antes} peticiones de vídeo antes de interactuar`);
+if (mp4Before === 0) ok('no video downloaded while the poster is showing');
+else fail(`${mp4Before} video requests before any interaction`);
 
-// Arrancar desde el propio póster, como haría cualquiera.
 await page.click('.np__poster-play');
 await page.waitForFunction(() => document.querySelectorAll('.np video').length > 0,
   null, { timeout: 20000 });
 await page.waitForTimeout(1200);
 await page.hover('#player');
 
-await auditar('con barra de controles');
+await audit('with the control bar');
 
-/* --- el menú de ajustes, abierto ----------------------------------------- */
+/* --- settings menu, open -------------------------------------------------- */
 
-// Auditarlo cerrado no vale de nada: las semánticas de menú solo existen
-// mientras está desplegado.
+// Menu semantics only exist while it is open.
 await page.evaluate(() => document.querySelector('.np__btn--settings')?.focus());
 await page.keyboard.press('Enter');
 await page.waitForTimeout(300);
-await auditar('menú de ajustes abierto');
+await audit('settings menu open');
 
-console.log('\n[menú] patrón WAI-ARIA de botón de menú');
-const rolMenu = await page.evaluate(() =>
+console.log('\n[menu] WAI-ARIA menu button pattern');
+const menuRole = await page.evaluate(() =>
   document.querySelector('.np__menu [role="menu"]') !== null);
-if (rolMenu) bien('el contenedor declara role="menu"');
-else nota('el menú no declara role="menu"');
+if (menuRole) ok('the container declares role="menu"');
+else fail('the menu does not declare role="menu"');
 
-const expandido = await page.evaluate(() =>
+const expanded = await page.evaluate(() =>
   document.querySelector('.np__btn--settings')?.getAttribute('aria-expanded'));
-if (expandido === 'true') bien('aria-expanded refleja que está abierto');
-else nota(`aria-expanded es "${expandido}" con el menú abierto`);
+if (expanded === 'true') ok('aria-expanded reflects that it is open');
+else fail(`aria-expanded is "${expanded}" with the menu open`);
 
-const focoDentro = await page.evaluate(() =>
+const focusInside = await page.evaluate(() =>
   !!document.activeElement?.closest('.np__menu'));
-if (focoDentro) bien('el foco entra al menú al abrirlo');
-else nota('el foco no entró al menú');
+if (focusInside) ok('focus enters the menu when it opens');
+else fail('focus did not enter the menu');
 
-// Tabindex móvil: dentro de un menú recorren las flechas, no Tab.
 const tabbables = await page.evaluate(() =>
   [...document.querySelectorAll('.np__menu [role^="menuitem"]')]
     .filter((el) => el.tabIndex === 0).length);
-if (tabbables === 1) bien('solo un elemento del menú es tabulable (tabindex móvil)');
-else nota(`${tabbables} elementos del menú son tabulables; debería ser 1`);
+if (tabbables === 1) ok('only one menu item is tabbable (roving tabindex)');
+else fail(`${tabbables} menu items are tabbable; should be 1`);
 
 await page.keyboard.press('ArrowDown');
-const movio = await page.evaluate(() =>
+const moved = await page.evaluate(() =>
   document.activeElement?.getAttribute('aria-label'));
-if (movio) bien(`las flechas mueven el foco (ahora en "${movio}")`);
-else nota('las flechas no mueven el foco dentro del menú');
+if (moved) ok(`arrows move focus (now on "${moved}")`);
+else fail('arrows do not move focus inside the menu');
 
-// El submenú marca la opción activa de forma que un lector la anuncie.
 await page.keyboard.press('Enter');
 await page.waitForTimeout(250);
-const marcada = await page.evaluate(() =>
+const checked = await page.evaluate(() =>
   document.querySelectorAll('.np__menu [role="menuitemradio"][aria-checked="true"]').length);
-if (marcada === 1) bien('la opción activa está marcada con aria-checked');
-else nota(`${marcada} opciones marcadas con aria-checked; debería ser 1`);
+if (checked === 1) ok('the active option is marked with aria-checked');
+else fail(`${checked} options marked with aria-checked; should be 1`);
 
-// El menú no puede quedar recortado por el overflow del reproductor.
-const recorte = await page.evaluate(() => {
+const clip = await page.evaluate(() => {
   const m = document.querySelector('.np__menu');
   const np = document.querySelector('.np');
   const a = m.getBoundingClientRect(), b = np.getBoundingClientRect();
-  return { desborda: a.top < b.top - 1, alto: Math.round(a.height) };
+  return { overflows: a.top < b.top - 1, height: Math.round(a.height) };
 });
-if (!recorte.desborda) bien(`el menú cabe en el reproductor (${recorte.alto}px)`);
-else nota('el menú se sale del reproductor y queda recortado por overflow:hidden');
+if (!clip.overflows) ok(`the menu fits inside the player (${clip.height}px)`);
+else fail('the menu overflows the player and is clipped by overflow:hidden');
 
 await page.keyboard.press('Escape');
 await page.keyboard.press('Escape');
 await page.waitForTimeout(250);
-const focoVuelto = await page.evaluate(() =>
+const focusBack = await page.evaluate(() =>
   document.activeElement?.classList.contains('np__btn--settings'));
-if (focoVuelto) bien('al cerrar, el foco vuelve al engranaje');
-else nota('al cerrar, el foco no vuelve al botón que abrió el menú');
+if (focusBack) ok('closing returns focus to the gear');
+else fail('closing does not return focus to the button that opened the menu');
 
-/* --- navegación por teclado --------------------------------------------- */
+/* --- keyboard navigation -------------------------------------------------- */
 
-console.log('\n[teclado] recorrido con Tab');
-const foco = async () => page.evaluate(() => {
+console.log('\n[keyboard] Tab walk');
+const focused = async () => page.evaluate(() => {
   const a = document.activeElement;
   if (!a) return null;
-  return {
-    tag: a.tagName.toLowerCase(),
-    label: a.getAttribute('aria-label'),
-    dentro: !!a.closest('.np'),
-  };
+  return { tag: a.tagName.toLowerCase(), label: a.getAttribute('aria-label'), inside: !!a.closest('.np') };
 });
 
 await page.evaluate(() => document.querySelector('.np')?.focus());
-const alcanzados = [];
+const reached = [];
 for (let i = 0; i < 8; i++) {
   await page.keyboard.press('Tab');
-  const f = await foco();
-  if (!f?.dentro) break;
-  alcanzados.push(`${f.tag}[${f.label ?? 'sin etiqueta'}]`);
+  const f = await focused();
+  if (!f?.inside) break;
+  reached.push(`${f.tag}[${f.label ?? 'no label'}]`);
 }
-console.log('  alcanzados: ' + (alcanzados.join(', ') || 'ninguno'));
+console.log('  reached: ' + (reached.join(', ') || 'none'));
 
-const ESPERADOS = ['Pause', 'Mute', 'Volume', 'Seek', 'Full screen'];
-for (const e of ESPERADOS) {
-  if (alcanzados.some((a) => a.includes(e))) bien(`"${e}" es alcanzable con Tab`);
-  else nota(`"${e}" NO se alcanza con Tab`);
+const EXPECTED = ['Pause', 'Mute', 'Volume', 'Seek', 'Full screen'];
+for (const e of EXPECTED) {
+  if (reached.some((a) => a.includes(e))) ok(`"${e}" is reachable with Tab`);
+  else fail(`"${e}" is NOT reachable with Tab`);
 }
 
-/* --- lo que aporta un plugin ---------------------------------------------- */
+/* --- what a plugin adds --------------------------------------------------- */
 
-// La garantía que justifica que el plugin declare en vez de pintar su DOM: lo
-// que aporta queda sujeto a las mismas reglas que el resto de la interfaz.
-console.log('\n[plugins] los controles aportados cumplen el mismo contrato');
-const ctrlPlugin = await page.evaluate(() => {
+// Plugins declare and the UI builds, so their controls obey the same rules.
+console.log('\n[plugins] contributed controls meet the same contract');
+const pluginControl = await page.evaluate(() => {
   const b = document.querySelector('[data-control]');
   if (!b) return null;
   return {
@@ -260,77 +221,75 @@ const ctrlPlugin = await page.evaluate(() => {
     tag: b.tagName.toLowerCase(),
     label: b.getAttribute('aria-label'),
     pressed: b.getAttribute('aria-pressed'),
-    tabbable: b.tabIndex >= 0,
   };
 });
-if (!ctrlPlugin) {
-  nota('ningún plugin aportó control a la barra: no se puede verificar el contrato');
+if (!pluginControl) {
+  fail('no plugin added a control to the bar: the contract cannot be checked');
 } else {
-  if (ctrlPlugin.tag === 'button') bien(`"${ctrlPlugin.id}" es un <button> nativo`);
-  else nota(`"${ctrlPlugin.id}" no es un <button>: pierde rol y teclado nativos`);
+  if (pluginControl.tag === 'button') ok(`"${pluginControl.id}" is a native <button>`);
+  else fail(`"${pluginControl.id}" is not a <button>: it loses native role and keyboard`);
 
-  if (ctrlPlugin.label) bien(`"${ctrlPlugin.id}" tiene nombre accesible ("${ctrlPlugin.label}")`);
-  else nota(`"${ctrlPlugin.id}" no tiene nombre accesible`);
+  if (pluginControl.label) ok(`"${pluginControl.id}" has an accessible name ("${pluginControl.label}")`);
+  else fail(`"${pluginControl.id}" has no accessible name`);
 
-  if (ctrlPlugin.pressed !== null) bien(`"${ctrlPlugin.id}" expone aria-pressed`);
-  else nota(`"${ctrlPlugin.id}" es un conmutador sin aria-pressed`);
+  if (pluginControl.pressed !== null) ok(`"${pluginControl.id}" exposes aria-pressed`);
+  else fail(`"${pluginControl.id}" is a toggle without aria-pressed`);
 
-  if (alcanzados.some((a) => a.includes(ctrlPlugin.label)))
-    bien(`"${ctrlPlugin.id}" es alcanzable con Tab`);
-  else nota(`"${ctrlPlugin.id}" NO se alcanza con Tab`);
+  if (reached.some((a) => a.includes(pluginControl.label))) ok(`"${pluginControl.id}" is reachable with Tab`);
+  else fail(`"${pluginControl.id}" is NOT reachable with Tab`);
 }
 
-/* --- operable con teclado ------------------------------------------------ */
+/* --- keyboard operation --------------------------------------------------- */
 
-console.log('\n[teclado] atajos');
+console.log('\n[keyboard] shortcuts');
 await page.evaluate(() => document.querySelector('.np')?.focus());
 
 await page.keyboard.press('Space');
 await page.waitForTimeout(700);
-const pausado = await page.evaluate(() => document.querySelector('.np video')?.paused);
-if (pausado) bien('Espacio pausa la reproducción');
-else nota('Espacio no pausó la reproducción');
+const paused = await page.evaluate(() => document.querySelector('.np video')?.paused);
+if (paused) ok('Space pauses playback');
+else fail('Space did not pause playback');
 await page.keyboard.press('Space');
 await page.waitForTimeout(500);
 
-const antes = await page.evaluate(() => document.querySelector('.np video').currentTime);
+const before = await page.evaluate(() => document.querySelector('.np video').currentTime);
 await page.keyboard.press('ArrowRight');
 await page.waitForTimeout(400);
-const despues = await page.evaluate(() => document.querySelector('.np video').currentTime);
-if (despues > antes + 3) bien('Flecha derecha avanza en el vídeo');
-else nota(`Flecha derecha no avanzó (${antes.toFixed(2)} → ${despues.toFixed(2)})`);
+const after = await page.evaluate(() => document.querySelector('.np video').currentTime);
+if (after > before + 3) ok('Right arrow seeks forward');
+else fail(`Right arrow did not seek (${before.toFixed(2)} → ${after.toFixed(2)})`);
 
 await page.keyboard.press('m');
 await page.waitForTimeout(200);
-const silenciado = await page.evaluate(() =>
+const muted = await page.evaluate(() =>
   document.querySelector('.np__volume input').value === '0');
-if (silenciado) bien('M silencia');
-else nota('M no silenció');
+if (muted) ok('M mutes');
+else fail('M did not mute');
 
-/* --- el foco no se pierde ------------------------------------------------ */
+/* --- focus is not lost ---------------------------------------------------- */
 
-console.log('\n[foco] la barra no se oculta con el foco dentro');
+console.log('\n[focus] the bar does not hide with focus inside');
 await page.evaluate(() => document.querySelector('.np__bar button')?.focus());
-await page.waitForTimeout(3200);   // más que el tiempo de inactividad
+await page.waitForTimeout(3200);   // longer than the inactivity timeout
 const visible = await page.evaluate(() => {
   const bar = document.querySelector('.np__bar');
   return Number(getComputedStyle(bar).opacity) > 0.5;
 });
-if (visible) bien('la barra sigue visible con el foco dentro');
-else nota('la barra se ocultó con el foco dentro: se pierde de vista el control en uso');
+if (visible) ok('the bar stays visible with focus inside');
+else fail('the bar hid with focus inside: the control in use is lost from sight');
 
-/* --- veredicto ----------------------------------------------------------- */
+/* --- verdict -------------------------------------------------------------- */
 
 await browser.close();
-servidor?.close();
+server?.close();
 console.log('\n' + '─'.repeat(66));
-if (problemas.length === 0) {
-  console.log('ACCESIBILIDAD: sin problemas automatizables detectados.');
-  console.log('Recordatorio: axe cubre ~1/3 de los problemas reales. La revisión');
-  console.log('con lector de pantalla sigue siendo necesaria.');
+if (problems.length === 0) {
+  console.log('ACCESSIBILITY: no automatable problems found.');
+  console.log('Reminder: axe covers ~1/3 of real problems. A screen reader');
+  console.log('review is still needed.');
 } else {
-  console.log(`ACCESIBILIDAD: ${problemas.length} problema(s):`);
-  for (const p of problemas) console.log('  · ' + p);
+  console.log(`ACCESSIBILITY: ${problems.length} problem(s):`);
+  for (const p of problems) console.log('  · ' + p);
 }
 console.log('─'.repeat(66) + '\n');
-process.exit(problemas.length ? 1 : 0);
+process.exit(problems.length ? 1 : 0);

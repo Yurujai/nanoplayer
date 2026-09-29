@@ -7,46 +7,46 @@
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="/src/site.css">
 <style>
-  .opciones{display:flex;flex-wrap:wrap;align-items:center;gap:.75rem 1.5rem;margin:0 0 1rem;
+  .options{display:flex;flex-wrap:wrap;align-items:center;gap:.75rem 1.5rem;margin:0 0 1rem;
             border:0;padding:0}
-  .opciones legend{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-  .segmentos{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
-  .segmentos label{position:relative;padding:.4rem .95rem;cursor:pointer;font-size:.92rem;color:var(--dim)}
-  .segmentos label + label{border-left:1px solid var(--line)}
-  .segmentos input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
-  .segmentos label:has(input:checked){background:var(--accent);color:var(--on-accent);font-weight:600}
-  .segmentos label:has(input:focus-visible){outline:3px solid var(--accent);outline-offset:2px}
-  .casilla{display:inline-flex;align-items:center;gap:.45rem;font-size:.92rem;cursor:pointer}
-  .casilla input{width:1.05rem;height:1.05rem;accent-color:var(--accent)}
-  .probar{margin:0;padding-left:1.2rem}
-  .probar li{margin:.3rem 0;max-width:66ch}
+  .options legend{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .segmented{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .segmented label{position:relative;padding:.4rem .95rem;cursor:pointer;font-size:.92rem;color:var(--dim)}
+  .segmented label + label{border-left:1px solid var(--line)}
+  .segmented input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+  .segmented label:has(input:checked){background:var(--accent);color:var(--on-accent);font-weight:600}
+  .segmented label:has(input:focus-visible){outline:3px solid var(--accent);outline-offset:2px}
+  .checkbox{display:inline-flex;align-items:center;gap:.45rem;font-size:.92rem;cursor:pointer}
+  .checkbox input{width:1.05rem;height:1.05rem;accent-color:var(--accent)}
+  .try-list{margin:0;padding-left:1.2rem}
+  .try-list li{margin:.3rem 0;max-width:66ch}
   details{margin-top:1rem}
   summary{cursor:pointer}
   details p{color:var(--dim)}
 </style>
 </head>
 <body>
-<main class="ancho">
-  <p class="migas"><a href="../">← NanoPlayer</a></p>
+<main class="wide">
+  <p class="breadcrumb"><a href="../">← NanoPlayer</a></p>
   <h1>Video demo</h1>
   <p class="lead">
     A recorded lecture played from MP4 files. Switch between one video and two,
     and turn the intro and outro on to see how they chain.
   </p>
 
-  <fieldset class="opciones">
+  <fieldset class="options">
     <legend>Demo options</legend>
-    <div class="segmentos" role="radiogroup" aria-label="Videos">
-      <label><input type="radio" name="modo" id="modo-mono" value="mono"> One video</label>
-      <label><input type="radio" name="modo" id="modo-dual" value="dual" checked> Speaker + slides</label>
+    <div class="segmented" role="radiogroup" aria-label="Videos">
+      <label><input type="radio" name="mode" id="mode-single" value="single"> One video</label>
+      <label><input type="radio" name="mode" id="mode-dual" value="dual" checked> Speaker + slides</label>
     </div>
-    <label class="casilla"><input type="checkbox" id="cadena"> With intro and outro</label>
+    <label class="checkbox"><input type="checkbox" id="bumpers"> With intro and outro</label>
   </fieldset>
 
-  <div id="player" class="reproductor"></div>
+  <div id="player" class="player"></div>
 
   <h2>What to try</h2>
-  <ul class="probar">
+  <ul class="try-list">
     <li><strong>Layouts.</strong> Open <strong>⚙ Settings → Layout</strong>: side by side,
         picture in picture, speaker only or slides only.</li>
     <li><strong>Sync.</strong> Seek anywhere: the timecodes burned into both videos

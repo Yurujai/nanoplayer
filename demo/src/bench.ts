@@ -1,29 +1,16 @@
-/**
- * Banco de pruebas del núcleo.
- *
- * Usa la API pública tal cual la usaría un integrador: `createPlayer(...)` y
- * los métodos del ciclo de vida. Si algo aquí necesitase saltarse la API, sería
- * señal de que la API está mal.
- *
- * Sigue sin haber barra de controles ni layouts — eso es la Fase 2. Lo que se
- * ve son los botones del ciclo de vida en crudo, a propósito, porque lo
- * interesante de enseñar es justamente eso.
- */
 import {
-  createPlayer, type Manifest, type Player,
+  createPlayer, nativeEngineFactory, plugins, type Manifest, type Player,
 } from '@nanoplayer/core';
+import { enginesWithHls } from '@nanoplayer/engine-hls';
 import { attachControls, type ControlBar } from '@nanoplayer/ui';
-// Basta con importarlo: el plugin se auto-registra. El núcleo no lo conoce.
 import '@nanoplayer/plugin-captions';
 import '@nanoplayer/plugin-chapters';
-import { plugins, nativeEngineFactory } from '@nanoplayer/core';
-import { enginesWithHls } from '@nanoplayer/engine-hls';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 
-const MANIFIESTOS: Record<string, unknown> = {
-  mono: {
-    id: 'demo-mono',
+const MANIFESTS: Record<string, unknown> = {
+  single: {
+    id: 'demo-single',
     title: 'Single stream',
     duration: 40,
     streams: [
@@ -46,8 +33,6 @@ const MANIFIESTOS: Record<string, unknown> = {
       { src: '../media/en.vtt', lang: 'en', label: 'English', kind: 'subtitles' },
     ],
   },
-  // Mismo contenido servido como HLS: el selector debe preferir hls.js donde
-  // haya MSE, sin que nada más cambie.
   hls: {
     id: 'demo-hls',
     title: 'Dual stream over HLS',
@@ -61,35 +46,30 @@ const MANIFIESTOS: Record<string, unknown> = {
                     type: 'application/vnd.apple.mpegurl' }] },
     ],
   },
-  // Solo sonido. No hace falta declarar nada: el tipo `audio/mp4` ya lo dice.
   audio: {
     id: 'demo-audio',
     title: 'Audio only',
     duration: 40,
     poster: '../media/poster.jpg',
     streams: [
-      { id: 'locucion', role: 'presenter', label: 'Narration', audio: true,
+      { id: 'narration', role: 'presenter', label: 'Narration', audio: true,
         sources: [{ src: '../media/audio.m4a', type: 'audio/mp4' }] },
     ],
   },
-  // El caso probablemente más útil: una clase sin cámara, pero con las
-  // diapositivas. El audio es el maestro y el vídeo mudo lo persigue.
   'audio-slides': {
     id: 'demo-audio-slides',
     title: 'Audio with slides',
     duration: 40,
     poster: '../media/poster.jpg',
     streams: [
-      { id: 'locucion', role: 'presenter', label: 'Narration', audio: true,
+      { id: 'narration', role: 'presenter', label: 'Narration', audio: true,
         sources: [{ src: '../media/audio.m4a', type: 'audio/mp4' }] },
       { id: 'slides', role: 'presentation', label: 'Slides', audio: false,
         sources: [{ src: '../media/slides.mp4', type: 'video/mp4' }] },
     ],
   },
-  // El medio dura 40 s y solo se enseñan del 10 al 25. El fichero no se toca:
-  // lo que cambia es el timeline que ve quien mira.
-  recorte: {
-    id: 'demo-recorte',
+  trimmed: {
+    id: 'demo-trimmed',
     title: 'Trimmed',
     duration: 40,
     streams: [
@@ -98,10 +78,8 @@ const MANIFIESTOS: Record<string, unknown> = {
     ],
     annotations: [{ kind: 'trim', start: 10, end: 25 }],
   },
-  // Para ver que la validación no es decorativa: dos pistas de audio es
-  // exactamente lo que S2 midió que rompe en iPhone.
-  invalido: {
-    id: 'demo-roto',
+  invalid: {
+    id: 'demo-invalid',
     streams: [
       { id: 'a', role: 'presenter', audio: true,
         sources: [{ src: '../media/presenter.mp4', type: 'video/mp4' }] },
@@ -111,15 +89,9 @@ const MANIFIESTOS: Record<string, unknown> = {
   },
 };
 
-/**
- * Qué tiene de particular cada caso.
- *
- * El banco enseña el manifiesto entero, pero sin señalar qué línea hace la
- * gracia es un muro de JSON: lo interesante es qué campo provoca cada
- * comportamiento.
- */
-const CLAVES: Record<string, string> = {
-  mono: 'One stream. <b>audio: true</b> makes it the master of the clock.',
+/** What each case shows: without pointing at the field that matters, the manifest is a wall of JSON. */
+const NOTES: Record<string, string> = {
+  single: 'One stream. <b>audio: true</b> makes it the master of the clock.',
   dual: 'Two streams. <b>Exactly one</b> has <b>audio: true</b>: it is the master, ' +
         'and the others follow it. Two audio tracks are rejected because iOS cannot play them. ' +
         'The <b>textTracks</b> switch on the captions plugin with no configuration.',
@@ -130,149 +102,138 @@ const CLAVES: Record<string, string> = {
          'The artwork stays up during playback instead of leaving a black rectangle.',
   'audio-slides': 'A lecture with no camera but with the slides. The <b>audio is the master</b> ' +
                   'and the silent video follows it: the sync model does not change at all.',
-  recorte: 'The video is 40 s long and the <b>trim</b> annotation shows 10 to 25. ' +
+  trimmed: 'The video is 40 s long and the <b>trim</b> annotation shows 10 to 25. ' +
            'The bar reads <b>0:15</b>, not 0:40, and the burned-in timecode starts at 10: ' +
            'the file is untouched, only the time shown is remapped. ' +
            'It stops at the end even though the media has 15 s left.',
-  invalido: '<b>Both</b> streams have <b>audio: true</b>. Validation rejects it and says why, ' +
-            'instead of leaving a player that only fails on iPhone.',
+  invalid: '<b>Both</b> streams have <b>audio: true</b>. Validation rejects it and says why, ' +
+           'instead of leaving a player that only fails on iPhone.',
 };
 
 let player: Player | null = null;
-let controles: ControlBar | null = null;
-let peticiones = 0;
-
-/* ------------------------------------------------------------------- log -- */
+let controls: ControlBar | null = null;
+let requests = 0;
 
 function log(type: string, payload: unknown): void {
-  // La deriva llega a ~30 Hz; en el registro ahogaría todo lo demás.
+  // Drift arrives at ~30 Hz and would drown everything else.
   if (type === 'sync:drift' || type === 'time') return;
-  const linea = document.createElement('div');
-  linea.className = 'ev';
-  const corto = JSON.stringify(payload, (k, v) =>
+  const line = document.createElement('div');
+  line.className = 'ev';
+  const short = JSON.stringify(payload, (k, v) =>
     (k === 'manifest' ? '…' : typeof v === 'number' ? Math.round(v * 1000) / 1000 : v));
-  linea.innerHTML = `<span class="t">${type}</span> <span class="p">${corto ?? ''}</span>`;
-  const cont = $('#eventos');
-  cont.prepend(linea);
-  while (cont.childElementCount > 120) cont.lastElementChild?.remove();
+  line.innerHTML = `<span class="t">${type}</span> <span class="p">${short ?? ''}</span>`;
+  const list = $('#events');
+  list.prepend(line);
+  while (list.childElementCount > 120) list.lastElementChild?.remove();
 }
 
-/* --------------------------------------------------------------- creación -- */
-
-function crear(clave: string): Player {
+function createFor(key: string): Player {
   const p = createPlayer({
     container: $('#player'),
-    manifest: MANIFIESTOS[clave] as Manifest,
-    // Registrar hls.js delante basta para que gane donde puede. El selector
-    // decide con `canPlay`, no con condicionales repartidos.
+    manifest: MANIFESTS[key] as Manifest,
     engines: enginesWithHls(nativeEngineFactory),
   });
 
   p.bus.onAny((type, payload) => log(type, payload));
   p.on('engine:attach:ok', ({ engine }) => log('engine chosen', { engine }));
-  p.on('state:change', pintar);
-  p.on('time', pintar);
+  p.on('state:change', render);
+  p.on('time', render);
 
   p.on('sync:drift', ({ drift, action }) => {
     const ms = drift * 1000;
-    const el = $('#deriva');
+    const el = $('#drift');
     el.textContent = (ms >= 0 ? '+' : '') + ms.toFixed(0) + ' ms';
-    el.className = 'val ' + (Math.abs(ms) > 33 ? 'mal' : 'bien');
-    $('#accion').textContent = action;
+    el.className = 'val ' + (Math.abs(ms) > 33 ? 'bad' : 'good');
+    $('#action').textContent = action;
   });
 
   return p;
 }
 
-function limpiarEscenario(mensaje: string): void {
-  controles?.destroy();
-  controles = null;
-  $('#escenario').innerHTML =
-    `<p class="vacio">${mensaje}</p><div id="player"></div>`;
+function clearStage(message: string): void {
+  controls?.destroy();
+  controls = null;
+  $('#stage').innerHTML = `<p class="empty">${message}</p><div id="player"></div>`;
 }
 
-/* ------------------------------------------------------------------- UI --- */
-
-function pintar(): void {
+function render(): void {
   const s = player?.state ?? 'idle';
-  $('#estado').textContent = s;
-  $('#estado').dataset['s'] = s;
+  $('#state').textContent = s;
+  $('#state').dataset['s'] = s;
   $('#resumeAt').textContent = (player?.resumeAt ?? 0).toFixed(2) + ' s';
-  $('#peticiones').textContent = String(peticiones);
-  $('#videos').textContent = String(document.querySelectorAll('#escenario video').length);
-  $('#tiempo').textContent = (player?.currentTime ?? 0).toFixed(2) + ' s';
+  $('#requests').textContent = String(requests);
+  $('#videos').textContent = String(document.querySelectorAll('#stage video').length);
+  $('#time').textContent = (player?.currentTime ?? 0).toFixed(2) + ' s';
 
-  const on = (sel: string, v: boolean) => { $<HTMLButtonElement>(sel).disabled = !v; };
-  on('#btn-resolver', s === 'idle');
-  on('#btn-enganchar', s === 'resolved');
-  on('#btn-play', s === 'attached');
-  on('#btn-pause', s === 'active');
-  on('#btn-desalojar', s === 'attached' || s === 'active');
-  on('#btn-seek', s === 'attached' || s === 'active');
+  const enable = (sel: string, on: boolean) => { $<HTMLButtonElement>(sel).disabled = !on; };
+  enable('#btn-resolve', s === 'idle');
+  enable('#btn-attach', s === 'resolved');
+  enable('#btn-play', s === 'attached');
+  enable('#btn-pause', s === 'active');
+  enable('#btn-detach', s === 'attached' || s === 'active');
+  enable('#btn-seek', s === 'attached' || s === 'active');
 }
 
-$('#btn-resolver').addEventListener('click', async () => {
-  player ??= crear($<HTMLSelectElement>('#fuente').value);
-  peticiones++;
+$('#btn-resolve').addEventListener('click', async () => {
+  player ??= createFor($<HTMLSelectElement>('#source').value);
+  requests++;
   await player.resolve().catch(() => {});
-  pintar();
+  render();
 });
 
-$('#btn-enganchar').addEventListener('click', async () => {
-  $('#escenario').querySelector('.vacio')?.remove();
+$('#btn-attach').addEventListener('click', async () => {
+  $('#stage').querySelector('.empty')?.remove();
   await player?.attach().catch(() => {});
-  // La barra se monta después de enganchar, cuando ya hay streams que envolver.
-  if (player && !controles) {
-    controles = attachControls(player, { lang: 'en' });
+  // The bar goes on after attaching, when there are streams to wrap.
+  if (player && !controls) {
+    controls = attachControls(player, { lang: 'en' });
     const res = await plugins.activate(player, {}, player.manifest);
     log('plugins:activated', { activated: res.activated, skipped: res.skipped });
   }
-  pintar();
+  render();
 });
 
 $('#btn-play').addEventListener('click', async () => {
   await player?.play().catch(() => {});
-  pintar();
+  render();
 });
 
-$('#btn-pause').addEventListener('click', () => { player?.pause(); pintar(); });
+$('#btn-pause').addEventListener('click', () => { player?.pause(); render(); });
 
 $('#btn-seek').addEventListener('click', () => {
   player?.seek(Math.random() * 30);
-  pintar();
+  render();
 });
 
-$('#btn-desalojar').addEventListener('click', () => {
+$('#btn-detach').addEventListener('click', () => {
   player?.detach();
-  limpiarEscenario('Engine detached. Zero &lt;video&gt; elements in the DOM, ' +
-    'position kept.');
-  pintar();
+  clearStage('Engine detached. Zero &lt;video&gt; elements in the DOM, position kept.');
+  render();
 });
 
-$('#btn-reiniciar').addEventListener('click', () => {
+$('#btn-reset').addEventListener('click', () => {
   player?.destroy();
   player = null;
-  peticiones = 0;
-  $('#eventos').innerHTML = '';
-  $('#deriva').textContent = '—';
-  $('#deriva').className = 'val';
-  $('#accion').textContent = '—';
-  limpiarEscenario('State <code>idle</code>: poster only. Not a single network request.');
-  pintar();
+  requests = 0;
+  $('#events').innerHTML = '';
+  $('#drift').textContent = '—';
+  $('#drift').className = 'val';
+  $('#action').textContent = '—';
+  clearStage('State <code>idle</code>: poster only. Not a single network request.');
+  render();
 });
 
-function pintarManifiesto(): void {
-  const clave = $<HTMLSelectElement>('#fuente').value;
-  // El objeto de verdad, no una copia escrita a mano: si se separaran, el
-  // ejemplo enseñaría algo que no es lo que se ejecuta.
-  $('#manifiesto').textContent = JSON.stringify(MANIFIESTOS[clave], null, 2);
-  $('#manifiesto-nota').innerHTML = CLAVES[clave] ?? '';
+function renderManifest(): void {
+  const key = $<HTMLSelectElement>('#source').value;
+  // The real object, not a hand-written copy that could drift from what runs.
+  $('#manifest').textContent = JSON.stringify(MANIFESTS[key], null, 2);
+  $('#manifest-note').innerHTML = NOTES[key] ?? '';
 }
 
-$('#btn-copiar').addEventListener('click', async () => {
-  const btn = $<HTMLButtonElement>('#btn-copiar');
+$('#btn-copy').addEventListener('click', async () => {
+  const btn = $<HTMLButtonElement>('#btn-copy');
   try {
-    await navigator.clipboard.writeText($('#manifiesto').textContent ?? '');
+    await navigator.clipboard.writeText($('#manifest').textContent ?? '');
     btn.textContent = 'Copied';
   } catch {
     btn.textContent = 'Could not copy';
@@ -280,26 +241,21 @@ $('#btn-copiar').addEventListener('click', async () => {
   setTimeout(() => { btn.textContent = 'Copy manifest'; }, 2000);
 });
 
-$('#fuente').addEventListener('change', () => {
-  $<HTMLButtonElement>('#btn-reiniciar').click();
-  pintarManifiesto();
+$('#source').addEventListener('change', () => {
+  $<HTMLButtonElement>('#btn-reset').click();
+  renderManifest();
 });
 
-pintarManifiesto();
+renderManifest();
 
-/**
- * Desincroniza los esclavos a mano para ver cómo se recuperan.
- *
- * Es la forma de hacer visible el sincronizador: 400 ms está por encima del
- * umbral de salto duro de Blink (500 ms no, 200 ms de WebKit sí), así que
- * según el motor se verá una corrección suave o un salto.
- */
+// 400 ms is above WebKit's hard-seek threshold (200 ms) but below Blink's
+// (500 ms): depending on the engine you see a smooth correction or a jump.
 $('#btn-sync').addEventListener('click', () => {
-  const esclavos = [...document.querySelectorAll<HTMLVideoElement>('#escenario video')]
+  const slaves = [...document.querySelectorAll<HTMLVideoElement>('#stage video')]
     .filter((v) => v.muted);
-  for (const v of esclavos) v.currentTime = Math.max(0, v.currentTime - 0.4);
-  log('demo:desynced', { streams: esclavos.length, ms: -400 });
+  for (const v of slaves) v.currentTime = Math.max(0, v.currentTime - 0.4);
+  log('demo:desynced', { streams: slaves.length, ms: -400 });
 });
 
-pintar();
-setInterval(pintar, 500);
+render();
+setInterval(render, 500);

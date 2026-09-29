@@ -1,51 +1,47 @@
 #!/usr/bin/env bash
-# Genera los medios de prueba de la demo.
+# Generates the demo's test media.
 #
-# Dos vídeos con timecode incrustado, para que la deriva sea visible a simple
-# vista además de medible. Framerates distintos (30 / 25) a propósito: en
-# dual-stream real las dos fuentes rara vez coinciden, y ahí es donde aparece.
+# Two videos with a burned-in timecode, so drift is visible by eye as well as
+# measurable. Different frame rates (30 / 25) on purpose: in real dual-stream
+# the two sources rarely match, and that is where drift shows up.
 #
-# GOP de 2 segundos, que es lo realista en producción. Importa porque limita la
-# precisión del seek: un `currentTime = X` cae al keyframe previo, y eso hay que
-# distinguirlo de un fallo del algoritmo de sincronización.
+# 2-second GOP, as in production. It limits seek precision (`currentTime = X`
+# lands on the previous keyframe), which must not be mistaken for a sync bug.
 #
-# Todo el texto se dimensiona en proporción al fotograma, y el contador de
-# frames se alinea a la derecha con `tw` (ancho del texto). Con tamaños fijos,
-# al bajar la resolución para publicar, el timecode y el contador se solapaban.
+# Text is sized relative to the frame: with fixed sizes, the timecode and the
+# frame counter overlapped at the smaller published resolution.
 set -euo pipefail
 
-# media/ está en .gitignore, así que en un clon limpio no existe.
+# media/ is git-ignored, so it does not exist in a fresh clone.
 mkdir -p "$(dirname "$0")/public/media"
 cd "$(dirname "$0")/public/media"
 
 DUR=${DUR:-60}
-# Ajustables para publicar una versión ligera sin tocar la de trabajo local.
+# Tunable to publish a lighter version without touching the local one.
 SIZE=${SIZE:-1280x720}
 CRF=${CRF:-23}
 FONT=${FONT:-/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf}
 
-# `drawtext` necesita que ffmpeg lleve libfreetype, y el de Homebrew en macOS
-# **no lo trae**. En vez de fallar, se degrada: sin timecode incrustado, pero
-# con un cuadro en movimiento para poder ver que el vídeo avanza. Basta para
-# desarrollar en local; en CI, que es Ubuntu, sí hay drawtext y salen completos.
+# drawtext needs ffmpeg built with libfreetype, which Homebrew's is not. Rather
+# than fail, fall back to a moving box so you can still see the video advance.
+# CI runs on Ubuntu, where drawtext is available.
 if ffmpeg -hide_banner -filters 2>/dev/null | grep -q drawtext && [ -f "$FONT" ]; then
-  HAY_TEXTO=1
+  HAS_TEXT=1
 else
-  HAY_TEXTO=0
-  echo "AVISO: sin drawtext o sin fuente; los vídeos saldrán sin timecode."
-  echo "       Para tenerlo en macOS: brew install homebrew-ffmpeg/ffmpeg/ffmpeg --with-freetype"
+  HAS_TEXT=0
+  echo "WARNING: no drawtext or no font; videos will have no timecode."
+  echo "         On macOS: brew install homebrew-ffmpeg/ffmpeg/ffmpeg --with-freetype"
   echo
 fi
 
 BOX="drawbox=x=0:y=(ih-ih/4):w=iw:h=(ih/4):color=black@0.8:t=fill"
-# El cuadro móvil sustituye al timecode cuando no hay texto: sobre una imagen
-# fija no se puede saber si el vídeo avanza o está congelado.
-MOVIL="drawbox=x='(iw-iw/12)*mod(t\\,4)/4':y='ih-ih/5':w='iw/12':h='ih/12':color=white:t=fill"
-label()  { [ "$HAY_TEXTO" = 1 ] && echo "drawtext=fontfile=${FONT}:text='$1':x=(w/40):y=(h-h/4+h/40):fontsize=(w/30):fontcolor=white" || echo "$MOVIL"; }
-tc()     { [ "$HAY_TEXTO" = 1 ] && echo "drawtext=fontfile=${FONT}:text='%{pts\\:hms}':x=(w/40):y=(h-h/6):fontsize=(w/14):fontcolor=$1" || echo "null"; }
-frames() { [ "$HAY_TEXTO" = 1 ] && echo "drawtext=fontfile=${FONT}:text='f%{n}':x=(w-tw-w/40):y=(h-h/6):fontsize=(w/14):fontcolor=$1" || echo "null"; }
+# On a still image there is no telling whether the video advances or is frozen.
+MOVING="drawbox=x='(iw-iw/12)*mod(t\\,4)/4':y='ih-ih/5':w='iw/12':h='ih/12':color=white:t=fill"
+label()  { [ "$HAS_TEXT" = 1 ] && echo "drawtext=fontfile=${FONT}:text='$1':x=(w/40):y=(h-h/4+h/40):fontsize=(w/30):fontcolor=white" || echo "$MOVING"; }
+tc()     { [ "$HAS_TEXT" = 1 ] && echo "drawtext=fontfile=${FONT}:text='%{pts\\:hms}':x=(w/40):y=(h-h/6):fontsize=(w/14):fontcolor=$1" || echo "null"; }
+frames() { [ "$HAS_TEXT" = 1 ] && echo "drawtext=fontfile=${FONT}:text='f%{n}':x=(w-tw-w/40):y=(h-h/6):fontsize=(w/14):fontcolor=$1" || echo "null"; }
 
-echo "Generando presenter.mp4 (${SIZE}, 30fps, con audio)..."
+echo "Generating presenter.mp4 (${SIZE}, 30fps, with audio)..."
 ffmpeg -y -loglevel error \
   -f lavfi -i "testsrc2=size=${SIZE}:rate=30:duration=${DUR}" \
   -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=${DUR}" \
@@ -55,7 +51,7 @@ ffmpeg -y -loglevel error \
   -movflags +faststart -shortest \
   presenter.mp4
 
-echo "Generando slides.mp4 (${SIZE}, 25fps, sin audio)..."
+echo "Generating slides.mp4 (${SIZE}, 25fps, no audio)..."
 ffmpeg -y -loglevel error \
   -f lavfi -i "testsrc=size=${SIZE}:rate=25:duration=${DUR}" \
   -vf "${BOX},$(label 'SLIDES 25fps'),$(tc 0x00ccff),$(frames 0x00ccff)" \
@@ -63,39 +59,32 @@ ffmpeg -y -loglevel error \
   -movflags +faststart \
   slides.mp4
 
-# --- solo audio ---
-# Una locución sintética serviría, pero un tono con armónicos basta para oír
-# que suena y para que la duración sea la misma que la del vídeo.
-echo "Generando audio.m4a (solo sonido)..."
+echo "Generating audio.m4a (audio only)..."
 ffmpeg -y -loglevel error \
   -f lavfi -i "sine=frequency=330:sample_rate=44100:duration=${DUR}" \
   -f lavfi -i "sine=frequency=495:sample_rate=44100:duration=${DUR}" \
   -filter_complex "[0:a][1:a]amix=inputs=2:duration=first,volume=0.5[a]" \
   -map "[a]" -c:a aac -b:a 96k audio.m4a
 
-# --- cabecera y cola ---
-# Color plano y distinto en cada una, como en S6: si el encadenado dejara un
-# hueco se vería como un destello negro. Cortas, porque la demo arranca sin
-# ellas y quien las activa quiere ver la costura, no esperar.
-pieza() {
-  local nombre="$1" color="$2" texto="$3" dur="$4" filtros="${MOVIL}"
-  [ "$HAY_TEXTO" = 1 ] && filtros="${filtros},drawtext=fontfile=${FONT}:text='${texto}':x=(w-tw)/2:y=(h-th)/2:fontsize=(w/10):fontcolor=white"
-  echo "Generando ${nombre}.mp4 (${dur} s)..."
+# Intro and outro in a flat, distinct colour each, as in S6: a gap in the
+# chaining would show as a black flash.
+bumper() {
+  local name="$1" color="$2" text="$3" dur="$4" filters="${MOVING}"
+  [ "$HAS_TEXT" = 1 ] && filters="${filters},drawtext=fontfile=${FONT}:text='${text}':x=(w-tw)/2:y=(h-th)/2:fontsize=(w/10):fontcolor=white"
+  echo "Generating ${name}.mp4 (${dur} s)..."
   ffmpeg -y -loglevel error \
     -f lavfi -i "color=c=${color}:size=${SIZE}:rate=25:duration=${dur}" \
     -f lavfi -i "sine=frequency=660:sample_rate=48000:duration=${dur}" \
-    -vf "${filtros}" -map 0:v -map 1:a \
+    -vf "${filters}" -map 0:v -map 1:a \
     -c:v libx264 -preset veryfast -pix_fmt yuv420p -crf "${CRF}" -g 50 -c:a aac -b:a 96k \
     -movflags +faststart -shortest \
-    "${nombre}.mp4"
+    "${name}.mp4"
 }
-pieza intro 0x7b2cbf 'INTRO' 5
-pieza outro 0xd9480f 'OUTRO' 4
+bumper intro 0x7b2cbf 'INTRO' 5
+bumper outro 0xd9480f 'OUTRO' 4
 
-# --- HLS, para el motor con hls.js ---
-# `-c copy` reempaqueta sin recodificar: los segmentos pesan lo mismo que el
-# MP4 de origen y la generación es instantánea.
-echo "Generando HLS (segmentos de 2 s)..."
+# HLS for the hls.js engine. `-c copy` repackages without re-encoding.
+echo "Generating HLS (2 s segments)..."
 rm -rf hls && mkdir -p hls
 ffmpeg -y -loglevel error -i presenter.mp4 \
   -c copy -f hls -hls_time 2 -hls_playlist_type vod \
@@ -104,10 +93,10 @@ ffmpeg -y -loglevel error -i slides.mp4 \
   -c copy -f hls -hls_time 2 -hls_playlist_type vod \
   -hls_segment_filename 'hls/slides%03d.ts' hls/slides.m3u8
 
-echo "Generando poster.jpg (fotograma del ponente)..."
+echo "Generating poster.jpg (a presenter frame)..."
 ffmpeg -y -loglevel error -ss 3 -i presenter.mp4 -frames:v 1 -vf scale=960:-1 poster.jpg
 
 echo
 ls -lh presenter.mp4 slides.mp4 intro.mp4 outro.mp4 poster.jpg audio.m4a
 ls hls/*.m3u8 | sed "s/^/  /"
-echo "Listo."
+echo "Done."

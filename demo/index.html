@@ -8,21 +8,21 @@
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="/src/site.css">
 <style>
-  .reglas{margin:0 0 .9rem;padding-left:1.2rem}
-  .reglas li{margin:.3rem 0;max-width:64ch}
-  .casos{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
-  .caso{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:.9rem 1rem}
-  .caso p{margin:0;color:var(--dim);font-size:.94rem}
-  .puertas{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem}
-  .puerta{display:flex;flex-direction:column;gap:.2rem;padding:1rem 1.1rem;border-radius:10px;
+  .rules{margin:0 0 .9rem;padding-left:1.2rem}
+  .rules li{margin:.3rem 0;max-width:64ch}
+  .cases{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+  .case{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:.9rem 1rem}
+  .case p{margin:0;color:var(--dim);font-size:.94rem}
+  .entries{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem}
+  .entry{display:flex;flex-direction:column;gap:.2rem;padding:1rem 1.1rem;border-radius:10px;
           border:1px solid var(--line);background:var(--card);color:var(--fg);text-decoration:none;
           transition:border-color .15s,transform .15s}
-  .puerta:hover{border-color:var(--accent);transform:translateY(-1px)}
-  .puerta.primaria{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
-  .puerta b{font-size:1.02rem}
-  .puerta span{font-size:.88rem;opacity:.85}
-  @media (max-width:640px){.casos,.puertas{grid-template-columns:1fr}}
-  @media (prefers-reduced-motion:reduce){.puerta{transition:none}.puerta:hover{transform:none}}
+  .entry:hover{border-color:var(--accent);transform:translateY(-1px)}
+  .entry.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  .entry b{font-size:1.02rem}
+  .entry span{font-size:.88rem;opacity:.85}
+  @media (max-width:640px){.cases,.entries{grid-template-columns:1fr}}
+  @media (prefers-reduced-motion:reduce){.entry{transition:none}.entry:hover{transform:none}}
 </style>
 </head>
 <body>
@@ -33,7 +33,7 @@
       An accessible web video player for lectures. It keeps the speaker and the
       slides in sync, handles live streams, and never makes you fork it.
     </p>
-    <span class="estado">In development · nothing released yet</span>
+    <span class="status">In development · nothing released yet</span>
   </header>
 
   <h2>What it is</h2>
@@ -46,7 +46,7 @@
 
   <h2>Why it exists</h2>
   <p>It was built from four requirements that came out of running lecture video in production:</p>
-  <ul class="reglas">
+  <ul class="rules">
     <li><strong>Accessibility you can verify.</strong> WCAG 2.1 AA and EN 301 549,
         checked automatically on every change.</li>
     <li><strong>No network until someone presses play.</strong> A course page can
@@ -58,30 +58,30 @@
   </ul>
 
   <h2>What it solves</h2>
-  <div class="casos">
-    <div class="caso">
+  <div class="cases">
+    <div class="case">
       <h3>Recorded lectures</h3>
       <p>Speaker and slides side by side, in sync, with four layouts to choose from.</p>
     </div>
-    <div class="caso">
+    <div class="case">
       <h3>Course pages with many videos</h3>
       <p>32 players can share a single request, and only one plays at a time.</p>
     </div>
-    <div class="caso">
+    <div class="case">
       <h3>Live classes and events</h3>
       <p>Rewind within the live window, jump back to live, and a clear notice when
          the stream hasn't started.</p>
     </div>
-    <div class="caso">
+    <div class="case">
       <h3>Embedding in an LMS</h3>
       <p>One script tag. A separate stylesheet for sites with a strict Content
          Security Policy.</p>
     </div>
-    <div class="caso">
+    <div class="case">
       <h3>Institutional intro and outro</h3>
       <p>Chained without a black gap. The intro can be skipped; the outro can't.</p>
     </div>
-    <div class="caso">
+    <div class="case">
       <h3>Captions and any language</h3>
       <p>Captions switch on by themselves, and the interface can be translated
          without code.</p>
@@ -89,14 +89,14 @@
   </div>
 
   <h2>Try it</h2>
-  <nav class="puertas" aria-label="Demos">
-    <a class="puerta primaria" href="video/">
+  <nav class="entries" aria-label="Demos">
+    <a class="entry primary" href="video/">
       <b>Video demo</b><span>Recorded lecture, one or two videos</span>
     </a>
-    <a class="puerta" href="live/">
+    <a class="entry" href="live/">
       <b>Live demo</b><span>Two synced live streams</span>
     </a>
-    <a class="puerta" href="bench/">
+    <a class="entry" href="bench/">
       <b>Test bench</b><span>The core, instrumented</span>
     </a>
   </nav>

@@ -16,38 +16,38 @@
   main{max-width:1100px;margin:0 auto}
   h1{font-size:1.2rem;margin:0 0 .2rem}
   p.lead{color:var(--dim);margin:0 0 1.25rem;font-size:.9rem}
-  .aviso{background:#1d1a12;border:1px solid var(--warn);border-left-width:4px;
+  .notice{background:#1d1a12;border:1px solid var(--warn);border-left-width:4px;
          border-radius:8px;padding:.7rem .9rem;margin:0 0 1.25rem;font-size:.88rem}
   section{background:var(--card);border:1px solid var(--line);border-radius:10px;
           padding:1rem;margin-bottom:1rem}
   h2{font-size:.78rem;margin:0 0 .8rem;color:var(--dim);
      text-transform:uppercase;letter-spacing:.07em}
-  .barra{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+  .toolbar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
   button,select{font:inherit;padding:.5rem .85rem;border-radius:8px;
     border:1px solid #39404a;background:#262b32;color:var(--fg);cursor:pointer}
   button:hover:not(:disabled){background:#303740}
   button:disabled{opacity:.35;cursor:default}
   button:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-  .metricas{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
             gap:.9rem;margin-bottom:1rem}
   .k{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:#8b939c}
   .val{font-size:1.15rem;font-weight:600;font-variant-numeric:tabular-nums}
-  .bien{color:var(--ok)} .mal{color:var(--bad)}
-  #estado{font-family:ui-monospace,monospace}
-  #estado[data-s="idle"]{color:var(--dim)}
-  #estado[data-s="resolved"]{color:var(--warn)}
-  #estado[data-s="attached"]{color:var(--accent)}
-  #estado[data-s="active"]{color:var(--ok)}
-  #escenario{min-height:120px}
+  .good{color:var(--ok)} .bad{color:var(--bad)}
+  #state{font-family:ui-monospace,monospace}
+  #state[data-s="idle"]{color:var(--dim)}
+  #state[data-s="resolved"]{color:var(--warn)}
+  #state[data-s="attached"]{color:var(--accent)}
+  #state[data-s="active"]{color:var(--ok)}
+  #stage{min-height:120px}
   #player:empty{display:none}
-  #escenario > [data-stream]{position:relative;background:#000;border-radius:8px;
+  #stage > [data-stream]{position:relative;background:#000;border-radius:8px;
                              overflow:hidden}
-  #escenario > [data-stream] video{width:100%;display:block}
-  #escenario > [data-stream]::before{content:attr(data-stream);position:absolute;
+  #stage > [data-stream] video{width:100%;display:block}
+  #stage > [data-stream]::before{content:attr(data-stream);position:absolute;
     top:8px;left:8px;z-index:1;background:#000a;padding:.2rem .5rem;
     border-radius:4px;font-size:.75rem;color:#e8eaed}
-  .vacio{color:var(--dim);font-size:.9rem;margin:0;padding:2rem 0;text-align:center}
-  #eventos{max-height:280px;overflow:auto;font:12px/1.5 ui-monospace,monospace}
+  .empty{color:var(--dim);font-size:.9rem;margin:0;padding:2rem 0;text-align:center}
+  #events{max-height:280px;overflow:auto;font:12px/1.5 ui-monospace,monospace}
   .ev{padding:.15rem 0;border-bottom:1px solid #1e222a}
   .ev .t{color:var(--accent)}
   .ev .p{color:var(--dim)}
@@ -56,8 +56,8 @@
       padding:.9rem;overflow-x:auto;margin:0;max-height:26rem}
   pre code{background:none;padding:0;font:12px/1.55 ui-monospace,monospace;
            color:#cdd3da;white-space:pre}
-  .nota{color:var(--dim);font-size:.86rem;margin:0 0 .8rem}
-  .nota b{color:var(--fg);font-weight:600}
+  .note{color:var(--dim);font-size:.86rem;margin:0 0 .8rem}
+  .note b{color:var(--fg);font-weight:600}
 </style>
 </head>
 <body>
@@ -69,14 +69,14 @@
     <code>createPlayer()</code> and the lifecycle methods, one step at a time.
   </p>
 
-  <p class="aviso">
+  <p class="notice">
     <strong>The control bar is here too.</strong> Try it with the keyboard only:
     <kbd>Tab</kbd> to move, <kbd>Space</kbd> or <kbd>K</kbd> to play, arrows to
     seek and change the volume, <kbd>M</kbd> to mute, <kbd>F</kbd> for full
     screen. The lifecycle buttons are deliberately raw: they are what this page
     is here to show.
   </p>
-  <p class="aviso">
+  <p class="notice">
     With two streams the synchronizer is running. Press
     <strong>Desync by 400&nbsp;ms</strong> or <strong>Seek at random</strong>
     and watch the drift close: <em>Loop action</em> shows whether it corrects
@@ -86,62 +86,62 @@
 
   <section>
     <h2>Lifecycle</h2>
-    <div class="metricas">
-      <div><div class="k">State</div><div class="val" id="estado">idle</div></div>
-      <div><div class="k">Network requests</div><div class="val" id="peticiones">0</div></div>
+    <div class="metrics">
+      <div><div class="k">State</div><div class="val" id="state">idle</div></div>
+      <div><div class="k">Network requests</div><div class="val" id="requests">0</div></div>
       <div><div class="k">&lt;video&gt; elements</div><div class="val" id="videos">0</div></div>
       <div><div class="k">Saved position</div><div class="val" id="resumeAt">0.00 s</div></div>
-      <div><div class="k">Time</div><div class="val" id="tiempo">0.00 s</div></div>
-      <div><div class="k">Drift</div><div class="val" id="deriva">—</div></div>
-      <div><div class="k">Loop action</div><div class="val" id="accion">—</div></div>
+      <div><div class="k">Time</div><div class="val" id="time">0.00 s</div></div>
+      <div><div class="k">Drift</div><div class="val" id="drift">—</div></div>
+      <div><div class="k">Loop action</div><div class="val" id="action">—</div></div>
     </div>
-    <div class="barra">
-      <select id="fuente" aria-label="Manifest">
-        <option value="mono">Single stream</option>
+    <div class="toolbar">
+      <select id="source" aria-label="Manifest">
+        <option value="single">Single stream</option>
         <option value="dual">Dual stream</option>
         <option value="hls">Dual stream over HLS</option>
         <option value="audio">Audio only</option>
         <option value="audio-slides">Audio with slides</option>
-        <option value="recorte">Trimmed</option>
-        <option value="invalido">Invalid manifest (two audio tracks)</option>
+        <option value="trimmed">Trimmed</option>
+        <option value="invalid">Invalid manifest (two audio tracks)</option>
       </select>
-      <button id="btn-resolver">1 · Resolve manifest</button>
-      <button id="btn-enganchar">2 · Attach engine</button>
+      <button id="btn-resolve">1 · Resolve manifest</button>
+      <button id="btn-attach">2 · Attach engine</button>
       <button id="btn-play">3 · Play</button>
       <button id="btn-pause">Pause</button>
       <button id="btn-seek">Seek at random</button>
       <button id="btn-sync">Desync by 400 ms</button>
-      <button id="btn-desalojar">Detach engine</button>
-      <button id="btn-reiniciar">Reset</button>
+      <button id="btn-detach">Detach engine</button>
+      <button id="btn-reset">Reset</button>
     </div>
   </section>
 
   <section>
     <h2>Stage</h2>
-    <div id="escenario">
-      <p class="vacio">State <code>idle</code>: poster only. Not a single network request.</p>
+    <div id="stage">
+      <p class="empty">State <code>idle</code>: poster only. Not a single network request.</p>
       <div id="player"></div>
     </div>
   </section>
 
   <section>
     <h2>Manifest · what the player is given</h2>
-    <p class="nota" id="manifiesto-nota"></p>
-    <div class="barra" style="margin-bottom:.6rem">
-      <button id="btn-copiar">Copy manifest</button>
+    <p class="note" id="manifest-note"></p>
+    <div class="toolbar" style="margin-bottom:.6rem">
+      <button id="btn-copy">Copy manifest</button>
     </div>
-    <pre><code id="manifiesto"></code></pre>
+    <pre><code id="manifest"></code></pre>
   </section>
 
   <section>
     <h2>Event bus · everything <code>onAny()</code> sees</h2>
-    <div id="eventos"></div>
+    <div id="events"></div>
   </section>
 
   <footer style="color:var(--dim);font-size:.88rem;margin-top:2rem">
     <p style="margin:0 0 .4rem"><strong style="color:var(--fg)">Lab notebooks.</strong>
       The experiments that shaped the design, before any architecture was written.
-      They are development notes, written in Spanish.</p>
+      They are development notes.</p>
     <p style="margin:0">
       <a href="../spikes/s1-dual-sync/" style="color:var(--accent)">S1 · Dual-stream sync</a> ·
       <a href="../probe/" style="color:var(--accent)">S2 · Device probe</a> ·

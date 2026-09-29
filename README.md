@@ -1,211 +1,228 @@
 # NanoPlayer
 
-Reproductor web multi-stream, accesible y extensible.
+Multi-stream, accessible and extensible web video player.
 
-> **Estado: en desarrollo.** El reproductor ya funciona —mono-stream,
-> dual-stream sincronizado, HLS, directo, subtítulos y barra de controles
-> accesible— pero **no hay nada publicado**: ni en npm, ni en un CDN, ni una
-> versión etiquetada. Hoy la única forma de usarlo es clonar el repositorio y
-> compilarlo. La API puede cambiar sin aviso.
-
----
-
-## Por qué
-
-Cuatro requisitos, sacados de operar vídeo docente en producción, que
-condicionan toda la arquitectura:
-
-**Accesibilidad verificable.** WCAG 2.1 AA y EN 301 549 como requisito de
-arquitectura, comprobados automáticamente en CI. La accesibilidad añadida al
-final siempre sale cara y siempre sale peor.
-
-**Cero red hasta que el usuario lo pide.** Una página puede contener decenas de
-reproductores — el caso real que motivó esto tenía 32. Instanciar uno no
-descarga nada: ni metadatos, ni manifiesto, ni un byte de vídeo. Y una política
-de reproducción exclusiva evita que compitan entre ellos.
-
-**Configuración, no forks.** Activar o desactivar cualquier plugin es
-configuración en tiempo de ejecución. Nunca hace falta montar un build propio
-para cambiar qué features están encendidas.
-
-**Theming sin forks.** Variables CSS documentadas como API estable, para
-rediseñar el aspecto sin tocar el código del reproductor.
-
-La tesis, en una frase: **un reproductor que no te obliga a forkearlo.**
+> **Status: in development.** The player already works —single stream,
+> synchronized dual stream, HLS, live, captions and an accessible control bar—
+> but **nothing is released**: not on npm, not on a CDN, no tagged version.
+> Today the only way to use it is to clone the repository and build it. The API
+> may change without notice.
 
 ---
 
-## Qué funciona ya
+## Why
+
+Four requirements, drawn from running lecture video in production, that shape
+the whole architecture:
+
+**Accessibility you can verify.** WCAG 2.1 AA and EN 301 549 as an
+architectural requirement, checked automatically in CI. Accessibility added at
+the end always costs more and always comes out worse.
+
+**No network until the user asks.** A page can hold dozens of players — the
+real case that prompted this had 32. Creating one downloads nothing: no
+metadata, no manifest, not a byte of video. And an exclusive-playback policy
+keeps them from competing.
+
+**Configuration, not forks.** Turning any plugin on or off is runtime
+configuration. You never need a custom build to change which features are on.
+
+**Theming without forks.** CSS variables documented as a stable API, to
+redesign the look without touching the player's code.
+
+The thesis, in one sentence: **a player that never makes you fork it.**
+
+---
+
+## What works today
 
 | | |
 |---|---|
-| **Reproducción** | Mono-stream, dual-stream sincronizado, solo audio con carátula, y audio con diapositivas |
-| **Formatos** | MP4 por el motor nativo; HLS con [hls.js](packages/engine-hls/) en carga diferida, que solo se descarga si hace falta |
-| **Recorte** | La anotación `trim` remapea el timeline visible sin tocar el medio: duración, posición y saltos van en tiempo recortado |
-| **Directo** | Ventana DVR, salto al borde, espera por flujo con reintentos, y distinción entre «aún no ha empezado» y «se ha interrumpido» |
-| **Sincronización** | Control proporcional con histéresis y perfiles por motor. En directo mide por hora absoluta (`EXT-X-PROGRAM-DATE-TIME`), no por `currentTime` |
-| **Interfaz** | Barra de controles accesible, navegable entera con teclado, y menú de ajustes por paneles apilados con la ergonomía del de YouTube |
-| **Layouts** | Lado a lado, imagen en imagen, solo ponente y solo presentación |
-| **Multi-instancia** | Registro compartido con reproducción exclusiva y resolución de manifiestos en lote — 32 reproductores, una petición |
-| **Plugins** | Registro con orden topológico y anclajes de interfaz. Los plugins declaran su condición y se activan solos según el manifiesto, cada reproductor con los suyos |
-| **Capítulos** | Marcas en la barra de progreso, el capítulo en curso a la vista y anunciado al lector de pantalla, y una lista en ajustes para saltar |
-| **Theming** | Variables CSS documentadas, sin Shadow DOM |
-| **Instalación** | Los paquetes sueltos por npm, o una etiqueta `<script>` y tres líneas con el bundle de 27 KB gzip. También UMD para cargadores AMD, y la hoja de estilos como fichero para entornos con CSP estricta |
-| **Errores** | `code` para decidir qué se le dice al usuario —traducible—, y `message` en inglés como diagnóstico para quien integra |
-| **Idiomas** | Español e inglés de serie, y catálogo abierto: añadir otro —o cambiar una palabra— es configuración, no un fork. Tiempos y porcentajes los formatea `Intl`, así que salen bien en cualquier idioma |
+| **Playback** | Single stream, synchronized dual stream, audio only with artwork, and audio with slides |
+| **Formats** | MP4 through the native engine; HLS through lazily loaded [hls.js](packages/engine-hls/), downloaded only when needed |
+| **Trim** | The `trim` annotation remaps the visible timeline without touching the media: duration, position and seeks are in trimmed time |
+| **Intro and outro** | Chained without a visible gap; the intro can be skipped, the outro cannot |
+| **Live** | DVR window, jump to the edge, per-stream waiting with retries, and a distinction between "not started yet" and "interrupted" |
+| **Sync** | Proportional control with hysteresis and per-engine profiles. Live streams are measured by absolute time (`EXT-X-PROGRAM-DATE-TIME`), not by `currentTime` |
+| **Interface** | Accessible control bar, fully keyboard-operable, and a settings menu of stacked panels with YouTube's ergonomics |
+| **Layouts** | Side by side, picture in picture, speaker only and slides only |
+| **Multi-instance** | Shared registry with exclusive playback and batched manifest resolution — 32 players, one request |
+| **Plugins** | Registry with topological order and UI slots. Plugins declare their condition and switch on by themselves from the manifest, each player with its own |
+| **Chapters** | Marks on the progress bar, the current chapter on screen and announced to screen readers, and a list in settings to jump to one |
+| **Theming** | Documented CSS variables, no Shadow DOM |
+| **Installation** | The packages separately from npm, or one `<script>` tag and three lines with the 27 KB gzip bundle. Also UMD for AMD loaders, and the stylesheet as a file for sites with a strict CSP |
+| **Errors** | A `code` to decide what the user is told —translatable— and an English `message` as a diagnostic for integrators |
+| **Languages** | Spanish and English built in, with an open catalogue: adding another —or changing one word— is configuration, not a fork. Times and percentages are formatted by `Intl`, so they come out right in any language |
 
-El núcleo **no tiene dependencias en tiempo de ejecución**, y hls.js solo se
-descarga la primera vez que hay que reproducir HLS: quien reproduzca MP4 no lo
-paga.
+The core has **no runtime dependencies**, and hls.js is only downloaded the
+first time HLS has to play: whoever plays MP4 does not pay for it.
 
-### Paquetes
+### Packages
 
-| Paquete | |
+| Package | |
 |---|---|
-| [`@nanoplayer/core`](packages/core/) | Manifiesto, ciclo de vida, motores, sincronización y plugins. Sin interfaz |
-| [`@nanoplayer/ui`](packages/ui/) | Barra de controles accesible, menú de ajustes y layouts |
-| [`@nanoplayer/engine-hls`](packages/engine-hls/) | Motor HLS sobre hls.js |
-| [`@nanoplayer/plugin-captions`](packages/plugin-captions/) | Subtítulos |
-| [`@nanoplayer/plugin-chapters`](packages/plugin-chapters/) | Capítulos: marcas en la barra de progreso y lista en ajustes |
-| [`@nanoplayer/bundle`](packages/bundle/) | Todo lo anterior salvo HLS en un fichero, para la etiqueta `<script>`. 27 KB gzip |
+| [`@nanoplayer/core`](packages/core/) | Manifest, lifecycle, engines, sync and plugins. No UI |
+| [`@nanoplayer/ui`](packages/ui/) | Accessible control bar, settings menu and layouts |
+| [`@nanoplayer/engine-hls`](packages/engine-hls/) | HLS engine on hls.js |
+| [`@nanoplayer/plugin-captions`](packages/plugin-captions/) | Captions |
+| [`@nanoplayer/plugin-chapters`](packages/plugin-chapters/) | Chapters: marks on the progress bar and a list in settings |
+| [`@nanoplayer/bundle`](packages/bundle/) | All of the above except HLS in one file, for the `<script>` tag. 27 KB gzip |
 
-## Qué falta
+## What is missing
 
-Por orden de lo que bloquea a más gente:
+In order of what blocks the most people:
 
-- **Publicación.** Nada está en npm y no hay workflow de release. Los cuatro
-  paquetes siguen en `0.0.0`.
-- **HLS en una etiqueta `<script>`.** El bundle lleva el motor nativo, que
-  cubre MP4 en todas partes y HLS en Safari e iOS. Para HLS en Chrome hace
-  falta hls.js, que hoy solo se puede cargar por la vía npm.
-- **Plugins previstos:** multi-audio, Chromecast, listas de reproducción y H5P.
-  Las anotaciones del manifiesto ya son el mecanismo por el que entrarán.
-- **Demo.** El caso multi-instancia no tiene escenario donde verlo, y el spike
-  S5 no se publica en Pages. La demo de directo depende de un canal público de
-  pruebas de terceros.
+- **Publishing.** Nothing is on npm and there is no release workflow. The
+  packages are still at `0.0.0`.
+- **HLS with a `<script>` tag.** The bundle carries the native engine, which
+  covers MP4 everywhere and HLS on Safari and iOS. HLS on Chrome needs hls.js,
+  which today can only be loaded through npm.
+- **Planned plugins:** multi-audio, Chromecast, playlists and H5P. The
+  manifest's annotations are already the mechanism they will come in through.
+- **Demo.** The multi-instance case has nowhere to be seen, and spike S5 is not
+  published on Pages. The live demo depends on a third-party public test
+  channel.
 
-El alcance detallado y el calendario se publicarán cuando el MVP esté más
-avanzado.
+The detailed scope and schedule will be published when the MVP is further along.
+
+---
+
+## Browser quirks
+
+Much of the code exists to work around measured browser behaviour — iOS not
+preloading, WebKit and hls.js seeking, one audio track at a time on iPhone, and
+more. Each one is catalogued, with how it was found and which test guards it,
+in [`docs/browser-quirks.md`](docs/browser-quirks.md).
 
 ---
 
 ## Spikes
 
-Antes de escribir arquitectura, validar lo que puede hundir el proyecto. Código
-desechable: lo que sobrevive son las conclusiones.
+Before writing architecture, validate what could sink the project. Throwaway
+code: what survives are the conclusions.
 
-### [S1 · Sincronización dual-stream](spikes/s1-dual-sync/) ✅
+### [S1 · Dual-stream sync](spikes/s1-dual-sync/) ✅
 
-**¿Se pueden mantener dos vídeos sincronizados con solo `<video>` nativo?** Sí.
-Deriva mediana de 9,8 ms y p95 de 14,3 ms en Chrome — un frame a 30 fps son
-33 ms — con recuperación en todos los escenarios probados.
+**Can two videos be kept in sync with nothing but native `<video>`?** Yes.
+Median drift of 9.8 ms and p95 of 14.3 ms in Chrome — one frame at 30 fps is
+33 ms — recovering in every scenario tried.
 
-Hallazgo principal: la **histéresis es obligatoria**. Sin separar el umbral de
-enganche del de suelta, el controlador deja un offset permanente de 28,8 ms.
+Main finding: **hysteresis is mandatory**. Without separating the engage
+threshold from the release threshold, the controller leaves a permanent 28.8 ms
+offset.
 
-### [S2 · Matriz de dispositivos](spikes/s2-device-matrix/) ✅
+### [S2 · Device matrix](spikes/s2-device-matrix/) ✅
 
-**¿Qué aguanta cada dispositivo?** Medido en Blink, Safari de escritorio y dos
-iPhone. Un único fichero HTML autocontenido que cualquiera abre en su móvil y
-devuelve un informe.
+**What can each device take?** Measured on Blink, desktop Safari and two
+iPhones. A single self-contained HTML file anyone opens on their phone, which
+returns a report.
 
-| Motor | Vídeos a la vez | Deriva p95 | Fullscreen del contenedor |
+| Engine | Videos at once | Drift p95 | Container full screen |
 |---|---|---|---|
-| Blink (Chrome) | 18 | 15 ms | sí |
-| WebKit (Safari, Mac) | 17 | 54 ms | sí |
+| Blink (Chrome) | 18 | 15 ms | yes |
+| WebKit (Safari, Mac) | 17 | 54 ms | yes |
 | WebKit (iPhone) | 17 | 209 ms | **no** |
 
-La respuesta a la pregunta decisiva fue que no: **en iPhone no existe el
-fullscreen de contenedor**, así que el dual-stream a pantalla completa es
-imposible, y es limitación de iOS y no de WebKit. De ahí que el botón se oculte
-donde la política lo prohíbe en lugar de quedarse sin hacer nada.
+The answer to the decisive question was no: **iPhone has no container full
+screen**, so full-screen dual stream is impossible, and it is an iOS limitation,
+not a WebKit one. Hence the button hides where policy forbids it instead of
+sitting there doing nothing.
 
-### [S5 · Directo dual-stream](spikes/s5-live-dual/) ✅
+### [S5 · Live dual stream](spikes/s5-live-dual/) ✅
 
-**¿Se pueden sincronizar dos directos HLS independientes?** Sí, **pero solo con
-`EXT-X-PROGRAM-DATE-TIME`** en ambas listas. Sin esa etiqueta no es que la
-corrección salga peor: es que **no hay forma de medir** si están sincronizados,
-porque en directo `currentTime` tiene su origen en el momento en que cada flujo
-empezó a cargar.
+**Can two independent HLS live streams be synchronized?** Yes, **but only with
+`EXT-X-PROGRAM-DATE-TIME`** in both playlists. Without that tag the correction
+does not just get worse: **there is no way to measure** whether they are in
+sync, because in a live stream `currentTime` starts from the moment each stream
+began loading.
 
-Por eso el sincronizador tiene un modo directo que compara por hora absoluta, y
-por eso sin la etiqueta el reproductor **no corrige**, en lugar de fingir. En
-Wowza la propiedad es `cupertinoEnableProgramDateTime`, desactivada por defecto.
+That is why the synchronizer has a live mode that compares absolute time, and
+why without the tag the player **does not correct** rather than pretend. In
+Wowza the property is `cupertinoEnableProgramDateTime`, off by default.
+
+### [S6 · Intro and outro chaining](spikes/s6-chaining/) ✅
+
+**Can the intro hand over to the content —and the content to the outro—
+without a visible gap?** Yes, but only by starting the next piece **600 ms
+before** the current one ends, muted, and switching on its first frame: 0 ms
+gap on Chromium, WebKit and an iPhone 17 Pro with Safari 26.5.
 
 ---
 
-## Desarrollo
+## Development
 
-Requisitos: Node 20+, pnpm, ffmpeg.
+Requirements: Node 20+, pnpm, ffmpeg.
 
 ```bash
 pnpm install
-pnpm test          # 241 tests unitarios
+pnpm test          # 394 unit tests
 pnpm typecheck
 ```
 
-La auditoría de accesibilidad se pasa sobre el build de la demo, no sobre el
-servidor de desarrollo — es más fiel auditar lo que realmente se despliega:
+The accessibility audit runs on the demo's build, not on the dev server —
+auditing what is actually deployed is more faithful:
 
 ```bash
 pnpm --filter @nanoplayer/demo build
 cd e2e && node a11y.mjs --serve ../demo/dist
+node keyboard.mjs --serve ../demo/dist
+node chaining.mjs --serve ../demo/dist
 ```
 
-### La demo
+### The demo
 
 ```bash
 cd demo
-./gen-media.sh     # genera los vídeos de prueba con ffmpeg
+./gen-media.sh     # generates the test videos with ffmpeg
 pnpm --filter @nanoplayer/demo dev      # http://localhost:5180
 ```
 
-Es la web pública, en inglés: una portada que explica qué es el reproductor,
-una demo de vídeo, una de directo sobre un canal público de pruebas y el **banco de
-pruebas** del núcleo. Ver [`demo/README.md`](demo/README.md).
+It is the public website: a landing page explaining what the player is, a video
+demo, a live demo on a public test channel, and the core's **test bench**. See
+[`demo/README.md`](demo/README.md).
 
-### Los spikes
+### The spikes
 
 ```bash
-# S1 — banco de sincronización
+# S1 — sync bench
 cd spikes/s1-dual-sync
 ./gen-media.sh && pnpm install
-node serve.mjs 8099     # http://127.0.0.1:8099 para verlo
-node measure.mjs        # medición automática
+node serve.mjs 8099     # http://127.0.0.1:8099 to see it
+node measure.mjs        # automatic measurement
 
-# S2 — sonda de dispositivos
+# S2 — device probe
 cd spikes/s2-device-matrix
 ./gen-media.sh && pnpm install
 node build.mjs          # -> dist/nanoplayer-probe.html
-node verify.mjs         # comprobar la sonda antes de repartirla
+node verify.mjs         # check the probe before handing it out
 
-# S5 — directo dual-stream
+# S5 — live dual stream
 cd spikes/s5-live-dual
-./stream.sh             # dos emisiones en vivo arrancadas a la vez
-node serve.mjs 8170     # sirve las listas SIN caché: imprescindible en directo
+./stream.sh             # two live broadcasts started together
+node serve.mjs 8170     # serves the playlists WITHOUT caching: essential for live
 node measure.mjs 30
 ```
 
-Los medios de prueba no se versionan: se regeneran con `gen-media.sh`.
+Test media are not versioned: they are regenerated with `gen-media.sh`.
 
-### Publicación
+### Publishing
 
-Cada push a `main` publica en GitHub Pages el índice, la demo y los bancos de
-S1 y S2. CI ejecuta tests, typecheck y la auditoría de accesibilidad, que
-**bloquea el merge**: la accesibilidad que no se comprueba automáticamente se
-pierde sin que nadie se entere, que es exactamente lo que este proyecto existe
-para evitar.
+Every push to `main` publishes the website and the S1, S2 and S6 benches to
+GitHub Pages. CI runs the tests, the typecheck, the accessibility audit, the
+keyboard walk and the chaining check, and they **block the merge**:
+accessibility that is not checked automatically gets lost without anyone
+noticing, which is exactly what this project exists to prevent.
 
 ---
 
-## Licencia
+## License
 
-[Apache-2.0](LICENSE). Permisiva y con concesión de patentes.
+[Apache-2.0](LICENSE). Permissive, with a patent grant.
 
-Es una elección deliberada: cualquiera puede usar NanoPlayer, modificarlo,
-integrarlo en productos propietarios y comercializarlo, sin pedir permiso. En un
-reproductor web la adopción es el valor, y la fricción legal es lo primero que
-descarta una opción cuando alguien evalúa qué integrar.
+A deliberate choice: anyone can use NanoPlayer, modify it, build it into
+proprietary products and sell it, without asking. In a web player adoption is
+the value, and legal friction is the first thing that rules an option out when
+someone evaluates what to integrate.
 
-Las contribuciones entran bajo la misma licencia por defecto, según la sección 5
-de la propia Apache-2.0. No hace falta firmar ningún CLA.
+Contributions come in under the same licence by default, per section 5 of
+Apache-2.0 itself. No CLA to sign.
