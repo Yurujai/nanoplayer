@@ -1,14 +1,6 @@
 /**
- * Cadenas de la interfaz por defecto.
- *
- * Un solo sitio, no cuatro. Antes estaban repartidas entre `control-bar`,
- * `poster`, `settings-menu` y `layouts`, cada una con su tabla y su forma de
- * deducir el idioma; añadir un idioma obligaba a tocar los cuatro ficheros.
- *
- * **Dos idiomas de serie y no más.** Sirven de referencia y de prueba de que el
- * mecanismo funciona; el resto entra por `strings` al crear el reproductor, o
- * por un PR con otro objeto como estos dos. Lo que importa es que ninguna de
- * las dos vías obligue a tocar el código de la interfaz.
+ * Default UI strings. Spanish and English ship with the package; any other
+ * language comes in through `strings` when creating the player.
  */
 import { strings } from '@nanoplayer/core';
 
@@ -39,12 +31,10 @@ strings.register('es', {
   'ui.live.goTo': 'Ir al directo',
   'ui.live.behind': 'Retrasado respecto al directo',
   'ui.live.window': 'Posición en el directo',
-  // Con variable, para que un idioma pueda poner el tiempo donde le convenga.
-  'ui.live.behindBy': 'Retrasado respecto al directo: {tiempo}',
-  'ui.live.goToBehindBy': 'Ir al directo. Retrasado respecto al directo: {tiempo}',
+  'ui.live.behindBy': 'Retrasado respecto al directo: {time}',
+  'ui.live.goToBehindBy': 'Ir al directo. Retrasado respecto al directo: {time}',
 
-  // Una por código de `PlayerError`. El texto del error es diagnóstico para
-  // quien integra y va siempre en inglés; esto es lo que oye quien mira.
+  // One per `PlayerError` code: the error message itself is diagnostics for integrators.
   'ui.error.generic': 'No se ha podido reproducir el vídeo',
   'ui.error.manifest/fetch': 'No se ha podido cargar el vídeo',
   'ui.error.manifest/invalid': 'Este vídeo está mal configurado',
@@ -55,7 +45,6 @@ strings.register('es', {
   'ui.error.media/blocked': 'Pulsa reproducir para empezar',
   'ui.error.internal': 'No se ha podido reproducir el vídeo',
 
-  // Cabecera y cola. Para quien mira, "cola" es jerga: se le dice "cierre".
   'ui.chain.intro': 'Cabecera',
   'ui.chain.outro': 'Cierre',
   'ui.chain.skip': 'Saltar cabecera',
@@ -102,8 +91,8 @@ strings.register('en', {
   'ui.live.goTo': 'Go to live',
   'ui.live.behind': 'Behind live',
   'ui.live.window': 'Position in the live stream',
-  'ui.live.behindBy': 'Behind live: {tiempo}',
-  'ui.live.goToBehindBy': 'Go to live. Behind live: {tiempo}',
+  'ui.live.behindBy': 'Behind live: {time}',
+  'ui.live.goToBehindBy': 'Go to live. Behind live: {time}',
 
   'ui.error.generic': 'The video could not be played',
   'ui.error.manifest/fetch': 'The video could not be loaded',

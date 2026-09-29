@@ -1,23 +1,9 @@
 /**
- * Menú de ajustes por paneles apilados, con la ergonomía del de YouTube.
- *
- * La forma de declararlo ya es la que usarán los plugins: se registra un panel
- * describiendo *qué* ofrece —opciones, valor actual, qué hacer al elegir— y el
- * menú lo construye. El plugin nunca pinta DOM propio, y por eso las garantías
- * de accesibilidad siguen valiendo cuando alguien instale uno de terceros.
- *
- * Sigue el patrón WAI-ARIA de botón de menú, que no es decorativo:
- *
- *   - `role="menu"` con `menuitem` y `menuitemradio`, así el lector de pantalla
- *     anuncia "menú" y "opción seleccionada" en lugar de leer una lista de
- *     botones sueltos.
- *   - **Navegación con flechas y `tabindex` móvil**: dentro de un menú, Tab
- *     sale; son las flechas las que recorren. Es lo que espera quien usa
- *     lector de pantalla.
- *   - **El foco entra al abrir y vuelve al engranaje al cerrar.** Sin esto, al
- *     cerrar el menú el foco se va al principio del documento y hay que
- *     recorrerlo entero para volver.
- *   - `Escape` retrocede un panel, o cierra si ya está en el principal.
+ * Settings menu with stacked panels, following the WAI-ARIA menu button
+ * pattern: `role="menu"` with `menuitem`/`menuitemradio`, arrow keys and a
+ * roving tabindex inside, focus in on open and back to the gear on close, and
+ * Escape going back one panel before closing. Panels are declared, never
+ * drawn by whoever adds them, so the accessibility holds for third-party plugins.
  */
 import type { Translate } from '@nanoplayer/core';
 import { ICONS } from './icons.js';
@@ -29,142 +15,131 @@ export interface SettingsOption {
 
 export interface SettingsPanel {
   id: string;
-  /** Lo que se lee en el menú principal. */
+  /** What the main menu reads. */
   label: string;
   options: readonly SettingsOption[];
-  /** Valor actual, para marcar la opción y resumirla en el menú principal. */
+  /** Current value, to tick the option and summarise it in the main menu. */
   getValue: () => string;
   onSelect: (value: string) => void;
-  /** Menor va antes. Por defecto 100. */
+  /** Lower goes first. Defaults to 100. */
   priority?: number;
 }
 
 export class SettingsMenu {
-  readonly #boton: HTMLButtonElement;
+  readonly #button: HTMLButtonElement;
   readonly #popup: HTMLElement;
   readonly #t: Translate;
-  readonly #paneles = new Map<string, SettingsPanel>();
+  readonly #panels = new Map<string, SettingsPanel>();
 
-  #abierto = false;
-  #panelActivo: string | null = null;   // null = panel principal
-  #desatar: Array<() => void> = [];
+  #open = false;
+  /** `null` is the main panel. */
+  #activePanel: string | null = null;
+  #unsubscribe: Array<() => void> = [];
 
   constructor(host: HTMLElement, t: Translate) {
     const doc = host.ownerDocument;
     this.#t = t;
 
-    this.#boton = doc.createElement('button');
-    this.#boton.type = 'button';
-    this.#boton.className = 'np__btn np__btn--settings';
-    this.#boton.innerHTML = ICONS.settings;
-    this.#boton.setAttribute('aria-label', this.#t('ui.settings.label'));
-    this.#boton.setAttribute('aria-haspopup', 'true');
-    this.#boton.setAttribute('aria-expanded', 'false');
-    // Oculto hasta que alguien aporte ajustes: un engranaje que abre un menú
-    // vacío es ruido, y en la barra el sitio es escaso.
-    this.#boton.hidden = true;
+    this.#button = doc.createElement('button');
+    this.#button.type = 'button';
+    this.#button.className = 'np__btn np__btn--settings';
+    this.#button.innerHTML = ICONS.settings;
+    this.#button.setAttribute('aria-label', this.#t('ui.settings.label'));
+    this.#button.setAttribute('aria-haspopup', 'true');
+    this.#button.setAttribute('aria-expanded', 'false');
+    // Hidden until someone adds settings: a gear opening an empty menu is noise.
+    this.#button.hidden = true;
 
     this.#popup = doc.createElement('div');
     this.#popup.className = 'np__menu';
     this.#popup.hidden = true;
 
-    const envoltorio = doc.createElement('div');
-    envoltorio.className = 'np__menu-anchor';
-    envoltorio.append(this.#boton, this.#popup);
-    host.appendChild(envoltorio);
+    const wrapper = doc.createElement('div');
+    wrapper.className = 'np__menu-anchor';
+    wrapper.append(this.#button, this.#popup);
+    host.appendChild(wrapper);
 
-    this.#boton.addEventListener('click', () => this.toggle());
-    this.#popup.addEventListener('keydown', (ev) => this.#teclado(ev));
+    this.#button.addEventListener('click', () => this.toggle());
+    this.#popup.addEventListener('keydown', (ev) => this.#onKey(ev));
 
-    // Cerrar al pulsar fuera. En `pointerdown` y no en `click` para que no se
-    // reabra al soltar sobre el propio engranaje.
-    const fuera = (ev: Event) => {
-      if (!this.#abierto) return;
-      if (!envoltorio.contains(ev.target as Node)) this.close();
+    // `pointerdown`, not `click`, so releasing over the gear does not reopen it.
+    const outside = (ev: Event) => {
+      if (!this.#open) return;
+      if (!wrapper.contains(ev.target as Node)) this.close();
     };
-    doc.addEventListener('pointerdown', fuera, true);
-    this.#desatar.push(() => doc.removeEventListener('pointerdown', fuera, true));
+    doc.addEventListener('pointerdown', outside, true);
+    this.#unsubscribe.push(() => doc.removeEventListener('pointerdown', outside, true));
   }
 
   get button(): HTMLButtonElement {
-    return this.#boton;
+    return this.#button;
   }
 
   get isOpen(): boolean {
-    return this.#abierto;
+    return this.#open;
   }
 
   get panelCount(): number {
-    return this.#paneles.size;
+    return this.#panels.size;
   }
 
-  /** Registra un panel. Es lo que llamará un plugin para aportar ajustes. */
   addPanel(panel: SettingsPanel): () => void {
-    this.#paneles.set(panel.id, panel);
-    this.#boton.hidden = this.#paneles.size === 0;
-    if (this.#abierto) this.#pintar();
+    this.#panels.set(panel.id, panel);
+    this.#button.hidden = this.#panels.size === 0;
+    if (this.#open) this.#render();
     return () => {
-      this.#paneles.delete(panel.id);
-      this.#boton.hidden = this.#paneles.size === 0;
-      if (this.#abierto) this.#pintar();
+      this.#panels.delete(panel.id);
+      this.#button.hidden = this.#panels.size === 0;
+      if (this.#open) this.#render();
     };
   }
 
   toggle(): void {
-    this.#abierto ? this.close() : this.open();
+    if (this.#open) this.close();
+    else this.open();
   }
 
   open(): void {
-    if (this.#abierto || this.#paneles.size === 0) return;
-    this.#abierto = true;
-    this.#panelActivo = null;
+    if (this.#open || this.#panels.size === 0) return;
+    this.#open = true;
+    this.#activePanel = null;
     this.#popup.hidden = false;
-    this.#boton.setAttribute('aria-expanded', 'true');
-    this.#ajustarAltura();
-    this.#pintar();
-    this.#enfocarPrimero();
+    this.#button.setAttribute('aria-expanded', 'true');
+    this.#fitHeight();
+    this.#render();
+    this.#focusFirst();
   }
 
   close(): void {
-    if (!this.#abierto) return;
-    this.#abierto = false;
-    this.#panelActivo = null;
+    if (!this.#open) return;
+    this.#open = false;
+    this.#activePanel = null;
     this.#popup.hidden = true;
-    this.#boton.setAttribute('aria-expanded', 'false');
-    // Devolver el foco: sin esto se va al principio del documento y hay que
-    // recorrerlo entero para volver al reproductor.
-    this.#boton.focus();
+    this.#button.setAttribute('aria-expanded', 'false');
+    this.#button.focus();
   }
 
   destroy(): void {
-    for (const off of this.#desatar) off();
-    this.#desatar = [];
+    for (const off of this.#unsubscribe) off();
+    this.#unsubscribe = [];
     this.#popup.remove();
-    this.#boton.remove();
+    this.#button.remove();
   }
 
   /**
-   * Acota la altura al hueco que hay sobre la barra.
-   *
-   * El contenedor del reproductor lleva `overflow:hidden` —hace falta para
-   * redondear las esquinas del vídeo— así que un menú más alto que el
-   * reproductor se recorta y deja opciones inalcanzables. En un reproductor
-   * embebido de poca altura, eso se come el menú entero.
+   * The player root has `overflow:hidden`, so a menu taller than the space
+   * above the bar would be clipped and leave options unreachable.
    */
-  #ajustarAltura(): void {
-    const raiz = this.#boton.closest('.np') as HTMLElement | null;
-    if (!raiz) return;
-    const barra = this.#boton.closest('.np__bar') as HTMLElement | null;
-    const alturaBarra = barra?.getBoundingClientRect().height ?? 0;
-    const disponible = raiz.getBoundingClientRect().height - alturaBarra - 16;
-    // Un suelo razonable: por debajo de esto el menú no sirve de nada y es
-    // mejor que desborde a que muestre una sola fila.
-    this.#popup.style.maxHeight = `${Math.max(140, disponible)}px`;
+  #fitHeight(): void {
+    const root = this.#button.closest('.np') as HTMLElement | null;
+    if (!root) return;
+    const bar = this.#button.closest('.np__bar') as HTMLElement | null;
+    const barHeight = bar?.getBoundingClientRect().height ?? 0;
+    const available = root.getBoundingClientRect().height - barHeight - 16;
+    this.#popup.style.maxHeight = `${Math.max(140, available)}px`;
   }
 
-  /* ------------------------------------------------------------------ pintado */
-
-  #pintar(): void {
+  #render(): void {
     const doc = this.#popup.ownerDocument;
     this.#popup.textContent = '';
 
@@ -172,124 +147,112 @@ export class SettingsMenu {
     menu.setAttribute('role', 'menu');
     menu.setAttribute('aria-label', this.#t('ui.settings.label'));
 
-    if (this.#panelActivo === null) {
-      const ordenados = [...this.#paneles.values()]
+    if (this.#activePanel === null) {
+      const sorted = [...this.#panels.values()]
         .sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100));
-      for (const p of ordenados) menu.appendChild(this.#filaPanel(p));
+      for (const p of sorted) menu.appendChild(this.#panelRow(p));
     } else {
-      const panel = this.#paneles.get(this.#panelActivo);
-      if (!panel) { this.#panelActivo = null; return this.#pintar(); }
+      const panel = this.#panels.get(this.#activePanel);
+      if (!panel) { this.#activePanel = null; return this.#render(); }
 
-      const cabecera = doc.createElement('button');
-      cabecera.type = 'button';
-      cabecera.className = 'np__menu-back';
-      cabecera.setAttribute('role', 'menuitem');
-      cabecera.innerHTML = `<span class="np__menu-chevron" aria-hidden="true">‹</span>` +
+      const back = doc.createElement('button');
+      back.type = 'button';
+      back.className = 'np__menu-back';
+      back.setAttribute('role', 'menuitem');
+      back.innerHTML = `<span class="np__menu-chevron" aria-hidden="true">‹</span>` +
         `<span>${panel.label}</span>`;
-      cabecera.setAttribute('aria-label', `${this.#t('ui.settings.back')}: ${panel.label}`);
-      cabecera.addEventListener('click', () => { this.#panelActivo = null; this.#pintar(); this.#enfocarPrimero(); });
-      menu.appendChild(cabecera);
+      back.setAttribute('aria-label', `${this.#t('ui.settings.back')}: ${panel.label}`);
+      back.addEventListener('click', () => { this.#activePanel = null; this.#render(); this.#focusFirst(); });
+      menu.appendChild(back);
 
-      const actual = panel.getValue();
-      for (const op of panel.options) {
+      const current = panel.getValue();
+      for (const option of panel.options) {
         const item = doc.createElement('button');
         item.type = 'button';
         item.className = 'np__menu-item';
         item.setAttribute('role', 'menuitemradio');
-        item.setAttribute('aria-checked', String(op.value === actual));
+        item.setAttribute('aria-checked', String(option.value === current));
         item.innerHTML = `<span class="np__menu-tick" aria-hidden="true">` +
-          `${op.value === actual ? '✓' : ''}</span><span>${op.label}</span>`;
+          `${option.value === current ? '✓' : ''}</span><span>${option.label}</span>`;
         item.addEventListener('click', () => {
-          panel.onSelect(op.value);
-          this.#panelActivo = null;
-          this.#pintar();
-          this.#enfocarPrimero();
+          panel.onSelect(option.value);
+          this.#activePanel = null;
+          this.#render();
+          this.#focusFirst();
         });
         menu.appendChild(item);
       }
     }
 
     this.#popup.appendChild(menu);
-    this.#tabindexMovil(menu, 0);
+    this.#setRovingIndex(menu, 0);
   }
 
-  #filaPanel(panel: SettingsPanel): HTMLElement {
+  #panelRow(panel: SettingsPanel): HTMLElement {
     const doc = this.#popup.ownerDocument;
-    const actual = panel.options.find((o) => o.value === panel.getValue());
+    const current = panel.options.find((o) => o.value === panel.getValue());
     const item = doc.createElement('button');
     item.type = 'button';
     item.className = 'np__menu-item np__menu-item--parent';
     item.setAttribute('role', 'menuitem');
     item.setAttribute('aria-haspopup', 'true');
     item.innerHTML = `<span>${panel.label}</span>` +
-      `<span class="np__menu-value">${actual?.label ?? ''}` +
+      `<span class="np__menu-value">${current?.label ?? ''}` +
       `<span class="np__menu-chevron" aria-hidden="true">›</span></span>`;
-    // El valor actual entra en el nombre accesible: sin esto habría que abrir
-    // el panel para saber a qué velocidad se está reproduciendo.
-    item.setAttribute('aria-label', `${panel.label}: ${actual?.label ?? ''}`);
+    // The current value is part of the accessible name, so it is known without opening the panel.
+    item.setAttribute('aria-label', `${panel.label}: ${current?.label ?? ''}`);
     item.addEventListener('click', () => {
-      this.#panelActivo = panel.id;
-      this.#pintar();
-      this.#enfocarPrimero();
+      this.#activePanel = panel.id;
+      this.#render();
+      this.#focusFirst();
     });
     return item;
   }
-
-  /* ------------------------------------------------------------------ teclado */
 
   #items(): HTMLElement[] {
     return [...this.#popup.querySelectorAll<HTMLElement>('[role^="menuitem"]')];
   }
 
-  /**
-   * Tabindex móvil: solo un elemento del menú es tabulable, y las flechas mueven
-   * el foco entre ellos. Es el patrón que espera un lector de pantalla dentro de
-   * un `role="menu"`; con todos a `tabindex=0`, Tab recorrería el menú y no
-   * saldría de él, que es justo lo contrario de lo que debe pasar.
-   */
-  #tabindexMovil(raiz: HTMLElement, indice: number): void {
-    const items = [...raiz.querySelectorAll<HTMLElement>('[role^="menuitem"]')];
-    items.forEach((el, i) => { el.tabIndex = i === indice ? 0 : -1; });
+  /** Only one item is tabbable; with all at tabindex 0, Tab would never leave the menu. */
+  #setRovingIndex(root: HTMLElement, index: number): void {
+    const items = [...root.querySelectorAll<HTMLElement>('[role^="menuitem"]')];
+    items.forEach((el, i) => { el.tabIndex = i === index ? 0 : -1; });
   }
 
-  #enfocarPrimero(): void {
-    const items = this.#items();
-    items[0]?.focus();
+  #focusFirst(): void {
+    this.#items()[0]?.focus();
   }
 
-  #mover(delta: number): void {
+  #move(delta: number): void {
     const items = this.#items();
     if (items.length === 0) return;
-    const actual = items.findIndex((el) => el === this.#popup.ownerDocument.activeElement);
-    const siguiente = (actual + delta + items.length) % items.length;
-    this.#tabindexMovil(this.#popup, siguiente);
-    items[siguiente]?.focus();
+    const current = items.findIndex((el) => el === this.#popup.ownerDocument.activeElement);
+    const next = (current + delta + items.length) % items.length;
+    this.#setRovingIndex(this.#popup, next);
+    items[next]?.focus();
   }
 
-  #teclado(ev: KeyboardEvent): void {
+  #onKey(ev: KeyboardEvent): void {
     switch (ev.key) {
-      case 'ArrowDown': this.#mover(1); break;
-      case 'ArrowUp': this.#mover(-1); break;
-      case 'Home': this.#tabindexMovil(this.#popup, 0); this.#items()[0]?.focus(); break;
+      case 'ArrowDown': this.#move(1); break;
+      case 'ArrowUp': this.#move(-1); break;
+      case 'Home': this.#setRovingIndex(this.#popup, 0); this.#items()[0]?.focus(); break;
       case 'End': {
         const items = this.#items();
-        this.#tabindexMovil(this.#popup, items.length - 1);
+        this.#setRovingIndex(this.#popup, items.length - 1);
         items[items.length - 1]?.focus();
         break;
       }
       case 'Escape':
-        // Retrocede un nivel antes de cerrar: cerrar del todo desde un
-        // subpanel obligaría a volver a navegar hasta él.
-        if (this.#panelActivo !== null) {
-          this.#panelActivo = null;
-          this.#pintar();
-          this.#enfocarPrimero();
+        if (this.#activePanel !== null) {
+          this.#activePanel = null;
+          this.#render();
+          this.#focusFirst();
         } else {
           this.close();
         }
         break;
       case 'Tab':
-        // Dentro de un menú, Tab sale.
         this.close();
         return;
       default:

@@ -5,51 +5,51 @@ import { attachControls } from '../src/control-bar.js';
 import { injectStyles } from '../src/styles.js';
 import '../src/strings.js';
 
-const DURACIONES: Record<string, number> = { intro: 5, outro: 4 };
+const DURATIONS: Record<string, number> = { intro: 5, outro: 4 };
 
-/** Motor de mentira: el tiempo se mueve a mano y hay imagen un tic después del play. */
-function factoriaFalsa() {
-  const porId = new Map<string, any>();
+/** Fake engine: time moves by hand, and a frame arrives one tick after play. */
+function fakeFactory() {
+  const byId = new Map<string, any>();
   const factory: EngineFactory = {
-    name: 'falso',
+    name: 'fake',
     canPlay: () => 'probably',
     create() {
-      let t = 0, paused = true, cb: any = {}, duracion = 60;
-      let fotogramas: Array<() => void> = [];
+      let t = 0, paused = true, cb: any = {}, duration = 60;
+      let frames: Array<() => void> = [];
       const e: any = {
-        name: 'falso', attached: true,
+        name: 'fake', attached: true,
         element: {
           videoWidth: 640,
-          requestVideoFrameCallback(f: () => void) { fotogramas.push(f); return 1; },
+          requestVideoFrameCallback(f: () => void) { frames.push(f); return 1; },
         },
-        async attach(caja: HTMLElement, s: { id: string }, o: any) {
+        async attach(box: HTMLElement, s: { id: string }, o: any) {
           cb = o?.callbacks ?? {};
-          duracion = DURACIONES[s.id] ?? 60;
-          caja.appendChild(document.createElement('video'));
-          porId.set(s.id, e);
+          duration = DURATIONS[s.id] ?? 60;
+          box.appendChild(document.createElement('video'));
+          byId.set(s.id, e);
         },
         detach() {},
         async play() {
           paused = false; cb.onPlay?.(); cb.onPlaying?.();
-          setTimeout(() => { const f = fotogramas; fotogramas = []; f.forEach((x) => x()); }, 10);
+          setTimeout(() => { const f = frames; frames = []; f.forEach((x) => x()); }, 10);
         },
         pause() { if (!paused) { paused = true; cb.onPause?.(); } },
         seek(s: number) { t = s; },
         get currentTime() { return t; },
-        get duration() { return duracion; },
+        get duration() { return duration; },
         get paused() { return paused; },
         ended: false, buffered: null, seekable: null,
         getPlaybackRate: () => 1, setPlaybackRate() {}, setVolume() {}, setMuted() {},
         destroy() {},
-        _set(s: number) { t = s; cb.onTime?.(s, duracion); },
+        _set(s: number) { t = s; cb.onTime?.(s, duration); },
       };
       return e;
     },
   };
-  return { factory, porId };
+  return { factory, byId };
 }
 
-const MANIFIESTO: Manifest = {
+const MANIFEST: Manifest = {
   id: 'x', duration: 60,
   intro: { sources: [{ src: 'intro.mp4', type: 'video/mp4' }] },
   outro: { sources: [{ src: 'outro.mp4', type: 'video/mp4' }] },
@@ -57,7 +57,7 @@ const MANIFIESTO: Manifest = {
               sources: [{ src: 'cam.mp4', type: 'video/mp4' }] }],
 };
 
-const { intro: _, ...SOLO_COLA } = MANIFIESTO;
+const { intro: _, ...OUTRO_ONLY } = MANIFEST;
 
 let host: HTMLElement;
 
@@ -69,129 +69,129 @@ beforeEach(() => {
 });
 afterEach(() => { vi.useRealTimers(); });
 
-const montar = (manifest: Manifest = MANIFIESTO) => {
-  const { factory, porId } = factoriaFalsa();
+const mount = (manifest: Manifest = MANIFEST) => {
+  const { factory, byId } = fakeFactory();
   const p = new Player({ container: host, manifest, engines: [factory], lang: 'es' });
   attachControls(p);
-  return { p, motor: (id: string) => porId.get(id) };
+  return { p, engine: (id: string) => byId.get(id) };
 };
 
-const saltar = () => host.querySelector<HTMLButtonElement>('button.np__skip')!;
-const anuncio = () => host.querySelector('[role="status"]')?.textContent ?? '';
-const filaProgreso = () => host.querySelector<HTMLInputElement>('.np__range')!.parentElement!;
-const tiempo = () => host.querySelector('.np__time')?.textContent;
+const skipButton = () => host.querySelector<HTMLButtonElement>('button.np__skip')!;
+const announced = () => host.querySelector('[role="status"]')?.textContent ?? '';
+const progressRow = () => host.querySelector<HTMLInputElement>('.np__range')!.parentElement!;
+const timeText = () => host.querySelector('.np__time')?.textContent;
 
-describe('cadena · escenario', () => {
-  it('la cabecera y la cola van al escenario, detrás de los streams', async () => {
-    const { p } = montar();
+describe('chain · stage', () => {
+  it('intro and outro go into the stage, after the streams', async () => {
+    const { p } = mount();
     await p.play();
-    const orden = [...host.querySelector('.np__stage')!.children]
+    const order = [...host.querySelector('.np__stage')!.children]
       .map((c) => (c as HTMLElement).dataset['stream'] ?? (c as HTMLElement).dataset['bumper']);
-    expect(orden).toEqual(['cam', 'intro', 'outro']);
+    expect(order).toEqual(['cam', 'intro', 'outro']);
   });
 
-  it('solo se ve la pieza que dice data-phase', async () => {
+  it('only the piece named by data-phase is visible', async () => {
     injectStyles(document);
-    const { p, motor } = montar();
+    const { p, engine } = mount();
     await p.play();
-    const opacidad = (id: string) =>
+    const opacity = (id: string) =>
       getComputedStyle(host.querySelector<HTMLElement>(`[data-bumper="${id}"]`)!).opacity;
-    expect(opacidad('intro')).toBe('1');
-    expect(opacidad('outro')).toBe('0');
+    expect(opacity('intro')).toBe('1');
+    expect(opacity('outro')).toBe('0');
 
-    motor('intro')._set(4.8);
+    engine('intro')._set(4.8);
     await vi.advanceTimersByTimeAsync(100);
-    expect(opacidad('intro')).toBe('0');
+    expect(opacity('intro')).toBe('0');
   });
 });
 
-describe('cadena · saltar cabecera', () => {
-  it('no aparece con el póster, sí durante la cabecera', async () => {
-    const { p } = montar();
-    expect(saltar().hidden).toBe(true);
+describe('chain · skip intro', () => {
+  it('hidden with the poster, shown during the intro', async () => {
+    const { p } = mount();
+    expect(skipButton().hidden).toBe(true);
     await p.play();
-    expect(saltar().hidden).toBe(false);
-    expect(saltar().textContent).toBe('Saltar cabecera');
+    expect(skipButton().hidden).toBe(false);
+    expect(skipButton().textContent).toBe('Saltar cabecera');
   });
 
-  it('va antes que la barra en el orden de tabulación', () => {
-    montar();
+  it('comes before the bar in tab order', () => {
+    mount();
     const bar = host.querySelector('.np__bar')!;
-    expect(saltar().compareDocumentPosition(bar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(skipButton().compareDocumentPosition(bar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('al pulsarlo salta, desaparece y deja el foco en el reproductor', async () => {
-    const { p } = montar();
+  it('clicking it skips, hides it and keeps focus in the player', async () => {
+    const { p } = mount();
     await p.play();
-    saltar().focus();
-    saltar().click();
+    skipButton().focus();
+    skipButton().click();
     await vi.advanceTimersByTimeAsync(20);
     expect(p.phase).toBe('main');
-    expect(saltar().hidden).toBe(true);
+    expect(skipButton().hidden).toBe(true);
     expect(document.activeElement).toBe(host);
-    expect(anuncio()).toBe('Cabecera saltada');
+    expect(announced()).toBe('Cabecera saltada');
   });
 
-  it('no existe para la cola', async () => {
-    const { p, motor } = montar(SOLO_COLA);
+  it('does not exist for the outro', async () => {
+    const { p, engine } = mount(OUTRO_ONLY);
     await p.play();
-    motor('cam')._set(59.8);
+    engine('cam')._set(59.8);
     await vi.advanceTimersByTimeAsync(100);
     expect(p.phase).toBe('outro');
-    expect(saltar().hidden).toBe(true);
+    expect(skipButton().hidden).toBe(true);
   });
 });
 
-describe('cadena · progreso', () => {
-  it('durante la cabecera la barra se esconde y el tiempo dice cuánto le queda', async () => {
-    const { p, motor } = montar();
+describe('chain · progress', () => {
+  it('during the intro the bar hides and the time says what is left', async () => {
+    const { p, engine } = mount();
     await p.play();
-    expect(filaProgreso().hidden).toBe(true);
-    motor('intro')._set(2);
-    expect(tiempo()).toBe('Cabecera · 0:03');
+    expect(progressRow().hidden).toBe(true);
+    engine('intro')._set(2);
+    expect(timeText()).toBe('Cabecera · 0:03');
   });
 
-  it('en el contenido la barra vuelve', async () => {
-    const { p, motor } = montar();
+  it('the bar comes back with the content', async () => {
+    const { p, engine } = mount();
     await p.play();
-    motor('intro')._set(4.8);
+    engine('intro')._set(4.8);
     await vi.advanceTimersByTimeAsync(100);
     expect(p.phase).toBe('main');
-    expect(filaProgreso().hidden).toBe(false);
+    expect(progressRow().hidden).toBe(false);
   });
 
-  it('en la cola se anuncia y la barra no se puede arrastrar', async () => {
-    const { p, motor } = montar(SOLO_COLA);
+  it('the outro is announced and its bar cannot be dragged', async () => {
+    const { p, engine } = mount(OUTRO_ONLY);
     await p.play();
-    motor('cam')._set(59.8);
+    engine('cam')._set(59.8);
     await vi.advanceTimersByTimeAsync(100);
-    expect(anuncio()).toBe('Cierre');
-    expect(filaProgreso().hidden).toBe(true);
-    expect(tiempo()).toMatch(/^Cierre/);
+    expect(announced()).toBe('Cierre');
+    expect(progressRow().hidden).toBe(true);
+    expect(timeText()).toMatch(/^Cierre/);
   });
 });
 
-describe('cadena · teclado', () => {
-  const tecla = (key: string) =>
+describe('chain · keyboard', () => {
+  const press = (key: string) =>
     host.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
 
-  it('durante la cabecera las teclas de salto no mueven el contenido a ciegas', async () => {
-    const { p } = montar();
+  it('during the intro seeking keys do not move the content blindly', async () => {
+    const { p } = mount();
     await p.play();
-    for (const k of ['ArrowRight', 'l', 'End', '5']) tecla(k);
+    for (const k of ['ArrowRight', 'l', 'End', '5']) press(k);
     expect(p.phase).toBe('intro');
     expect(p.currentTime).toBe(0);
   });
 
-  it('durante la cola, hacia delante no hace nada y hacia atrás vuelve al contenido', async () => {
-    const { p, motor } = montar(SOLO_COLA);
+  it('during the outro forward does nothing and backward returns to the content', async () => {
+    const { p, engine } = mount(OUTRO_ONLY);
     await p.play();
-    motor('cam')._set(59.8);
+    engine('cam')._set(59.8);
     await vi.advanceTimersByTimeAsync(100);
-    tecla('ArrowRight');
-    tecla('End');
+    press('ArrowRight');
+    press('End');
     expect(p.phase).toBe('outro');
-    tecla('ArrowLeft');
+    press('ArrowLeft');
     expect(p.phase).toBe('main');
     expect(p.currentTime).toBe(55);
   });

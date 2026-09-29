@@ -1,4 +1,4 @@
-// Importado por su efecto: registra el catálogo de la interfaz al cargarse.
+// Imported for its side effect: registers the UI string catalogue.
 import './strings.js';
 
 export { attachControls, ControlBar } from './control-bar.js';

@@ -1,14 +1,7 @@
 /*
- * Escribe el CSS a un fichero, además de dejarlo como cadena exportada.
- *
- * Hace falta para los despliegues con **CSP estricta**, que es el caso normal
- * en una instalación institucional: `injectStyles()` crea un `<style>` en
- * línea, y una política `style-src 'self'` sin `'unsafe-inline'` lo bloquea sin
- * decir nada. El reproductor se queda sin estilos y no hay error que mirar.
- *
- * Con el fichero, quien tenga esa política lo sirve como un recurso más y pasa
- * `injectStyles: false`. La cadena sigue siendo la fuente única: este script la
- * vuelca, no la duplica.
+ * Writes the CSS to a file for sites with a strict CSP: `injectStyles()` adds
+ * an inline `<style>` that `style-src 'self'` blocks silently. Those sites serve
+ * this file and pass `injectStyles: false`. The string stays the single source.
  *
  *   node emit-css.mjs dist/nanoplayer.css
  */
@@ -16,10 +9,10 @@ import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { CSS } from './dist/index.js';
 
-const destino = resolve(process.cwd(), process.argv[2] ?? 'dist/nanoplayer.css');
-const cabecera = '/* NanoPlayer — hoja de estilos por defecto.\n'
-  + ' * Generada desde packages/ui/src/styles.ts; no editar a mano.\n'
-  + ' * Úsala con `injectStyles: false` si tu CSP no admite estilos en línea. */\n';
+const target = resolve(process.cwd(), process.argv[2] ?? 'dist/nanoplayer.css');
+const header = '/* NanoPlayer — default stylesheet.\n'
+  + ' * Generated from packages/ui/src/styles.ts; do not edit by hand.\n'
+  + ' * Use it with `injectStyles: false` if your CSP does not allow inline styles. */\n';
 
-writeFileSync(destino, cabecera + CSS);
-console.log(`  ${destino}  ${((cabecera.length + CSS.length) / 1024).toFixed(1)} KB`);
+writeFileSync(target, header + CSS);
+console.log(`  ${target}  ${((header.length + CSS.length) / 1024).toFixed(1)} KB`);

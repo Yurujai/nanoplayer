@@ -4,7 +4,7 @@ import { Player, playerError, strings, type Manifest } from '@nanoplayer/core';
 import { attachControls } from '../src/control-bar.js';
 import '../src/strings.js';
 
-const MANIFIESTO: Manifest = {
+const MANIFEST: Manifest = {
   id: 'x',
   streams: [{
     id: 'a', role: 'presenter', audio: true,
@@ -21,85 +21,78 @@ beforeEach(() => {
   document.body.appendChild(host);
 });
 
-const montar = (opciones: Record<string, unknown> = {}) => {
-  const p = new Player({ container: host, manifest: MANIFIESTO, ...opciones });
+const mount = (options: Record<string, unknown> = {}) => {
+  const p = new Player({ container: host, manifest: MANIFEST, ...options });
   attachControls(p);
   return p;
 };
 
-/** Lo que anunciaría un lector de pantalla. */
-const anuncio = () => host.querySelector('[role="status"]')?.textContent ?? '';
+/** What a screen reader would announce. */
+const announced = () => host.querySelector('[role="status"]')?.textContent ?? '';
 
-describe('errores · lo que se le dice a quien mira', () => {
-  it('anuncia un texto propio del código, no el diagnóstico', () => {
-    /*
-     * El mensaje del error es para quien integra: lleva detalles técnicos y va
-     * en inglés. Anunciarlo tal cual le leía a un usuario con lector de
-     * pantalla cosas como «hls.js cannot run in this browser».
-     */
-    const p = montar({ lang: 'es' });
+describe('errors · what the viewer is told', () => {
+  it('announces text chosen by the code, not the diagnostic message', () => {
+    // The message is English detail for integrators; it used to be read aloud.
+    const p = mount({ lang: 'es' });
     p.bus.emit('error', {
       error: playerError('media/network', 'HLS network error: fragLoadError 404'),
     });
-    expect(anuncio()).toBe('Se ha perdido la conexión con el vídeo');
-    expect(anuncio()).not.toContain('fragLoadError');
+    expect(announced()).toBe('Se ha perdido la conexión con el vídeo');
+    expect(announced()).not.toContain('fragLoadError');
   });
 
-  it('cada código dice algo distinto', () => {
-    const p = montar({ lang: 'es' });
+  it('each code says something different', () => {
+    const p = mount({ lang: 'es' });
     p.bus.emit('error', { error: playerError('engine/unsupported', 'No engine can play') });
-    expect(anuncio()).toBe('Este navegador no puede reproducir este vídeo');
+    expect(announced()).toBe('Este navegador no puede reproducir este vídeo');
     p.bus.emit('error', { error: playerError('manifest/fetch', '404 requesting /x.json') });
-    expect(anuncio()).toBe('No se ha podido cargar el vídeo');
+    expect(announced()).toBe('No se ha podido cargar el vídeo');
   });
 
-  it('se traduce como todo lo demás', () => {
-    const p = montar({ lang: 'en' });
+  it('is translated like everything else', () => {
+    const p = mount({ lang: 'en' });
     p.bus.emit('error', { error: playerError('media/blocked', 'The browser blocked playback') });
-    expect(anuncio()).toBe('Press play to start');
+    expect(announced()).toBe('Press play to start');
   });
 
-  it('acepta cadenas propias', () => {
-    const p = montar({
+  it('accepts custom strings', () => {
+    const p = mount({
       lang: 'es',
       strings: { es: { 'ui.error.media/network': 'Revisa tu conexión' } },
     });
     p.bus.emit('error', { error: playerError('media/network', 'whatever') });
-    expect(anuncio()).toBe('Revisa tu conexión');
+    expect(announced()).toBe('Revisa tu conexión');
   });
 
-  it('un código sin clave cae al genérico, no enseña la clave', () => {
-    // Si mañana se añade un código y nadie escribe su texto, el usuario no
-    // puede acabar oyendo «ui.error.algo/nuevo».
-    const p = montar({ lang: 'es' });
+  it('a code without a key falls back to the generic text, never the key', () => {
+    const p = mount({ lang: 'es' });
     p.bus.emit('error', {
-      error: { code: 'algo/nuevo' as never, message: 'x', retryable: false },
+      error: { code: 'something/new' as never, message: 'x', retryable: false },
     });
-    expect(anuncio()).toBe('No se ha podido reproducir el vídeo');
+    expect(announced()).toBe('No se ha podido reproducir el vídeo');
   });
 
-  it('hay texto para los ocho códigos, en los dos idiomas', () => {
-    const codigos = ['manifest/fetch', 'manifest/invalid', 'engine/unsupported',
+  it('there is text for all eight codes in both languages', () => {
+    const codes = ['manifest/fetch', 'manifest/invalid', 'engine/unsupported',
       'engine/failed', 'media/decode', 'media/network', 'media/blocked', 'internal'];
     for (const lang of ['es', 'en']) {
       const t = strings.translator(lang);
-      for (const c of codigos) {
+      for (const c of codes) {
         const k = `ui.error.${c}`;
-        expect(t(k), `falta ${k} en ${lang}`).not.toBe(k);
+        expect(t(k), `${k} missing in ${lang}`).not.toBe(k);
       }
     }
   });
 });
 
-describe('errores · el diagnóstico sigue entero', () => {
-  it('quien integra recibe el mensaje técnico sin tocar', () => {
-    // Traducir para el usuario no puede costarle el detalle a quien depura.
-    const p = montar();
-    const visto: string[] = [];
-    p.on('error', ({ error }) => visto.push(error.message));
+describe('errors · the diagnostics stay whole', () => {
+  it('integrators get the technical message untouched', () => {
+    const p = mount();
+    const seen: string[] = [];
+    p.on('error', ({ error }) => seen.push(error.message));
     p.bus.emit('error', {
       error: playerError('media/decode', 'HLS decoding error: bufferAppendError'),
     });
-    expect(visto).toEqual(['HLS decoding error: bufferAppendError']);
+    expect(seen).toEqual(['HLS decoding error: bufferAppendError']);
   });
 });

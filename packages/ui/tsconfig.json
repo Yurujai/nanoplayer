@@ -1,8 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    // Sin outDir ni rootDir: el bundle lo hace Vite y aquí tsc solo comprueba
-    // tipos. Con rootDir, apuntar al código fuente del núcleo daría TS6059.
+    // Type checking only; with rootDir the core source path would give TS6059.
     "noEmit": true,
     "paths": { "@nanoplayer/core": ["../core/src/index.ts"] }
   },

@@ -1,9 +1,6 @@
 /**
- * Iconos en línea.
- *
- * Todos llevan `aria-hidden`: el nombre accesible lo pone el `aria-label` del
- * botón. Un icono anunciado por su cuenta produce lecturas duplicadas del tipo
- * "gráfico, botón reproducir".
+ * Inline icons. All are `aria-hidden`: the button's `aria-label` names it, and
+ * an announced icon would be read twice ("graphic, play button").
  */
 const svg = (path: string, viewBox = '0 0 24 24') =>
   `<svg viewBox="${viewBox}" aria-hidden="true" focusable="false"><path d="${path}"/></svg>`;

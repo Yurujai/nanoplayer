@@ -2,19 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { formatPercent, formatTime, spokenTime } from '../src/format.js';
 
 describe('formatTime', () => {
-  it('omite la hora si no hace falta', () => {
+  it('omits hours when not needed', () => {
     expect(formatTime(0)).toBe('0:00');
     expect(formatTime(9)).toBe('0:09');
     expect(formatTime(65)).toBe('1:05');
     expect(formatTime(600)).toBe('10:00');
   });
 
-  it('la incluye cuando la hay', () => {
+  it('includes them when there are any', () => {
     expect(formatTime(3600)).toBe('1:00:00');
     expect(formatTime(3903)).toBe('1:05:03');
   });
 
-  it('no escupe NaN ante entradas absurdas', () => {
+  it('never prints NaN for absurd input', () => {
     for (const v of [Number.NaN, -5, Number.POSITIVE_INFINITY]) {
       expect(formatTime(v)).toBe('0:00');
     }
@@ -22,71 +22,58 @@ describe('formatTime', () => {
 });
 
 describe('spokenTime', () => {
-  it('dice el tiempo en palabras, no en dos puntos', () => {
-    // Un lector de pantalla lee "12:05" como "doce, dos puntos, cero cinco".
+  it('says the time in words, not with colons', () => {
     expect(spokenTime(735)).toBe('12 minutos y 15 segundos');
     expect(spokenTime(3903)).toBe('1 hora, 5 minutos y 3 segundos');
   });
 
-  it('usa el singular donde toca', () => {
+  it('uses the singular where it belongs', () => {
     expect(spokenTime(1)).toBe('1 segundo');
     expect(spokenTime(60)).toBe('1 minuto');
     expect(spokenTime(3600)).toBe('1 hora');
   });
 
-  it('dice "0 segundos" en vez de callarse', () => {
+  it('says "0 seconds" instead of saying nothing', () => {
     expect(spokenTime(0)).toBe('0 segundos');
   });
 
-  it('omite las unidades vacías', () => {
+  it('omits empty units', () => {
     expect(spokenTime(3600 + 3)).toBe('1 hora y 3 segundos');
     expect(spokenTime(120)).toBe('2 minutos');
   });
 
-  it('habla inglés si se le pide', () => {
+  it('speaks English when asked', () => {
     expect(spokenTime(735, 'en')).toBe('12 minutes and 15 seconds');
     expect(spokenTime(1, 'en')).toBe('1 second');
   });
 
-  it('habla cualquier idioma, no solo los dos que tienen catálogo', () => {
-    /*
-     * Esto es lo que antes no existía: la gramática estaba escrita a mano en
-     * un `startsWith('es')`, así que un usuario francés recibía el
-     * `aria-valuetext` en inglés. Que haya catálogo de botones o no es otra
-     * cuestión: los números y las unidades salen bien igualmente.
-     */
-    // Se normalizan los espacios duros antes de comparar: cada idioma elige
-    // los suyos —el francés pone U+00A0 tras el 1 y tras el 3, pero uno normal
-    // tras el 5— y eso es dato de CLDR, no algo que este código decida. Lo que
-    // se comprueba aquí son las palabras y su orden.
-    const palabras = (v: string) => v.replace(/[\u00a0\u202f]/g, ' ');
+  it('speaks any language, not just the two with a catalogue', () => {
+    // Non-breaking spaces are CLDR data per language; compare the words only.
+    const words = (v: string) => v.replace(/[  ]/g, ' ');
 
-    expect(palabras(spokenTime(735, 'ca'))).toBe('12 minuts i 15 segons');
-    expect(palabras(spokenTime(735, 'gl'))).toBe('12 minutos e 15 segundos');
-    expect(palabras(spokenTime(3903, 'fr'))).toBe('1 heure, 5 minutes et 3 secondes');
+    expect(words(spokenTime(735, 'ca'))).toBe('12 minuts i 15 segons');
+    expect(words(spokenTime(735, 'gl'))).toBe('12 minutos e 15 segundos');
+    expect(words(spokenTime(3903, 'fr'))).toBe('1 heure, 5 minutes et 3 secondes');
   });
 });
 
 describe('formatPercent', () => {
-  // OJO: el espacio antes del signo es DURO (U+00A0), no uno normal. Lo pone
-  // Intl y es lo correcto: "36" y "%" no deben partirse en dos líneas. Si
-  // alguna vez este test falla enseñando dos cadenas idénticas, es esto.
-  const DURO = '\u00a0';
+  // The space before the sign is non-breaking (U+00A0): if this fails showing
+  // two identical-looking strings, that is why.
+  const NBSP = ' ';
 
-  it('redondea y acota', () => {
-    expect(formatPercent(0.355)).toBe(`36${DURO}%`);
-    expect(formatPercent(2)).toBe(`100${DURO}%`);
-    expect(formatPercent(-1)).toBe(`0${DURO}%`);
+  it('rounds and clamps', () => {
+    expect(formatPercent(0.355)).toBe(`36${NBSP}%`);
+    expect(formatPercent(2)).toBe(`100${NBSP}%`);
+    expect(formatPercent(-1)).toBe(`0${NBSP}%`);
   });
 
-  it('coloca el signo como mande el idioma', () => {
-    // En inglés va pegado; en euskera, delante del número. Escribir esto a
-    // mano era garantizar que estuviera mal en todos menos en dos idiomas.
+  it('places the sign as the language says', () => {
     expect(formatPercent(0.35, 'en')).toBe('35%');
-    expect(formatPercent(0.35, 'eu')).toBe(`%${DURO}35`);
+    expect(formatPercent(0.35, 'eu')).toBe(`%${NBSP}35`);
   });
 
-  it('no escupe NaN ante entradas absurdas', () => {
-    expect(formatPercent(Number.NaN)).toBe(`0${DURO}%`);
+  it('never prints NaN for absurd input', () => {
+    expect(formatPercent(Number.NaN)).toBe(`0${NBSP}%`);
   });
 });

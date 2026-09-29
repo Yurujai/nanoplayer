@@ -4,9 +4,9 @@ import { Player, playerError, type EngineFactory, type Manifest } from '@nanopla
 import { attachControls } from '../src/control-bar.js';
 import '../src/strings.js';
 
-/** Un motor que nunca engancha: el directo aún no emite. */
-const sinEmision: EngineFactory = {
-  name: 'sin-emision',
+/** An engine that never attaches: the live stream is not on air yet. */
+const offAir: EngineFactory = {
+  name: 'off-air',
   canPlay: () => 'probably',
   create: () => ({
     async attach() { throw playerError('media/network', 'not broadcasting'); },
@@ -14,8 +14,8 @@ const sinEmision: EngineFactory = {
   }) as never,
 };
 
-const DIRECTO: Manifest = {
-  id: 'vivo', live: true,
+const LIVE: Manifest = {
+  id: 'live', live: true,
   streams: [{ id: 'cam', role: 'presenter', audio: true,
               sources: [{ src: 'cam.m3u8', type: 'application/vnd.apple.mpegurl' }] }],
 };
@@ -28,9 +28,9 @@ beforeEach(() => {
   document.body.appendChild(host);
 });
 
-describe('directo que aún no emite', () => {
-  it('al pulsar play se retira el póster y se ve el aviso de espera', async () => {
-    const p = new Player({ container: host, manifest: DIRECTO, engines: [sinEmision], lang: 'en',
+describe('live stream not on air yet', () => {
+  it('pressing play removes the poster and shows the waiting notice', async () => {
+    const p = new Player({ container: host, manifest: LIVE, engines: [offAir], lang: 'en',
                            liveRetry: { initialMs: 60_000, maxMs: 60_000 } });
     attachControls(p);
     const poster = host.querySelector<HTMLElement>('.np__poster')!;
@@ -39,7 +39,7 @@ describe('directo que aún no emite', () => {
     await p.play().catch(() => {});
     expect(p.state).toBe('resolved');
     expect(poster.hidden).toBe(true);
-    expect(host.querySelector('.np__espera')?.textContent)
+    expect(host.querySelector('.np__waiting')?.textContent)
       .toBe('The broadcast has not started yet');
     p.destroy();
   });

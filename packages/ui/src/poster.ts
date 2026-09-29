@@ -1,132 +1,98 @@
 /**
- * Estado inicial: póster y botón de reproducción.
- *
- * Es la cara visible del ciclo de vida perezoso. Mientras esto se ve, **no se
- * ha descargado ni un byte de vídeo**: solo la imagen. Es lo que permite una
- * página con muchos reproductores sin tumbar los servidores, y aquí es el
- * comportamiento por defecto en lugar de algo que el integrador tenga que
- * montarse por fuera.
- *
- * También cubre el hueco de la política de autoplay: en la práctica, la
- * inmensa mayoría de navegadores exige una interacción para reproducir con
- * sonido. El botón grande no es una concesión estética, es el gesto que hace
- * falta de todas formas.
+ * Initial state: the poster and the play button. While it shows, no video has
+ * been downloaded. The big button is also the user gesture that autoplay
+ * policies require anyway.
  */
 import { hasEngine, type Player, type Translate } from '@nanoplayer/core';
 import { ICONS } from './icons.js';
 
 export class Poster {
   readonly #player: Player;
-  readonly #raiz: HTMLElement;
-  readonly #capa: HTMLElement;
-  readonly #boton: HTMLButtonElement;
+  readonly #root: HTMLElement;
+  readonly #layer: HTMLElement;
+  readonly #button: HTMLButtonElement;
   readonly #t: Translate;
-  #desatar: Array<() => void> = [];
-  #ocupado = false;
+  #unsubscribe: Array<() => void> = [];
+  #busy = false;
 
   constructor(player: Player) {
     this.#player = player;
-    this.#raiz = player.container;
-    // El traductor del reproductor, no uno propio: el idioma se resuelve una
-    // sola vez y todo el mundo dice lo mismo.
+    this.#root = player.container;
     this.#t = player.t;
-    const doc = this.#raiz.ownerDocument;
+    const doc = this.#root.ownerDocument;
 
-    this.#capa = doc.createElement('div');
-    this.#capa.className = 'np__poster';
+    this.#layer = doc.createElement('div');
+    this.#layer.className = 'np__poster';
 
-    this.#boton = doc.createElement('button');
-    this.#boton.type = 'button';
-    this.#boton.className = 'np__poster-play';
-    this.#boton.innerHTML = ICONS.play;
-    this.#boton.setAttribute('aria-label', this.#t('ui.poster.play'));
-    this.#boton.addEventListener('click', () => this.#arrancar());
+    this.#button = doc.createElement('button');
+    this.#button.type = 'button';
+    this.#button.className = 'np__poster-play';
+    this.#button.innerHTML = ICONS.play;
+    this.#button.setAttribute('aria-label', this.#t('ui.poster.play'));
+    this.#button.addEventListener('click', () => this.#start());
 
-    this.#capa.appendChild(this.#boton);
-    /*
-     * Delante de la barra en el DOM, y por tanto en el orden de tabulación.
-     *
-     * En el estado inicial este botón es el único control grande y visible de
-     * la pantalla, y añadiéndolo al final se alcanzaba en el Tab 9, después de
-     * toda una barra que ni siquiera se está viendo. El orden de tabulación
-     * debe seguir al orden visual, y aquí el póster va por delante.
-     */
-    const barra = this.#raiz.querySelector('.np__bar');
-    if (barra) this.#raiz.insertBefore(this.#capa, barra);
-    else this.#raiz.appendChild(this.#capa);
+    this.#layer.appendChild(this.#button);
+    // Before the bar, so it comes first in tab order: it is the only visible
+    // control at this point (test: "the poster button comes before the bar").
+    const bar = this.#root.querySelector('.np__bar');
+    if (bar) this.#root.insertBefore(this.#layer, bar);
+    else this.#root.appendChild(this.#layer);
 
-    this.#desatar.push(player.on('state:change', () => this.#pintar()));
-    this.#desatar.push(player.on('live:status', () => this.#pintar()));
-    this.#desatar.push(player.on('manifest:resolve:ok', () => this.#pintarImagen()));
-    this.#pintarImagen();
-    this.#pintar();
+    this.#unsubscribe.push(player.on('state:change', () => this.#render()));
+    this.#unsubscribe.push(player.on('live:status', () => this.#render()));
+    this.#unsubscribe.push(player.on('manifest:resolve:ok', () => this.#renderImage()));
+    this.#renderImage();
+    this.#render();
   }
 
-  async #arrancar(): Promise<void> {
-    if (this.#ocupado) return;
-    this.#ocupado = true;
-    this.#boton.disabled = true;
-    this.#boton.setAttribute('aria-label', this.#t('ui.poster.loading'));
-    this.#capa.classList.add('np__poster--cargando');
+  async #start(): Promise<void> {
+    if (this.#busy) return;
+    this.#busy = true;
+    this.#button.disabled = true;
+    this.#button.setAttribute('aria-label', this.#t('ui.poster.loading'));
+    this.#layer.classList.add('np__poster--loading');
     try {
-      // `play()` resuelve y engancha por su cuenta si hace falta: el ciclo
-      // completo idle → active detrás de un solo gesto.
       await this.#player.play();
     } catch {
-      // El error viaja por el bus; aquí solo se restituye el botón para poder
-      // reintentar en vez de dejar un póster muerto.
-      this.#boton.disabled = false;
-      this.#boton.setAttribute('aria-label', this.#t('ui.poster.play'));
-      this.#capa.classList.remove('np__poster--cargando');
+      // The error travels on the bus; restore the button so the user can retry.
+      this.#button.disabled = false;
+      this.#button.setAttribute('aria-label', this.#t('ui.poster.play'));
+      this.#layer.classList.remove('np__poster--loading');
     } finally {
-      this.#ocupado = false;
+      this.#busy = false;
     }
   }
 
-  #pintarImagen(): void {
-    // `player.poster` no obliga a resolver: sale de lo que pasó el integrador o
-    // del manifiesto si vino ya cargado.
+  #renderImage(): void {
     const src = this.#player.poster;
-    if (src) this.#capa.style.backgroundImage = `url("${src.replace(/"/g, '%22')}")`;
-    this.#raiz.classList.toggle('np--sin-poster', !src);
+    if (src) this.#layer.style.backgroundImage = `url("${src.replace(/"/g, '%22')}")`;
+    this.#root.classList.toggle('np--no-poster', !src);
   }
 
-  #pintar(): void {
-    /*
-     * Un directo que aún no emite devuelve el reproductor a `resolved`, pero
-     * ya se pidió reproducir: lo que toca enseñar es el aviso de espera que la
-     * barra pone en el hueco de cada flujo. Con el póster encima, ese aviso
-     * quedaba tapado y parecía que el botón no hacía nada.
-     */
-    const esperandoDirecto = !!this.#player.manifest?.live
-      && this.#player.liveStatus !== 'unknown';
-    const conMedios = hasEngine(this.#player.state)
-      || esperandoDirecto;
-    /*
-     * Con solo audio la capa **se queda**: no hay imagen detrás que enseñar, y
-     * retirarla dejaría un rectángulo negro donde estaba la carátula. Lo que sí
-     * desaparece es el botón grande, porque a partir de ahí manda la barra.
-     *
-     * Con vídeo se retira entera en cuanto hay medios: mantenerla hasta
-     * `active` dejaría un velo sobre el primer fotograma.
-     */
-    const soloAudio = this.#player.audioOnly;
-    this.#capa.hidden = conMedios && !soloAudio;
-    this.#capa.classList.toggle('np__poster--fondo', conMedios && soloAudio);
-    this.#boton.hidden = conMedios && soloAudio;
-    this.#raiz.classList.toggle('np--solo-audio', soloAudio);
-    this.#raiz.classList.toggle('np--con-poster', !conMedios);
-    if (!conMedios) {
-      this.#boton.disabled = false;
-      this.#boton.setAttribute('aria-label', this.#t('ui.poster.play'));
-      this.#capa.classList.remove('np__poster--cargando');
+  #render(): void {
+    // A live stream that is not on air yet goes back to `resolved` after play:
+    // the per-stream waiting notice must show, not the poster on top of it
+    // (test: "pressing play removes the poster and shows the waiting notice").
+    const waitingForLive = !!this.#player.manifest?.live && this.#player.liveStatus !== 'unknown';
+    const hasMedia = hasEngine(this.#player.state) || waitingForLive;
+    // Audio only keeps the layer as a backdrop: removing it would leave a black box.
+    const audioOnly = this.#player.audioOnly;
+    this.#layer.hidden = hasMedia && !audioOnly;
+    this.#layer.classList.toggle('np__poster--backdrop', hasMedia && audioOnly);
+    this.#button.hidden = hasMedia && audioOnly;
+    this.#root.classList.toggle('np--audio-only', audioOnly);
+    this.#root.classList.toggle('np--with-poster', !hasMedia);
+    if (!hasMedia) {
+      this.#button.disabled = false;
+      this.#button.setAttribute('aria-label', this.#t('ui.poster.play'));
+      this.#layer.classList.remove('np__poster--loading');
     }
   }
 
   destroy(): void {
-    for (const off of this.#desatar) off();
-    this.#desatar = [];
-    this.#capa.remove();
-    this.#raiz.classList.remove('np--con-poster');
+    for (const off of this.#unsubscribe) off();
+    this.#unsubscribe = [];
+    this.#layer.remove();
+    this.#root.classList.remove('np--with-poster');
   }
 }

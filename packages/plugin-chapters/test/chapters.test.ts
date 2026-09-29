@@ -4,17 +4,17 @@ import { create, plugins, type Manifest, type Player } from '@nanoplayer/core';
 import { attachControls, type ControlBar } from '@nanoplayer/ui';
 import '../src/index.js';
 
-const CAPITULOS = [
+const CHAPTERS = [
   { kind: 'chapter', start: 0, end: 12, title: 'Welcome' },
   { kind: 'chapter', start: 12, end: 28, title: 'The first law' },
   { kind: 'chapter', start: 28, title: 'Wrap-up' },
 ] as const;
 
-const clase = (over: Partial<Manifest> = {}): Manifest => ({
-  id: 'clase', duration: 40,
+const lesson = (over: Partial<Manifest> = {}): Manifest => ({
+  id: 'lesson', duration: 40,
   streams: [{ id: 'cam', role: 'presenter', audio: true,
               sources: [{ src: 'cam.mp4', type: 'video/mp4' }] }],
-  annotations: [...CAPITULOS],
+  annotations: [...CHAPTERS],
   ...over,
 });
 
@@ -26,112 +26,110 @@ beforeEach(() => {
   document.body.appendChild(host);
 });
 
-/** Un reproductor con barra y el manifiesto resuelto, sin tocar la red de vídeo. */
-async function montar(manifest: Manifest): Promise<{ p: Player; barra: ControlBar }> {
+async function mount(manifest: Manifest): Promise<{ p: Player; bar: ControlBar }> {
   const p = create(host, { manifest, lang: 'en', registry: false });
-  const barra = attachControls(p);
+  const bar = attachControls(p);
   await p.resolve();
-  // La activación de plugins va por detrás de `manifest:resolve:ok`.
+  // Plugin activation runs after `manifest:resolve:ok`.
   await new Promise((r) => setTimeout(r, 0));
-  return { p, barra };
+  return { p, bar };
 }
 
-/** Lleva el reproductor a `t` y avisa a la barra, como haría el motor. */
-function ir(p: Player, t: number): void {
+/** Seeks and notifies the bar, as an engine would. */
+function goTo(p: Player, t: number): void {
   p.seek(t);
   p.bus.emit('time', { current: t, duration: p.duration });
 }
 
-const marcas = () =>
+const marks = () =>
   [...host.querySelectorAll<HTMLElement>('.np__mark')].map((m) => m.style.left);
-const progreso = () => host.querySelector<HTMLInputElement>('.np__range')!;
-const tramo = () => host.querySelector('.np__segment')?.textContent;
+const progress = () => host.querySelector<HTMLInputElement>('.np__range')!;
+const segment = () => host.querySelector('.np__segment')?.textContent;
 
-describe('capítulos · barra de progreso', () => {
-  it('se activa solo si el manifiesto trae capítulos', async () => {
-    await montar(clase());
+describe('chapters · progress bar', () => {
+  it('activates only when the manifest has chapters', async () => {
+    await mount(lesson());
     expect(plugins.active).toContain('chapters');
   });
 
-  it('marca dónde empieza cada capítulo, salvo el primero', async () => {
-    await montar(clase());
-    expect(marcas()).toEqual(['30%', '70%']);
+  it('marks where each chapter starts, except the first', async () => {
+    await mount(lesson());
+    expect(marks()).toEqual(['30%', '70%']);
   });
 
-  it('enseña el capítulo en curso y lo anuncia con la posición', async () => {
-    const { p } = await montar(clase());
-    ir(p, 20);
-    expect(tramo()).toBe('The first law');
-    expect(progreso().getAttribute('aria-valuetext')).toMatch(/, The first law$/);
-    ir(p, 30);
-    expect(tramo()).toBe('Wrap-up');
+  it('shows the current chapter and announces it with the position', async () => {
+    const { p } = await mount(lesson());
+    goTo(p, 20);
+    expect(segment()).toBe('The first law');
+    expect(progress().getAttribute('aria-valuetext')).toMatch(/, The first law$/);
+    goTo(p, 30);
+    expect(segment()).toBe('Wrap-up');
   });
 
-  it('al pasar el ratón dice el tiempo y el capítulo de ese punto', async () => {
-    await montar(clase());
-    const barra = progreso();
-    barra.getBoundingClientRect = () => ({ left: 0, width: 400, top: 0, height: 6,
+  it('hovering shows the time and chapter at that point', async () => {
+    await mount(lesson());
+    const range = progress();
+    range.getBoundingClientRect = () => ({ left: 0, width: 400, top: 0, height: 6,
       right: 400, bottom: 6, x: 0, y: 0, toJSON() {} }) as DOMRect;
-    barra.dispatchEvent(new PointerEvent('pointermove', { clientX: 200 }));
-    const etiqueta = host.querySelector<HTMLElement>('.np__tip')!;
-    expect(etiqueta.hidden).toBe(false);
-    expect(etiqueta.textContent).toBe('0:20 · The first law');
-    barra.dispatchEvent(new PointerEvent('pointerleave'));
-    expect(etiqueta.hidden).toBe(true);
+    range.dispatchEvent(new PointerEvent('pointermove', { clientX: 200 }));
+    const tip = host.querySelector<HTMLElement>('.np__tip')!;
+    expect(tip.hidden).toBe(false);
+    expect(tip.textContent).toBe('0:20 · The first law');
+    range.dispatchEvent(new PointerEvent('pointerleave'));
+    expect(tip.hidden).toBe(true);
   });
 
-  it('con recorte, las marcas se remapean al tiempo que se enseña', async () => {
-    // Del 10 al 30: se ven 20 s, y los capítulos empiezan en 2 y en 18.
-    const { p } = await montar(clase({
-      annotations: [...CAPITULOS, { kind: 'trim', start: 10, end: 30 }],
+  it('with a trim, marks are remapped to the visible time', async () => {
+    // 10 to 30: 20 s visible, chapters start at 2 and 18.
+    const { p } = await mount(lesson({
+      annotations: [...CHAPTERS, { kind: 'trim', start: 10, end: 30 }],
     }));
-    expect(marcas()).toEqual(['10%', '90%']);
-    ir(p, 0);
-    expect(tramo()).toBe('Welcome');
+    expect(marks()).toEqual(['10%', '90%']);
+    goTo(p, 0);
+    expect(segment()).toBe('Welcome');
   });
 });
 
-describe('capítulos · menú de ajustes', () => {
-  /** Abre el panel de capítulos y devuelve sus opciones. */
-  const abrir = (barra: ControlBar) => {
-    barra.settings.open();
-    const entrada = [...host.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+describe('chapters · settings menu', () => {
+  const open = (bar: ControlBar) => {
+    bar.settings.open();
+    const entry = [...host.querySelectorAll<HTMLElement>('[role="menuitem"]')]
       .find((el) => el.textContent?.startsWith('Chapters'));
-    entrada?.click();
+    entry?.click();
     return [...host.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
   };
 
-  it('lista los capítulos y marca el actual', async () => {
-    const { p, barra } = await montar(clase());
-    ir(p, 20);
-    const opciones = abrir(barra);
-    // La marca ✓ de la opción activa es visual; el estado va en aria-checked.
-    expect(opciones.map((o) => o.textContent?.replace('✓', '').trim()))
+  it('lists the chapters and marks the current one', async () => {
+    const { p, bar } = await mount(lesson());
+    goTo(p, 20);
+    const options = open(bar);
+    // The ✓ is visual only; the state lives in aria-checked.
+    expect(options.map((o) => o.textContent?.replace('✓', '').trim()))
       .toEqual(['Welcome', 'The first law', 'Wrap-up']);
-    expect(opciones[1]!.getAttribute('aria-checked')).toBe('true');
+    expect(options[1]!.getAttribute('aria-checked')).toBe('true');
   });
 
-  it('elegir uno salta a su principio', async () => {
-    const { p, barra } = await montar(clase());
-    abrir(barra).find((o) => o.textContent?.trim() === 'Wrap-up')!.click();
+  it('choosing one jumps to its start', async () => {
+    const { p, bar } = await mount(lesson());
+    open(bar).find((o) => o.textContent?.trim() === 'Wrap-up')!.click();
     expect(p.currentTime).toBe(28);
   });
 
-  it('con recorte, salta al tiempo que se enseña', async () => {
-    const { p, barra } = await montar(clase({
-      annotations: [...CAPITULOS, { kind: 'trim', start: 10, end: 30 }],
+  it('with a trim, jumps to the visible time', async () => {
+    const { p, bar } = await mount(lesson({
+      annotations: [...CHAPTERS, { kind: 'trim', start: 10, end: 30 }],
     }));
-    abrir(barra).find((o) => o.textContent?.trim() === 'The first law')!.click();
+    open(bar).find((o) => o.textContent?.trim() === 'The first law')!.click();
     expect(p.currentTime).toBe(2);
   });
 
-  it('deja fuera los capítulos que el recorte deja enteros fuera', async () => {
-    const { barra } = await montar(clase({
-      annotations: [...CAPITULOS, { kind: 'trim', start: 14, end: 26 }],
+  it('leaves out chapters the trim excludes entirely', async () => {
+    const { bar } = await mount(lesson({
+      annotations: [...CHAPTERS, { kind: 'trim', start: 14, end: 26 }],
     }));
-    // Un solo capítulo visible: no hay adónde saltar y el panel no aparece.
-    barra.settings.open();
-    const entradas = [...host.querySelectorAll('[role="menuitem"]')].map((e) => e.textContent);
-    expect(entradas.some((e) => e?.startsWith('Chapters'))).toBe(false);
+    // A single visible chapter: nowhere to jump, so no panel.
+    bar.settings.open();
+    const entries = [...host.querySelectorAll('[role="menuitem"]')].map((e) => e.textContent);
+    expect(entries.some((e) => e?.startsWith('Chapters'))).toBe(false);
   });
 });

@@ -6,8 +6,7 @@ import { SettingsMenu } from '../src/settings-menu.js';
 import { injectStyles } from '../src/styles.js';
 import '../src/strings.js';
 
-// El traductor real, con el catálogo de la interfaz ya registrado: así el test
-// falla si alguien renombra una clave o se deja de registrarla.
+// The real translator, so a renamed or unregistered key fails the test.
 const t = strings.translator('es');
 
 let host: HTMLElement;
@@ -18,23 +17,21 @@ beforeEach(() => {
   document.body.appendChild(host);
 });
 
-describe('SettingsMenu · contrato con los plugins', () => {
+describe('SettingsMenu · contract with plugins', () => {
   const panel = (id: string, over: Record<string, unknown> = {}) => ({
     id, label: id, options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }],
     getValue: () => 'a', onSelect: () => {}, ...over,
   });
 
-  it('el engranaje no aparece si nadie ha aportado ajustes', () => {
+  it('the gear stays hidden until someone adds settings', () => {
     const m = new SettingsMenu(host, t);
     expect(m.button.hidden).toBe(true);
     m.addPanel(panel('speed'));
     expect(m.button.hidden).toBe(false);
   });
 
-  it('el atributo hidden de verdad lo esconde', () => {
-    // Comprobar solo el atributo no bastaba: `button.np__btn` declara
-    // `display:inline-flex`, que gana al display:none que aporta `hidden`.
-    // El botón quedaba con el atributo puesto y a la vista.
+  it('the hidden attribute really hides it', () => {
+    // `button.np__btn` declares inline-flex, which beat the attribute's display:none.
     injectStyles(document);
     host.classList.add('np');
     const m = new SettingsMenu(host, t);
@@ -43,26 +40,25 @@ describe('SettingsMenu · contrato con los plugins', () => {
     expect(getComputedStyle(m.button).display).not.toBe('none');
   });
 
-  it('retirar el último panel vuelve a esconder el engranaje', () => {
+  it('removing the last panel hides the gear again', () => {
     const m = new SettingsMenu(host, t);
-    const quitar = m.addPanel(panel('speed'));
-    quitar();
+    const remove = m.addPanel(panel('speed'));
+    remove();
     expect(m.button.hidden).toBe(true);
     expect(m.panelCount).toBe(0);
   });
 
-  it('ordena por prioridad, no por orden de registro', () => {
+  it('sorts by priority, not by registration order', () => {
     const m = new SettingsMenu(host, t);
-    m.addPanel(panel('tarde', { priority: 90 }));
-    m.addPanel(panel('pronto', { priority: 10 }));
+    m.addPanel(panel('late', { priority: 90 }));
+    m.addPanel(panel('early', { priority: 10 }));
     m.open();
-    const etiquetas = [...host.querySelectorAll('[role="menuitem"]')]
+    const labels = [...host.querySelectorAll('[role="menuitem"]')]
       .map((el) => el.textContent?.trim());
-    expect(etiquetas[0]).toContain('pronto');
+    expect(labels[0]).toContain('early');
   });
 
-  it('el valor actual entra en el nombre accesible', () => {
-    // Sin esto habría que abrir el panel solo para saber a qué velocidad va.
+  it('the current value is part of the accessible name', () => {
     const m = new SettingsMenu(host, t);
     m.addPanel(panel('speed', { getValue: () => 'b' }));
     m.open();
@@ -70,46 +66,44 @@ describe('SettingsMenu · contrato con los plugins', () => {
     expect(item?.getAttribute('aria-label')).toBe('speed: B');
   });
 
-  it('marca la opción activa con aria-checked', () => {
+  it('marks the active option with aria-checked', () => {
     const m = new SettingsMenu(host, t);
     m.addPanel(panel('speed'));
     m.open();
     host.querySelector<HTMLElement>('.np__menu-item--parent')?.click();
-    const marcadas = host.querySelectorAll('[role="menuitemradio"][aria-checked="true"]');
-    expect(marcadas).toHaveLength(1);
-    expect(marcadas[0]?.textContent).toContain('A');
+    const checked = host.querySelectorAll('[role="menuitemradio"][aria-checked="true"]');
+    expect(checked).toHaveLength(1);
+    expect(checked[0]?.textContent).toContain('A');
   });
 
-  it('elegir una opción llama a onSelect y vuelve al panel principal', () => {
+  it('choosing an option calls onSelect and goes back to the main panel', () => {
     const onSelect = vi.fn();
     const m = new SettingsMenu(host, t);
     m.addPanel(panel('speed', { onSelect }));
     m.open();
     host.querySelector<HTMLElement>('.np__menu-item--parent')?.click();
-    const opciones = host.querySelectorAll<HTMLElement>('[role="menuitemradio"]');
-    opciones[1]?.click();
+    const options = host.querySelectorAll<HTMLElement>('[role="menuitemradio"]');
+    options[1]?.click();
     expect(onSelect).toHaveBeenCalledWith('b');
     expect(host.querySelector('.np__menu-back')).toBeNull();
   });
 
-  it('no abre si no hay nada que ofrecer', () => {
+  it('does not open with nothing to offer', () => {
     const m = new SettingsMenu(host, t);
     m.open();
     expect(m.isOpen).toBe(false);
   });
 });
 
-describe('declaración de control de barra', () => {
-  it('los campos dinámicos permiten reflejar el estado', () => {
-    // Un conmutador necesita que icono, etiqueta y estado cambien con él; si
-    // fueran valores fijos, el plugin tendría que repintar por su cuenta.
-    let activo = false;
+describe('bar control declaration', () => {
+  it('dynamic fields let a toggle reflect its state', () => {
+    let on = false;
     const decl: BarControlDecl = {
       id: 'captions',
-      icon: () => (activo ? 'on' : 'off'),
-      label: () => (activo ? 'Subtítulos' : 'Activar subtítulos'),
-      pressed: () => activo,
-      onActivate: () => { activo = !activo; },
+      icon: () => (on ? 'on' : 'off'),
+      label: () => (on ? 'Subtítulos' : 'Activar subtítulos'),
+      pressed: () => on,
+      onActivate: () => { on = !on; },
     };
     expect(typeof decl.icon).toBe('function');
     expect(decl.pressed?.()).toBe(false);
@@ -119,10 +113,9 @@ describe('declaración de control de barra', () => {
   });
 });
 
-describe('pantalla completa', () => {
-  it('el botón se oculta donde la política la prohíbe', () => {
-    // Dentro de un iframe sin allow="fullscreen" la llamada se rechaza. Enseñar
-    // el botón dejaría un control que no hace nada y nadie entendería por qué.
+describe('fullscreen', () => {
+  it('the button hides where the permissions policy forbids it', () => {
+    // See docs/browser-quirks.md#iframe-fullscreen.
     const original = Object.getOwnPropertyDescriptor(Document.prototype, 'fullscreenEnabled');
     Object.defineProperty(document, 'fullscreenEnabled', { value: false, configurable: true });
     expect(document.fullscreenEnabled).toBe(false);

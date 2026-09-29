@@ -4,7 +4,7 @@ import { Player, type Manifest } from '@nanoplayer/core';
 import { attachControls } from '../src/control-bar.js';
 import '../src/strings.js';
 
-const MANIFIESTO: Manifest = {
+const MANIFEST: Manifest = {
   id: 'x',
   poster: 'p.jpg',
   streams: [{
@@ -21,53 +21,47 @@ beforeEach(() => {
   document.body.appendChild(host);
 });
 
-/** Lo que recorrería el Tab, en orden de documento. */
-const tabulables = () =>
+/** What Tab would walk through, in document order. */
+const tabbable = () =>
   [...host.querySelectorAll<HTMLElement>('button, input, [tabindex]')]
     .filter((el) => el.tabIndex >= 0 && !(el as HTMLButtonElement).disabled)
     .map((el) => el.getAttribute('aria-label') ?? el.tagName.toLowerCase());
 
-describe('orden de tabulación', () => {
-  it('el botón del póster va antes que la barra', () => {
-    /*
-     * En el estado inicial es el único control grande y visible, y estaba el
-     * último: se alcanzaba en el Tab 9, detrás de una barra que ni se ve. El
-     * orden de tabulación tiene que seguir al visual.
-     */
-    const p = new Player({ container: host, manifest: MANIFIESTO, lang: 'es' });
+describe('tab order', () => {
+  it('the poster button comes before the bar', () => {
+    // It used to be last, reached at Tab 9 behind a bar that is not even visible.
+    const p = new Player({ container: host, manifest: MANIFEST, lang: 'es' });
     attachControls(p);
-    const orden = tabulables();
-    const poster = orden.indexOf('Reproducir vídeo');
-    const primeroDeLaBarra = orden.indexOf('Posición');
-    expect(poster, 'el botón del póster no está en el orden').toBeGreaterThanOrEqual(0);
-    expect(poster).toBeLessThan(primeroDeLaBarra);
+    const order = tabbable();
+    const poster = order.indexOf('Reproducir vídeo');
+    const firstInBar = order.indexOf('Posición');
+    expect(poster, 'the poster button is not in the order').toBeGreaterThanOrEqual(0);
+    expect(poster).toBeLessThan(firstInBar);
   });
 
-  it('el contenedor es alcanzable y lleva nombre', () => {
-    // Es el asidero del que depende Safari con sus ajustes de fábrica: allí
-    // Tab no entra en los botones, y los atajos llegan por el contenedor.
-    const p = new Player({ container: host, manifest: MANIFIESTO, lang: 'es' });
-    attachControls(p, { label: 'Una clase' });
+  it('the container is reachable and named', () => {
+    // Safari's anchor with default settings (see docs/browser-quirks.md#webkit-tab).
+    const p = new Player({ container: host, manifest: MANIFEST, lang: 'es' });
+    attachControls(p, { label: 'A lecture' });
     expect(host.tabIndex).toBe(0);
     expect(host.getAttribute('role')).toBe('region');
-    expect(host.getAttribute('aria-label')).toBe('Una clase');
+    expect(host.getAttribute('aria-label')).toBe('A lecture');
   });
 
-  it('todo lo tabulable tiene nombre accesible', () => {
-    const p = new Player({ container: host, manifest: MANIFIESTO, lang: 'es' });
+  it('everything tabbable has an accessible name', () => {
+    const p = new Player({ container: host, manifest: MANIFEST, lang: 'es' });
     attachControls(p);
-    const sinNombre = [...host.querySelectorAll<HTMLElement>('button, input')]
+    const unnamed = [...host.querySelectorAll<HTMLElement>('button, input')]
       .filter((el) => !(el.getAttribute('aria-label') ?? '').trim());
-    expect(sinNombre.map((e) => e.outerHTML.slice(0, 60))).toEqual([]);
+    expect(unnamed.map((e) => e.outerHTML.slice(0, 60))).toEqual([]);
   });
 
-  it('nada dentro del reproductor se salta el orden natural', () => {
-    // Un tabindex positivo reordena el documento entero y rompe el recorrido
-    // de la página que lo integra, no solo el del reproductor.
-    const p = new Player({ container: host, manifest: MANIFIESTO, lang: 'es' });
+  it('nothing inside the player skips the natural order', () => {
+    // A positive tabindex reorders the whole host page, not just the player.
+    const p = new Player({ container: host, manifest: MANIFEST, lang: 'es' });
     attachControls(p);
-    const positivos = [...host.querySelectorAll<HTMLElement>('[tabindex]')]
+    const positive = [...host.querySelectorAll<HTMLElement>('[tabindex]')]
       .filter((el) => el.tabIndex > 0);
-    expect(positivos.map((e) => e.tagName)).toEqual([]);
+    expect(positive.map((e) => e.tagName)).toEqual([]);
   });
 });

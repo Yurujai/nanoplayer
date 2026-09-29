@@ -1,10 +1,10 @@
 # @nanoplayer/ui
 
-Interfaz por defecto de NanoPlayer: barra de controles accesible.
+NanoPlayer's default interface: an accessible control bar.
 
-Paquete aparte a propósito. El núcleo se queda *headless* —hay quien querrá su
-propia interfaz— y el bundle "con pilas incluidas" lleva ambos, así que el caso
-`<script>` sigue siendo una etiqueta.
+A separate package on purpose. The core stays *headless* (some will want their
+own interface), and the "batteries included" bundle ships both, so the
+`<script>` case is still a single tag.
 
 ```ts
 import { createPlayer } from '@nanoplayer/core';
@@ -15,112 +15,112 @@ await player.attach();
 attachControls(player);
 ```
 
-## Accesibilidad
+## Accessibility
 
-No es una intención: se comprueba en CI y **bloquea el merge**.
+Not an intention: it is checked in CI and **blocks the merge**.
 
-| Decisión | Por qué |
+| Decision | Why |
 |---|---|
-| Botones `<button>` nativos | Traen rol, activación por teclado y foco. Un `<div role="button">` obliga a reimplementarlo todo |
-| `<input type="range">` para progreso y volumen | Traen teclado, gestos táctiles y anuncio de valores |
-| `aria-valuetext` con tiempo hablado | Un lector diría "735"; con esto dice "12 minutos y 15 segundos" |
-| La barra no se oculta con el foco dentro | Quien navega con teclado perdería de vista el control en uso |
-| Región `role="status"` | Para lo que solo se percibe mirando: buffering, errores |
-| Sin Shadow DOM | Las relaciones ARIA no cruzan bien esa frontera, y obligaría a exponer un `::part` por elemento para poder darle estilo |
+| Native `<button>` elements | They bring role, keyboard activation and focus. A `<div role="button">` means reimplementing all of it |
+| `<input type="range">` for progress and volume | They bring keyboard, touch gestures and value announcements |
+| `aria-valuetext` with spoken time | A screen reader would say "735"; with this it says "12 minutes and 15 seconds" |
+| The bar does not hide while focus is inside | Keyboard users would lose sight of the control in use |
+| A `role="status"` region | For what is only perceived by looking: buffering, errors |
+| No Shadow DOM | ARIA relationships do not cross that boundary well, and it would force a `::part` per element to allow styling |
 
-**Lo que la comprobación automática NO cubre:** axe-core detecta alrededor de un
-tercio de los problemas reales. Que pase en verde evita regresiones, pero no
-sustituye una revisión con lector de pantalla.
+**What the automated check does NOT cover:** axe-core finds about a third of
+real problems. A green run prevents regressions but does not replace a review
+with a screen reader.
 
-### Safari y el recorrido con Tab
+### Safari and Tab navigation
 
-**Safari no tabula los botones por defecto.** Con los ajustes de fábrica, Tab
-solo recorre campos de texto y enlaces; botones, deslizadores y selects se
-saltan hasta que se activa *Ajustes del Sistema → Teclado → Navegación por
-teclado* (o, en Safari, *Avanzado → «Pulsar Tab para resaltar cada elemento»*).
+**Safari does not tab to buttons by default.** With factory settings, Tab only
+visits text fields and links; buttons, sliders and selects are skipped until
+*System Settings → Keyboard → Keyboard navigation* is on (or, in Safari,
+*Advanced → "Press Tab to highlight each item on a webpage"*).
 
-Le ocurre a cualquier página, no solo a esta, pero conviene saberlo porque
-Safari es el navegador por defecto en macOS y **el único motor en iOS**.
+It happens to every page, not just this one, but it matters because Safari is
+the default browser on macOS and **the only engine on iOS**.
 
-Por eso el contenedor lleva `tabindex="0"`: en ese modo es lo único que recibe
-foco, y **los atajos siguen funcionando desde ahí**. Comprobado en WebKit —
-espacio reproduce, las flechas saltan, `M` silencia— con el foco en el
-reproductor y sin entrar en ningún control.
+That is why the container has `tabindex="0"`: in that mode it is the only thing
+that gets focus, and **shortcuts keep working from there**. Checked in WebKit
+(space plays, arrows seek, `M` mutes) with focus on the player and without
+entering any control.
 
-El recorrido se verifica en CI **en los dos motores y partiendo del documento**
-(`e2e/teclado.mjs`), no con un `focus()` programático: ese atajo era lo que
-impedía ver este comportamiento.
+Tab order is verified in CI **in both engines, starting from the document**
+(`e2e/keyboard.mjs`), not with a programmatic `focus()`: that shortcut is what
+hid this behaviour.
 
-## Teclado
+## Keyboard
 
-| Tecla | Acción |
+| Key | Action |
 |---|---|
-| `Espacio` / `K` | Reproducir o pausar |
+| `Space` / `K` | Play or pause |
 | `←` / `→` | ∓5 s |
 | `J` / `L` | ∓10 s |
-| `↑` / `↓` | Volumen |
-| `M` | Silenciar |
-| `F` | Pantalla completa |
-| `0`–`9` | Saltar a ese porcentaje |
-| `Inicio` / `Fin` | Principio o final |
+| `↑` / `↓` | Volume |
+| `M` | Mute |
+| `F` | Fullscreen |
+| `0`–`9` | Jump to that percentage |
+| `Home` / `End` | Start or end |
 
-Los atajos ceden las teclas que el control enfocado ya usa: las flechas sobre un
-deslizador son suyas, y el espacio sobre un botón lo activa.
+Shortcuts give way to keys the focused control already uses: arrows on a slider
+belong to it, and space on a button activates it.
 
-Durante la **cabecera** las teclas de salto no hacen nada: no hay barra a la que
-referirlas. Durante la **cola**, hacia atrás vuelven al contenido y hacia
-delante se ignoran, porque la cola no se salta.
+During the **intro** seek keys do nothing: there is no bar to refer them to.
+During the **outro**, backwards returns to the content and forwards is ignored,
+because the outro cannot be skipped.
 
-## Cabecera y cola
+## Intro and outro
 
-Las dos se pintan **encima** del contenido, no en su lugar, así que el escenario
-no cambia de tamaño al pasar de una a otro. Qué se ve lo decide un único
-atributo, `data-phase`, que pone el reproductor.
+Both are drawn **on top of** the content, not in its place, so the stage does
+not resize when switching. What is visible is decided by a single attribute,
+`data-phase`, set by the player.
 
-- **Saltar cabecera** aparece dentro del vídeo, abajo a la derecha, como el de
-  los anuncios. No se oculta con la barra: durante la cabecera es lo único que
-  se puede hacer. Va antes que la barra en el orden de tabulación.
-- **La barra de progreso se esconde** mientras suena una de las dos, y en su
-  lugar el tiempo dice qué es y cuánto le queda: «Cabecera · 0:05». La barra es
-  solo del contenido.
-- La cola **no tiene botón** ni se puede adelantar.
+- **Skip intro** appears inside the video, bottom right, like the one on ads.
+  It does not hide with the bar: during the intro it is the only thing to do.
+  It comes before the bar in tab order.
+- **The progress bar hides** while either plays, and the time says what it is
+  and how much is left instead: "Intro · 0:05". The bar belongs to the content
+  only.
+- The outro **has no button** and cannot be skipped forward.
 
-## Subtítulos
+## Captions
 
-Se pintan en una capa del ancho del reproductor, no dentro de un `<video>`. El
-navegador los dibujaría dentro del elemento, y en un layout lado a lado eso los
-encajona en la mitad del ancho.
+They are drawn in a player-wide layer, not inside a `<video>`. The browser
+would draw them inside the element, and in a side-by-side layout that squeezes
+them into half the width.
 
-El `<track>` sigue ahí en modo `hidden`: el navegador parsea el WebVTT y
-gestiona los tiempos —que es lo difícil— y solo se toma el control de dónde se
-pintan. **Lo que se pierde son las preferencias de subtítulos del sistema
-operativo**, así que se exponen como variables:
+The `<track>` is still there in `hidden` mode: the browser parses WebVTT and
+handles timing (the hard part), and only where they are drawn is taken over.
+**What is lost are the operating system's caption preferences**, so they are
+exposed as variables:
 
 ```css
 .np {
   --np-cue-color: #fff;
   --np-cue-bg: rgba(0, 0, 0, .78);
 }
-.np .np__cue { --np-cue-size: 1.4rem; }   /* por defecto escala con el ancho */
+.np .np__cue { --np-cue-size: 1.4rem; }   /* scales with width by default */
 ```
 
-## Dentro de un iframe
+## Inside an iframe
 
-Funciona sin más, pero **la pantalla completa necesita permiso explícito**:
+It just works, but **fullscreen needs explicit permission**:
 
 ```html
 <iframe src="…" allow="fullscreen; autoplay; picture-in-picture"></iframe>
 ```
 
-Sin ese atributo la llamada se rechaza con *Disallowed by permissions policy*, y
-el botón **se oculta solo** en lugar de quedarse sin hacer nada.
+Without that attribute the call is rejected with *Disallowed by permissions
+policy*, and the button **hides itself** instead of doing nothing.
 
-Ojo con una consecuencia menos obvia: el `PlayerRegistry` no cruza iframes, así
-que varios reproductores en varios iframes dejan de coordinarse entre sí.
+A less obvious consequence: `PlayerRegistry` does not cross iframes, so several
+players in several iframes stop coordinating with each other.
 
-## Idiomas
+## Languages
 
-Español e inglés de serie. **Añadir otro es configuración, no un fork:**
+Spanish and English built in. **Adding another is configuration, not a fork:**
 
 ```ts
 create('#player', {
@@ -136,13 +136,13 @@ create('#player', {
 });
 ```
 
-Lo que el idioma nuevo no cubra cae al catálogo base, así que una traducción a
-medias deja el reproductor usable en vez de con botones en blanco. Una clave que
-no existe en ninguna parte **se enseña tal cual** —`ui.play`— porque un hueco
-vacío no dice dónde mirar.
+Whatever the new language does not cover falls back to the base catalogue, so a
+half-done translation leaves the player usable instead of with blank buttons. A
+key that exists nowhere **is shown as is** (`ui.play`), because an empty gap
+does not say where to look.
 
-Sirve igual para cambiar una sola palabra, que es el caso más frecuente y el que
-peor se lleva con un PR al proyecto:
+It works the same for changing a single word, the most common case and the one
+that fits worst in a PR to the project:
 
 ```ts
 create('#player', { manifest, strings: {
@@ -150,76 +150,77 @@ create('#player', { manifest, strings: {
 } });
 ```
 
-El idioma se dice **una vez**, en `create()`, y lo heredan la barra, el póster y
-todos los plugins. `attachControls(player, { lang })` existe solo para el caso
-raro de que la barra deba hablar en otro distinto.
+The language is given **once**, in `create()`, and the bar, the poster and all
+plugins inherit it. `attachControls(player, { lang })` exists only for the rare
+case where the bar must speak a different one.
 
-Sin decir nada se usa el del documento que contiene al reproductor
-(`<html lang>`), y `es` si tampoco lo declara. Un `es-MX` sirve el catálogo `es`.
+When nothing is given, the language of the document containing the player
+(`<html lang>`) is used, and `es` if it declares none. An `es-MX` gets the `es`
+catalogue.
 
-### Las claves
+### Keys
 
-| Prefijo | Qué cubre |
+| Prefix | Covers |
 |---|---|
-| `ui.*` | Botones y deslizadores de la barra |
-| `ui.status.*` | Región viva: reproduciendo, en pausa, cargando |
-| `ui.live.*` | Directo: distintivo, espera, ir al borde |
-| `ui.chain.*` | Cabecera y cola: nombres y botón de saltar |
-| `ui.poster.*` | El póster antes de reproducir |
-| `ui.settings.*` | Menú de ajustes |
-| `ui.layout.*` | Nombres de las disposiciones |
-| `captions.*` | Plugin de subtítulos |
+| `ui.*` | Bar buttons and sliders |
+| `ui.status.*` | Live region: playing, paused, loading |
+| `ui.live.*` | Live: badge, waiting, go to the edge |
+| `ui.chain.*` | Intro and outro: names and skip button |
+| `ui.poster.*` | The poster before playback |
+| `ui.settings.*` | Settings menu |
+| `ui.layout.*` | Layout names |
+| `captions.*` | Captions plugin |
 
-Las que llevan variable la escriben entre llaves —`'Retrasado: {tiempo}'`—
-para que cada idioma ponga las palabras en su orden.
+Keys with a variable write it in braces (`'Behind live: {time}'`) so each
+language can put the words in its own order.
 
-### Lo que no hace falta traducir
+### What needs no translation
 
-Los tiempos y los porcentajes los formatea `Intl`, no este catálogo. `12
-minutos y 15 segundos` para `aria-valuetext`, `35 %` para el volumen, y ambos
-salen bien en cualquier idioma sin que nadie escriba una cadena: en euskera el
-signo va delante —`% 35`— y en inglés va pegado.
+Times and percentages are formatted by `Intl`, not by this catalogue. `12
+minutes and 15 seconds` for `aria-valuetext`, `35%` for volume, and both come
+out right in any language without anyone writing a string: in Basque the sign
+goes first (`% 35`) and in Spanish it is separated by a space.
 
-### Añadir un idioma al proyecto
+### Adding a language to the project
 
-Un objeto más en `packages/ui/src/strings.ts`, con las mismas claves que el
-español. No hay que tocar nada más.
+One more object in `packages/ui/src/strings.ts`, with the same keys as the base
+language. Nothing else needs touching.
 
-**CI comprueba que la traducción está completa**, y lo hace contra el idioma
-base, así que un idioma nuevo queda cubierto sin tocar el test. Falla si:
+**CI checks that the translation is complete**, against the base language, so a
+new language is covered without touching the test. It fails if:
 
-- falta alguna clave del base — y dice cuáles, por nombre;
-- sobra alguna que el base no tenga, que casi siempre es una errata;
-- alguna cadena está vacía;
-- **se pierde una variable.** Si `ui.live.behindBy` es `'Retrasado: {tiempo}'`
-  y la traducción pone solo `'Behind live'`, no falta la clave ni está vacía:
-  simplemente el tiempo deja de aparecer. Es el fallo que no se ve leyendo el
-  diff.
+- a base key is missing, and it names which ones;
+- there is a key the base does not have, almost always a typo;
+- a string is empty;
+- **a variable is lost.** If `ui.live.behindBy` is `'Behind live: {time}'` and
+  the translation only says `'Behind live'`, no key is missing and nothing is
+  empty: the time simply stops appearing. That failure does not show when
+  reading the diff.
 
-### Desde un plugin
+### From a plugin
 
-`ctx.t` llega en el contexto, así que un plugin **no deduce el idioma ni trae su
-propia tabla**:
+`ctx.t` comes in the context, so a plugin **neither guesses the language nor
+brings its own table**:
 
 ```ts
-plugins.register({ id: 'mio', load: () => ({
+plugins.register({ id: 'mine', load: () => ({
   activate(ctx) {
     ctx.whenUi((ui) => ui.addBarControl({
-      id: 'mio', icon: ICONO, label: () => ctx.t('mio.label'), onActivate,
+      id: 'mine', icon: ICON, label: () => ctx.t('mine.label'), onActivate,
     }));
   },
 }) });
 
-// Al cargarse, el plugin aporta sus cadenas al catálogo compartido:
-strings.register('es', { 'mio.label': 'Lo mío' });
+// When loaded, the plugin adds its strings to the shared catalogue:
+strings.register('en', { 'mine.label': 'Mine' });
 ```
 
-Quien integre puede sobrescribirlas con `strings` sin tocar el plugin.
+Integrators can override them with `strings` without touching the plugin.
 
 ## Theming
 
-Todo lo personalizable son variables CSS. Se puede rediseñar el reproductor
-entero sin forkear:
+Everything customisable is a CSS variable. The whole player can be redesigned
+without forking:
 
 ```css
 .np {

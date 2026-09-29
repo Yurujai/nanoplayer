@@ -26,7 +26,7 @@ export class LiveNotices {
   update(stream: string, status: string): void {
     const { root, t } = this.ctx;
     this.ctx.collectStreams();
-    const existing = root.querySelector<HTMLElement>(`[data-espera="${CSS.escape(stream)}"]`);
+    const existing = root.querySelector<HTMLElement>(`[data-waiting="${CSS.escape(stream)}"]`);
     if (status === 'live') {
       existing?.remove();
       return;
@@ -36,7 +36,7 @@ export class LiveNotices {
     // twenty minutes must not read that it has not started.
     const text = t(status === 'interrupted' ? 'ui.live.interrupted' : 'ui.live.waiting');
     if (existing) {
-      existing.querySelector('.np__espera-texto')!.textContent = text;
+      existing.querySelector('.np__waiting-text')!.textContent = text;
       return;
     }
     const box = root.querySelector<HTMLElement>(`[data-stream="${CSS.escape(stream)}"]`);
@@ -47,13 +47,13 @@ export class LiveNotices {
   #notice(stream: string, text: string): HTMLElement {
     const doc = this.ctx.root.ownerDocument;
     const layer = doc.createElement('div');
-    layer.className = 'np__espera';
-    layer.dataset['espera'] = stream;
+    layer.className = 'np__waiting';
+    layer.dataset['waiting'] = stream;
     layer.setAttribute('role', 'status');
     const image = this.ctx.player.liveWaitingImage;
     if (image) layer.style.backgroundImage = `url("${image.replace(/"/g, '%22')}")`;
     const p = doc.createElement('p');
-    p.className = 'np__espera-texto';
+    p.className = 'np__waiting-text';
     p.textContent = text;
     layer.appendChild(p);
     return layer;

@@ -1,26 +1,17 @@
 /**
- * Estilos de la interfaz, como cadena.
- *
- * Se inyectan desde JavaScript para que el caso `<script>` siga siendo una sola
- * etiqueta. Quien tenga build propio puede desactivarlo e importar el CSS.
- *
- * **Todo lo personalizable son variables CSS**, y esa es la API de theming: se
- * puede rediseñar el reproductor entero sin forkear el proyecto. Nada de Shadow
- * DOM — las relaciones ARIA no cruzan bien esa frontera y obligaría a exponer
- * un `::part` por cada elemento para poder darle estilo desde fuera.
+ * UI styles as a string, injected from JavaScript so the `<script>` case stays
+ * one tag (a build can turn that off and import the CSS file). CSS variables
+ * are the theming API. No Shadow DOM: ARIA relations do not cross it well.
  */
 export const CSS = `
 :where(.np) [hidden]{
-  /* El atributo hidden lo aplica el navegador como display:none, pero
-     cualquier regla display explícita gana. Los botones de la barra y el del
-     póster declaran display:inline-flex, así que sin esto se quedaban a la
-     vista con el atributo puesto. Se vio en el caso de solo audio.
-     (Sin comillas invertidas aquí: esto vive dentro de una plantilla.) */
+  /* Any explicit display rule beats the hidden attribute: buttons declaring
+     inline-flex stayed visible while hidden. */
   display:none!important;
 }
 
 .np{
-  /* --- API de theming: sobrescribe estas variables y ya --- */
+  /* --- theming API: override these variables --- */
   --np-color-accent:#6aa9ff;
   --np-color-bg:#000;
   --np-color-control:#fff;
@@ -36,17 +27,13 @@ export const CSS = `
   --np-gradient:linear-gradient(to top,rgba(0,0,0,.78),rgba(0,0,0,0));
   --np-transition:120ms ease;
 
-  /* Escala de apilamiento. Sin ella, cualquier z-index suelto se cuela por
-     encima de los controles: el vídeo pequeño de imagen-en-imagen tapaba el
-     menú de ajustes, y los subtítulos se pintaban por encima de él. */
+  /* One stacking scale: loose z-indexes let picture-in-picture cover the menu. */
   --np-z-pip:1;
   --np-z-overlay:2;
   --np-z-bar:3;
   --np-z-poster:4;
 
   position:relative;
-  /* Permite dimensionar los subtítulos con el ancho del reproductor y no con
-     el de la ventana: un reproductor embebido pequeño necesita texto menor. */
   container-type:inline-size;
   background:var(--np-color-bg);
   font-family:var(--np-font);
@@ -57,20 +44,18 @@ export const CSS = `
 .np:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:2px}
 .np__stage{position:relative;display:flex;width:100%}
 .np__stage>[data-stream]{position:relative;flex:1;min-width:0}
-/* Un flujo que aún no emite no tiene vídeo dentro, así que no tendría altura:
-   se le da la del hueco que le toca para que el aviso caiga en su sitio. */
+/* A live stream not on air has no video, hence no height for its notice. */
 .np__stage>[data-stream]:not(:has(video)){aspect-ratio:16/9;background:#000}
 .np__stage video{display:block;width:100%;height:auto}
 
-/* --- póster: el estado inicial, sin un byte de vídeo descargado --- */
+/* --- poster --- */
 .np__poster{
   position:absolute;inset:0;z-index:var(--np-z-poster);
   display:flex;align-items:center;justify-content:center;
   background:var(--np-color-bg) center/cover no-repeat;
 }
 .np__poster[hidden]{display:none}
-/* Sin medios detrás, el contenedor no tiene altura propia. */
-.np--con-poster{aspect-ratio:16/9}
+.np--with-poster{aspect-ratio:16/9}
 button.np__poster-play{
   width:4.5rem;height:4.5rem;border-radius:50%;
   display:inline-flex;align-items:center;justify-content:center;
@@ -80,23 +65,19 @@ button.np__poster-play{
 button.np__poster-play:hover:not([disabled]){background:rgba(0,0,0,.75);transform:scale(1.06)}
 button.np__poster-play:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:3px}
 button.np__poster-play svg{width:45%;height:45%;fill:currentColor;pointer-events:none}
-.np__poster--cargando button{opacity:.5;cursor:progress}
-.np__poster--cargando button svg{animation:np-latido 1s ease-in-out infinite}
-@keyframes np-latido{50%{opacity:.35}}
-/* Con la barra oculta no hay dónde volver: mientras se ve el póster, se ve. */
-.np--con-poster .np__bar{opacity:0;pointer-events:none}
+.np__poster--loading button{opacity:.5;cursor:progress}
+.np__poster--loading button svg{animation:np-pulse 1s ease-in-out infinite}
+@keyframes np-pulse{50%{opacity:.35}}
+.np--with-poster .np__bar{opacity:0;pointer-events:none}
 
-/* Solo audio: la capa se queda de fondo. Baja por debajo de todo —deja de ser
-   póster y pasa a ser fondo— o taparía la barra de controles, que está en un
-   nivel inferior al del póster. */
-.np__poster--fondo{z-index:0;pointer-events:none}
-.np--solo-audio .np__stage{display:none}
-.np--solo-audio{aspect-ratio:16/9}
-/* Sin carátula no tiene sentido reservar un hueco de vídeo: basta la barra. */
-.np--solo-audio.np--sin-poster{aspect-ratio:auto;min-height:5.5rem}
-.np--solo-audio.np--sin-poster .np__bar{background:#000}
+/* Audio only: the poster becomes a backdrop below the bar, or it would cover it. */
+.np__poster--backdrop{z-index:0;pointer-events:none}
+.np--audio-only .np__stage{display:none}
+.np--audio-only{aspect-ratio:16/9}
+.np--audio-only.np--no-poster{aspect-ratio:auto;min-height:5.5rem}
+.np--audio-only.np--no-poster .np__bar{background:#000}
 
-/* --- barra de controles --- */
+/* --- control bar --- */
 .np__bar{
   position:absolute;left:0;right:0;bottom:0;
   display:flex;flex-direction:column;gap:.25rem;
@@ -106,8 +87,7 @@ button.np__poster-play svg{width:45%;height:45%;fill:currentColor;pointer-events
   transition:opacity var(--np-transition),transform var(--np-transition);
 }
 .np--inactive .np__bar{opacity:0;transform:translateY(.5rem);pointer-events:none}
-/* Nunca ocultar la barra si el foco está dentro: quien navega con teclado
-   perdería de vista el control que está usando. */
+/* Never hide the bar with focus inside it. */
 .np__bar:focus-within{opacity:1!important;transform:none!important;pointer-events:auto!important}
 .np__row{display:flex;align-items:center;gap:.15rem}
 
@@ -129,20 +109,18 @@ button.np__btn[disabled]{opacity:.4;cursor:default}
   color:var(--np-color-control-dim);padding:0 .5rem;white-space:nowrap;
 }
 .np__spacer{flex:1 1 auto}
-/* Nombre del tramo en curso (el capítulo). Cede sitio antes que los botones. */
 .np__segment{
   flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   font-size:.8125rem;color:var(--np-color-control);
 }
 .np__segment:empty{display:none}
 
-/* --- tramos en la barra de progreso --- */
+/* --- segment marks --- */
 .np__row--progress{position:relative}
 .np__marks{
   position:absolute;left:0;right:0;top:50%;height:var(--np-bar-height-active);
   transform:translateY(-50%);pointer-events:none;
 }
-/* Un corte en la barra, del color del fondo: separa sin añadir otro color. */
 .np__mark{position:absolute;top:0;bottom:0;width:3px;margin-left:-1.5px;background:rgba(0,0,0,.7)}
 .np__tip{
   position:absolute;bottom:calc(100% + .45rem);transform:translateX(-50%);
@@ -152,10 +130,7 @@ button.np__btn[disabled]{opacity:.4;cursor:default}
 }
 .np__plugins{display:inline-flex;align-items:center}
 
-/* --- deslizadores ---
-   Son <input type="range"> nativos a propósito: traen teclado, gestos táctiles
-   y anuncio de valores. Reimplementarlos con un div y role="slider" es donde se
-   pierde a quien usa lector de pantalla. */
+/* --- sliders: native range inputs keep keyboard, touch and announcements --- */
 .np__range{
   -webkit-appearance:none;appearance:none;
   width:100%;height:var(--np-bar-height-active);
@@ -202,7 +177,7 @@ button.np__btn[disabled]{opacity:.4;cursor:default}
 .np__volume:hover .np__range,
 .np__volume:focus-within .np__range{width:5rem;opacity:1;margin:0 .5rem 0 .25rem}
 
-/* --- capas de contenido sobre el vídeo --- */
+/* --- overlays --- */
 .np__overlay{position:absolute;z-index:var(--np-z-overlay);pointer-events:none}
 .np__overlay--fill{inset:0}
 .np__overlay--center{inset:0;display:flex;align-items:center;justify-content:center}
@@ -212,11 +187,9 @@ button.np__btn[disabled]{opacity:.4;cursor:default}
   padding:0 5%;text-align:center;
   transition:bottom var(--np-transition);
 }
-/* Con la barra visible, los subtítulos suben para no quedar debajo. */
 .np:not(.np--inactive) .np__overlay--captions{bottom:5.25rem}
 
-/* Estilo de los subtítulos. Es la API para replicar las preferencias que se
-   pierden al no usar el renderizado nativo del navegador. */
+/* Caption styling: the API to replace the native caption preferences we lose. */
 .np__cue{
   --np-cue-size:clamp(.95rem,2.6cqw,1.6rem);
   display:inline-block;max-width:100%;
@@ -229,46 +202,43 @@ button.np__btn[disabled]{opacity:.4;cursor:default}
 .np__cue b,.np__cue strong{font-weight:700}
 .np__cue i,.np__cue em{font-style:italic}
 
-/* --- espera de un directo --- */
-.np__espera{
+/* --- live waiting notice --- */
+.np__waiting{
   position:absolute;inset:0;z-index:var(--np-z-overlay);
   display:flex;align-items:center;justify-content:center;
   background:#000 center/cover no-repeat;
   padding:1rem;text-align:center;
 }
-.np__espera-texto{
+.np__waiting-text{
   margin:0;padding:.5em .9em;border-radius:var(--np-radius);
   background:rgba(0,0,0,.72);font-size:clamp(.85rem,2.4cqw,1.1rem);
   max-width:90%;
 }
-/* Un flujo esperando dentro de un escenario con otro emitiendo: la capa se
-   queda en su hueco, no tapa al que sí funciona. */
 .np__stage>[data-stream]{position:relative}
 
-button.np__directo{
+button.np__live{
   display:inline-flex;align-items:center;gap:.4rem;
   width:auto;height:auto;
   font:inherit;font-size:.7rem;font-weight:700;letter-spacing:.06em;
   padding:.3rem .55rem;margin-left:.4rem;border:0;border-radius:3px;
   background:#c8102e;color:#fff;cursor:default;
 }
-button.np__directo::before{
+button.np__live::before{
   content:'';width:.45rem;height:.45rem;border-radius:50%;background:#fff;
 }
-/* Retrasado: deja de ser un indicador y pasa a ser una acción. */
-button.np__directo--atras{
+/* Behind the edge: from indicator to action. */
+button.np__live--behind{
   background:rgba(255,255,255,.2);cursor:pointer;opacity:1;
 }
-button.np__directo--atras::before{background:var(--np-color-control-dim)}
-button.np__directo--atras:hover{background:rgba(255,255,255,.32)}
-button.np__directo:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:2px}
+button.np__live--behind::before{background:var(--np-color-control-dim)}
+button.np__live--behind:hover{background:rgba(255,255,255,.32)}
+button.np__live:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:2px}
 
-/* --- menú de ajustes --- */
+/* --- settings menu --- */
 .np__menu-anchor{position:relative;display:inline-flex}
 .np__menu{
   position:absolute;right:0;bottom:calc(100% + .5rem);
   min-width:12rem;max-width:min(18rem,90vw);
-  /* La altura real la fija el JS al abrir, según el hueco sobre la barra. */
   max-height:min(20rem,50vh);overflow-y:auto;
   background:rgba(20,22,26,.96);border-radius:var(--np-radius);
   box-shadow:0 8px 28px rgba(0,0,0,.5);
@@ -288,7 +258,7 @@ button.np__directo:focus-visible{outline:3px solid var(--np-color-focus);outline
 .np__menu-value{
   display:inline-flex;align-items:center;gap:.15rem;
   color:var(--np-color-control-dim);
-  white-space:nowrap;   /* "Lado a lado" partía en dos líneas */
+  white-space:nowrap;
 }
 .np__menu-item--parent>span:first-child{white-space:nowrap}
 .np__menu-chevron{font-size:1.15em;line-height:1}
@@ -298,16 +268,13 @@ button.np__directo:focus-visible{outline:3px solid var(--np-color-focus);outline
   border-radius:0!important;margin-bottom:.2rem;font-weight:600;
 }
 
-/* --- disposición de los streams ---
-   Todo por CSS, apoyándose en el data-role que el Player pone en cada caja. */
+/* --- stream layouts, from the data-role on each stream box --- */
 .np--layout-presenter .np__stage>[data-role="presentation"],
 .np--layout-presentation .np__stage>[data-role="presenter"]{display:none}
 
 .np--layout-pip .np__stage{position:relative;display:block}
 .np--layout-pip .np__stage>[data-role="presentation"]{width:100%}
 .np--layout-pip .np__stage>[data-role="presenter"]{
-  /* Por encima de la barra, no encima: con 5rem se solapaba con ella. Al
-     ocultarse la barra por inactividad, el recuadro baja. */
   position:absolute;right:1rem;bottom:7rem;width:28%;min-width:8rem;
   transition:bottom var(--np-transition);
   border-radius:var(--np-radius);overflow:hidden;
@@ -316,18 +283,13 @@ button.np__directo:focus-visible{outline:3px solid var(--np-color-focus);outline
 
 .np--inactive.np--layout-pip .np__stage>[data-role="presenter"]{bottom:1rem}
 
-/* En pantallas estrechas, lado a lado deja dos vídeos ilegibles. */
 @media (max-width:640px){
   .np--layout-side-by-side .np__stage{flex-direction:column}
 }
 
-/* --- cabecera y cola ---
-   Van encima del contenido, no en su lugar: así el escenario conserva el
-   tamaño que le da el contenido y el cambio no mueve nada. Solo se ve la que
-   diga data-phase, y cambiar ese único atributo es lo que hace el cambio
-   instantáneo. Transparente y no display:none, para que la que espera siga
-   decodificando (S6). Mismo nivel que la imagen en imagen, pero después en el
-   DOM: la tapa. */
+/* --- intro and outro ---
+   Over the content, shown by data-phase alone. Transparent, not display:none,
+   so the waiting piece keeps decoding (see docs/browser-quirks.md#first-frame-latency). */
 .np__stage>[data-bumper]{
   position:absolute;inset:0;z-index:var(--np-z-pip);
   background:#000;opacity:0;pointer-events:none;
@@ -335,14 +297,12 @@ button.np__directo:focus-visible{outline:3px solid var(--np-color-focus);outline
 .np__stage>[data-bumper] video{width:100%;height:100%;object-fit:contain}
 .np[data-phase="intro"] .np__stage>[data-bumper="intro"],
 .np[data-phase="outro"] .np__stage>[data-bumper="outro"]{opacity:1}
-/* Solo audio esconde el escenario; una cabecera con imagen necesita verse. */
-.np--solo-audio:is([data-phase="intro"],[data-phase="outro"]) .np__stage{
+/* Audio only hides the stage; an intro with a picture still needs it. */
+.np--audio-only:is([data-phase="intro"],[data-phase="outro"]) .np__stage{
   display:block;position:absolute;inset:0;
 }
 
-/* Saltar cabecera: dentro del vídeo, abajo a la derecha, como el de los
-   anuncios. Por encima de la barra, y no se oculta con ella: es lo único que
-   se puede hacer durante la cabecera, y tiene que estar a mano. */
+/* Skip intro: over the video, and it does not hide with the bar. */
 button.np__skip{
   position:absolute;right:0;bottom:5.25rem;z-index:var(--np-z-bar);
   display:inline-flex;align-items:center;gap:.5rem;
@@ -358,31 +318,30 @@ button.np__skip:focus-visible{outline:3px solid var(--np-color-focus);outline-of
 button.np__skip svg{width:1.25rem;height:1.25rem;fill:currentColor;pointer-events:none}
 .np--inactive button.np__skip{bottom:1.5rem}
 
-/* --- accesibilidad --- */
+/* --- accessibility --- */
 .np__sr{
   position:absolute;width:1px;height:1px;padding:0;margin:-1px;
   overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;
 }
 
-/* Quien pide menos movimiento no debería recibir transiciones. */
 @media (prefers-reduced-motion:reduce){
   .np *,.np *::before,.np *::after{transition-duration:.01ms!important}
 }
-/* En alto contraste, los fondos translúcidos desaparecen: hacen falta bordes. */
+/* Forced colours drop translucent backgrounds: borders keep controls visible. */
 @media (forced-colors:active){
   button.np__btn,button.np__skip{border:1px solid ButtonText}
   .np__bar{background:Canvas}
 }
 `;
 
-let inyectado = false;
+let injected = false;
 
-/** Mete los estilos una vez por documento. */
+/** Adds the styles once per document. */
 export function injectStyles(doc: Document = document): void {
-  if (inyectado || doc.getElementById('nanoplayer-styles')) return;
+  if (injected || doc.getElementById('nanoplayer-styles')) return;
   const style = doc.createElement('style');
   style.id = 'nanoplayer-styles';
   style.textContent = CSS;
   doc.head.appendChild(style);
-  inyectado = true;
+  injected = true;
 }

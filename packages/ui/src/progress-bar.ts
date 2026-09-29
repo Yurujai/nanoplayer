@@ -155,7 +155,7 @@ export class ProgressBar {
       this.#range.setAttribute('aria-label', this.t('ui.live.window'));
       this.#range.setAttribute('aria-valuetext', p.atLiveEdge
         ? this.t('ui.live.badge')
-        : this.t('ui.live.behindBy', { tiempo: spokenTime(behind, this.t.lang) }));
+        : this.t('ui.live.behindBy', { time: spokenTime(behind, this.t.lang) }));
     }
     // `live: true` does not mean someone is broadcasting: before the event
     // starts there must be no LIVE badge over an empty screen, nor a "−0:00"
@@ -171,7 +171,7 @@ export class ProgressBar {
    * "LIVE" while showing something from five minutes ago breeds distrust.
    */
   #renderBadge(visible: boolean): void {
-    let badge = this.time.parentElement?.querySelector<HTMLButtonElement>('.np__directo') ?? null;
+    let badge = this.time.parentElement?.querySelector<HTMLButtonElement>('.np__live') ?? null;
     if (!visible) {
       badge?.remove();
       return;
@@ -179,7 +179,7 @@ export class ProgressBar {
     if (!badge) {
       badge = this.doc.createElement('button');
       badge.type = 'button';
-      badge.className = 'np__directo';
+      badge.className = 'np__live';
       badge.addEventListener('click', () => {
         this.player.seekToLive();
         this.onUse();
@@ -188,11 +188,11 @@ export class ProgressBar {
     }
     const atEdge = this.player.atLiveEdge;
     badge.textContent = atEdge ? this.t('ui.live.badge') : this.t('ui.live.goTo');
-    badge.classList.toggle('np__directo--atras', !atEdge);
+    badge.classList.toggle('np__live--behind', !atEdge);
     badge.disabled = atEdge;
     badge.setAttribute('aria-label', atEdge
       ? this.t('ui.live.badge')
-      : this.t('ui.live.goToBehindBy', { tiempo: spokenTime(this.player.behindLive, this.t.lang) }));
+      : this.t('ui.live.goToBehindBy', { time: spokenTime(this.player.behindLive, this.t.lang) }));
   }
 
   /** Time, segment and spoken position for `t`: "12 minutes and 15 seconds, First law". */
