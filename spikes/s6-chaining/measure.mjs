@@ -1,121 +1,121 @@
 /*
- * Medición automática del spike S6.
+ * Automatic measurement for spike S6.
  *
- * Mide el hueco de cada costura en las tres variantes, en Chrome de escritorio.
+ * Measures the gap of each seam in the three variants, on desktop Chrome.
  *
- * **Sin `--autoplay-policy=no-user-gesture-required`**, al contrario que los
- * arneses de S1 y S5. Ese flag es justo lo que este spike no puede permitirse:
- * con él, las tres variantes pasarían y la pregunta sobre la política quedaría
- * sin responder. La activación por gesto se consigue como en la vida real, con
- * un clic de verdad (`page.click`).
+ * **Without `--autoplay-policy=no-user-gesture-required`**, unlike the S1 and
+ * S5 harnesses. That flag is exactly what this spike cannot afford: with it,
+ * all three variants would pass and the policy question would stay
+ * unanswered. Gesture activation is obtained as in real life, with a real
+ * click (`page.click`).
  *
- * Y una advertencia que conviene no olvidar al leer la salida: **Chrome de
- * escritorio concede la activación por página**, no por elemento. Un clic en
- * cualquier sitio desbloquea todos los `<video>` de la página. iOS **no** hace
- * eso: allí el permiso es de cada elemento. Así que es de esperar que aquí la
- * variante B pase, y eso NO significa que vaya a pasar en un iPhone. La
- * respuesta de iOS solo sale del banco manual.
+ * And a warning worth remembering when reading the output: **desktop Chrome
+ * grants activation per page**, not per element. A click anywhere unlocks
+ * every `<video>` on the page. iOS does **not** do that: there the permission
+ * belongs to each element. So variant B is expected to pass here, and that
+ * does NOT mean it will pass on an iPhone. The iOS answer only comes from the
+ * manual bench.
  *
  *   node measure.mjs
  *   HEADED=1 node measure.mjs
- *   ENGINE=webkit node measure.mjs   (el motor de Safari — el que importa)
+ *   ENGINE=webkit node measure.mjs   (Safari's engine — the one that matters)
  *
- * Conviene generar un principal corto para no esperar de más:
+ * Generating a short main piece avoids waiting too long:
  *   DUR_MAIN=12 ./gen-media.sh
  */
 import { chromium, webkit } from 'playwright';
 
-const URL_BANCO = process.env.URL ?? 'http://127.0.0.1:8180/';
-const LIMITE_MS = Number(process.env.LIMITE ?? 90000);
+const BENCH_URL = process.env.URL ?? 'http://127.0.0.1:8180/';
+const LIMIT_MS = Number(process.env.LIMIT ?? 90000);
 
 const CONFIGS = [
-  { variante: 'A', lead: 0, salto: false, nota: 'la propuesta, sin anticipación' },
-  { variante: 'A', lead: 300, salto: false, nota: 'la propuesta, anticipando 300 ms' },
-  { variante: 'A', lead: 600, salto: false, nota: 'la propuesta, anticipando 600 ms' },
-  { variante: 'A', lead: 0, salto: true, nota: 'saltando la cabecera' },
-  { variante: 'B', lead: 0, salto: false, nota: 'sin desbloquear en el gesto' },
-  { variante: 'C', lead: 0, salto: false, nota: 'un elemento, cambiando src' },
+  { variant: 'A', lead: 0, skip: false, note: 'the proposal, no anticipation' },
+  { variant: 'A', lead: 300, skip: false, note: 'the proposal, anticipating 300 ms' },
+  { variant: 'A', lead: 600, skip: false, note: 'the proposal, anticipating 600 ms' },
+  { variant: 'A', lead: 0, skip: true, note: 'skipping the intro' },
+  { variant: 'B', lead: 0, skip: false, note: 'not unlocked in the gesture' },
+  { variant: 'C', lead: 0, skip: false, note: 'one element, swapping src' },
 ];
 
 const ms = (v) => (v === null || v === undefined ? '    —' : String(Math.round(v)).padStart(5));
 
-async function correr(browser, cfg) {
-  // Contexto nuevo en cada pasada: Chrome acumula "media engagement" por
-  // origen, y con él se vuelve más permisivo. Reutilizar el contexto haría que
-  // las últimas variantes salieran mejor por haber ido después, no por ser
-  // mejores.
+async function run(browser, cfg) {
+  // A new context on every pass: Chrome accumulates "media engagement" per
+  // origin, and becomes more permissive with it. Reusing the context would
+  // make the last variants come out better for having gone later, not for
+  // being better.
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
-  const errores = [];
-  page.on('pageerror', (e) => errores.push(String(e)));
-  page.on('console', (m) => { if (m.type() === 'error') errores.push(m.text()); });
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 
-  await page.goto(URL_BANCO, { waitUntil: 'load' });
-  await page.selectOption('#sel-variante', cfg.variante);
-  if (cfg.variante !== 'C') await page.selectOption('#sel-lead', String(cfg.lead));
+  await page.goto(BENCH_URL, { waitUntil: 'load' });
+  await page.selectOption('#sel-variant', cfg.variant);
+  if (cfg.variant !== 'C') await page.selectOption('#sel-lead', String(cfg.lead));
 
   await page.click('#btn-play');
 
-  if (cfg.salto) {
-    // Un momento para que la cabecera arranque de verdad antes de saltarla:
-    // saltar en el primer fotograma mediría el arranque, no el salto.
+  if (cfg.skip) {
+    // A moment for the intro to really start before skipping it: skipping on
+    // the first frame would measure the start, not the skip.
     await page.waitForTimeout(2000);
-    await page.click('#btn-saltar');
+    await page.click('#btn-skip');
   }
 
   const t0 = Date.now();
-  let informe = null;
-  while (Date.now() - t0 < LIMITE_MS) {
-    informe = await page.evaluate(() => {
-      try { return JSON.parse(document.getElementById('informe').textContent); }
+  let report = null;
+  while (Date.now() - t0 < LIMIT_MS) {
+    report = await page.evaluate(() => {
+      try { return JSON.parse(document.getElementById('report').textContent); }
       catch { return null; }
     });
-    if (informe && informe.completa) break;
+    if (report && report.complete) break;
     await page.waitForTimeout(500);
   }
 
   await ctx.close();
-  return { informe, errores, agotado: !(informe && informe.completa) };
+  return { report, errors, timedOut: !(report && report.complete) };
 }
 
-const MOTOR = process.env.ENGINE ?? 'chromium';
+const ENGINE = process.env.ENGINE ?? 'chromium';
 
 /*
- * S1 y S5 exigen Chrome del sistema porque el Chromium de Playwright no traía
- * códecs H.264. Eso **ya no es cierto** en las versiones recientes: se ha
- * comprobado aquí que decodifica el H.264 de `gen-media.sh`. Aun así se
- * prefiere Chrome si está instalado, y si no se cae al Chromium empaquetado en
- * lugar de no poder medir.
+ * S1 and S5 require the system Chrome because Playwright's Chromium did not
+ * ship H.264 codecs. That is **no longer true** in recent versions: it was
+ * checked here that it decodes the H.264 from `gen-media.sh`. Even so, Chrome
+ * is preferred if installed, and otherwise it falls back to the bundled
+ * Chromium instead of being unable to measure.
  *
- * WebKit es el que de verdad interesa —es el motor de Safari— pero **no es
- * Safari de iOS**: su política de autoplay no es la del dispositivo. Sirve para
- * ver la forma de la respuesta, no para darla por buena.
+ * WebKit is the one that really matters —it is Safari's engine— but **it is
+ * not iOS Safari**: its autoplay policy is not the device's. It shows the
+ * shape of the answer, not an answer to take as good.
  */
-async function abrirNavegador() {
+async function openBrowser() {
   const headless = !process.env.HEADED;
-  if (MOTOR === 'webkit') {
-    return { browser: await webkit.launch({ headless }), cual: 'WebKit (Playwright)' };
+  if (ENGINE === 'webkit') {
+    return { browser: await webkit.launch({ headless }), which: 'WebKit (Playwright)' };
   }
   try {
     const browser = await chromium.launch({ channel: 'chrome', headless });
-    return { browser, cual: 'Google Chrome del sistema' };
+    return { browser, which: 'system Google Chrome' };
   } catch {
     const browser = await chromium.launch({ headless });
-    return { browser, cual: 'Chromium de Playwright (no hay Chrome instalado)' };
+    return { browser, which: 'Playwright Chromium (Chrome is not installed)' };
   }
 }
 
-const { browser, cual } = await abrirNavegador();
+const { browser, which } = await openBrowser();
 
 /*
- * Comprobar que este navegador decodifica el H.264 de las piezas ANTES de
- * medir nada. Sin esto, un navegador sin códecs daría cero fotogramas y los
- * huecos saldrían nulos: un fallo de entorno disfrazado de resultado.
+ * Check that this browser decodes the pieces' H.264 BEFORE measuring anything.
+ * Without this, a browser with no codecs would give zero frames and the gaps
+ * would come out null: an environment failure disguised as a result.
  */
 {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
-  await page.goto(URL_BANCO, { waitUntil: 'load' });
+  await page.goto(BENCH_URL, { waitUntil: 'load' });
   const ok = await page.evaluate(() => new Promise((res) => {
     const v = document.createElement('video');
     v.muted = true; v.src = 'media/intro.mp4';
@@ -125,74 +125,74 @@ const { browser, cual } = await abrirNavegador();
   }));
   await ctx.close();
   if (!ok) {
-    console.error(`\n  ${cual} no decodifica el H.264 de media/. Sin eso no hay nada que medir.`);
+    console.error(`\n  ${which} does not decode the H.264 in media/. Without that there is nothing to measure.`);
     await browser.close();
     process.exit(1);
   }
 }
 
-console.log(`\nBanco:   ${URL_BANCO}`);
-console.log(`Motor:   ${cual}`);
-console.log('Los navegadores de escritorio conceden la activación POR PÁGINA.');
-console.log('Que la variante B pase aquí no dice nada sobre iOS.\n');
+console.log(`\nBench:   ${BENCH_URL}`);
+console.log(`Engine:  ${which}`);
+console.log('Desktop browsers grant activation PER PAGE.');
+console.log('Variant B passing here says nothing about iOS.\n');
 
-const filas = [];
+const rows = [];
 
 for (const cfg of CONFIGS) {
-  const etiqueta = `${cfg.variante}${cfg.salto ? ' (salto)' : ''} lead=${cfg.lead}ms`;
-  process.stdout.write(`  ${etiqueta.padEnd(22)} ${cfg.nota} ... `);
+  const label = `${cfg.variant}${cfg.skip ? ' (skip)' : ''} lead=${cfg.lead}ms`;
+  process.stdout.write(`  ${label.padEnd(22)} ${cfg.note} ... `);
 
-  const { informe, errores, agotado } = await correr(browser, cfg);
+  const { report, errors, timedOut } = await run(browser, cfg);
 
-  if (!informe) { console.log('SIN INFORME'); continue; }
-  console.log(agotado ? 'incompleto (se agotó el tiempo)' : 'ok');
+  if (!report) { console.log('NO REPORT'); continue; }
+  console.log(timedOut ? 'incomplete (timed out)' : 'ok');
 
-  for (const c of informe.costuras) {
-    filas.push({
-      config: etiqueta,
-      costura: `${c.de}→${c.a}`,
-      motivo: c.motivo,
-      hueco: c.huecoMs,
-      latencia: c.latenciaMs,
-      bloqueado: c.bloqueado,
-      conSonido: c.conSonido,
-      pausada: c.pausadaTrasSonido,
-      rs: c.readyStateEntrante,
+  for (const s of report.seams) {
+    rows.push({
+      config: label,
+      seam: `${s.from}→${s.to}`,
+      reason: s.reason,
+      gap: s.gapMs,
+      latency: s.latencyMs,
+      blocked: s.blocked,
+      withSound: s.withSound,
+      paused: s.pausedAfterUnmute,
+      rs: s.incomingReadyState,
     });
   }
-  if (informe.rvfc === false) {
-    console.log('    AVISO: sin requestVideoFrameCallback, los huecos son estimaciones.');
+  if (report.rvfc === false) {
+    console.log('    WARNING: no requestVideoFrameCallback, the gaps are estimates.');
   }
-  for (const e of errores.slice(0, 3)) console.log(`    error de página: ${e}`);
+  for (const e of errors.slice(0, 3)) console.log(`    page error: ${e}`);
 }
 
-console.log('\n  config                 costura       motivo  hueco  latenc  bloq  sonido  pausada  rs');
+console.log('\n  config                 seam          reason    gap  latency  blkd   sound  paused  rs');
 console.log('  ' + '-'.repeat(86));
-for (const f of filas) {
+for (const r of rows) {
   console.log(
-    '  ' + f.config.padEnd(22) +
-    f.costura.padEnd(14) +
-    String(f.motivo).padEnd(8) +
-    ms(f.hueco) +
-    ms(f.latencia) + '  ' +
-    String(f.bloqueado ? 'sí' : 'no').padStart(4) +
-    String(f.conSonido === null ? '—' : (f.conSonido ? 'sí' : 'NO')).padStart(8) +
-    String(f.pausada ? 'sí' : 'no').padStart(9) +
-    String(f.rs === null ? '—' : f.rs).padStart(4)
+    '  ' + r.config.padEnd(22) +
+    r.seam.padEnd(14) +
+    String(r.reason).padEnd(8) +
+    ms(r.gap) +
+    ms(r.latency) + '  ' +
+    String(r.blocked ? 'yes' : 'no').padStart(4) +
+    String(r.withSound === null ? '—' : (r.withSound ? 'yes' : 'NO')).padStart(8) +
+    String(r.paused ? 'yes' : 'no').padStart(9) +
+    String(r.rs === null ? '—' : r.rs).padStart(4)
   );
 }
 
 console.log(`
-  hueco    milisegundos entre el último fotograma presentado de la pieza
-           saliente y el primero de la entrante. Un fotograma a 30 fps son 33 ms
-  latenc   desde que se pidió el play() hasta el primer fotograma presentado.
-           Si el hueco ≈ la latencia, el problema es que se arrancó tarde
-  bloq     el play fue rechazado con NotAllowedError
-  sonido   la petición iba CON sonido. Si pone NO, esa fila no prueba nada
-           sobre la política: un play silenciado se concede siempre
-  pausada  tras quitarle el silencio, el navegador la pausó
-  rs       readyState de la entrante al pedirle el play. Menos de 2 significa
-           que el hueco es de búfer, no de política
+  gap      milliseconds between the outgoing piece's last presented frame and
+           the incoming one's first. One frame at 30 fps is 33 ms
+  latency  from the play() request to the first presented frame.
+           If gap ≈ latency, the problem is that it started too late
+  blkd     the play was rejected with NotAllowedError
+  sound    the request went WITH sound. If it says NO, that row proves nothing
+           about the policy: a muted play is always granted
+  paused   after unmuting it, the browser paused it
+  rs       readyState of the incoming piece when its play was requested.
+           Below 2 means the gap is a buffer gap, not a policy one
 `);
 
 await browser.close();

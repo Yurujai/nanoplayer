@@ -1,150 +1,150 @@
 /*
- * Spike S5 — sincronización de dos directos HLS independientes.
+ * Spike S5 — synchronising two independent live HLS streams.
  *
- * Código desechable: sirve para responder una pregunta, no para reutilizarse.
+ * Throwaway code: it answers one question, it is not meant for reuse.
  *
- * La pregunta: **¿puede el reproductor mantener juntos dos directos que salen
- * alineados de origen?** No si el origen los alinea —eso es trabajo del
- * servidor de emisión— sino si el navegador es capaz de no separarlos.
+ * The question: **can the player keep together two live streams that leave
+ * the source aligned?** Not whether the source aligns them —that is the
+ * broadcast server's job— but whether the browser manages not to pull them
+ * apart.
  *
- * Por qué hace falta medir dos cosas a la vez:
+ * Why two things have to be measured at once:
  *
- *   - `currentTime` es la posición dentro de la ventana de la lista. Cada flujo
- *     tiene su propia ventana, que empieza donde le toca y **se desplaza** al
- *     caducar segmentos. Comparar dos currentTime es comparar relojes sin
- *     origen común: puede dar cero estando desincronizados, o al revés.
+ *   - `currentTime` is the position within the playlist window. Each stream has
+ *     its own window, which starts wherever it happens to and **slides** as
+ *     segments expire. Comparing two currentTime values is comparing clocks
+ *     with no common origin: it can read zero while out of sync, or the reverse.
  *
- *   - `playingDate` es la hora absoluta de la posición actual, y solo existe si
- *     la lista trae `EXT-X-PROGRAM-DATE-TIME`. Esa sí es comparable: dos
- *     posiciones con la misma hora son el mismo instante.
+ *   - `playingDate` is the absolute time of the current position, and it only
+ *     exists if the playlist carries `EXT-X-PROGRAM-DATE-TIME`. That one is
+ *     comparable: two positions with the same time are the same instant.
  *
- * Medir ambas es lo que permite responder qué se compra activando la etiqueta.
+ * Measuring both is what answers what turning the tag on buys.
  */
 
 const $ = (id) => document.getElementById(id);
 
 const CFG = {
-  // Cuántos segmentos por detrás del borde arranca hls.js. Es el parámetro que
-  // más influye en si dos instancias empiezan juntas o separadas.
+  // How many segments behind the edge hls.js starts. It is the parameter with
+  // the most influence on whether two instances start together or apart.
   liveSyncDurationCount: Number(new URLSearchParams(location.search).get('lsdc') ?? 3),
 };
 
-const flujos = [
+const streams = [
   { id: 'presenter', el: $('vPresenter'), hls: null },
   { id: 'slides', el: $('vSlides'), hls: null },
 ];
 
-const muestras = [];
-let midiendo = false;
-let arranque = null;
+const samples = [];
+let measuring = false;
+let startedAt = null;
 
 function log(txt) {
   const l = document.createElement('div');
   l.textContent = `${new Date().toLocaleTimeString()}  ${txt}`;
-  $('registro').prepend(l);
-  while ($('registro').childElementCount > 60) $('registro').lastElementChild?.remove();
+  $('log').prepend(l);
+  while ($('log').childElementCount > 60) $('log').lastElementChild?.remove();
 }
 
-/* ------------------------------------------------------------------ carga -- */
+/* ------------------------------------------------------------------- load -- */
 
-function crear(flujo) {
+function create(stream) {
   const hls = new Hls({
     lowLatencyMode: false,
     liveSyncDurationCount: CFG.liveSyncDurationCount,
     enableWorker: true,
   });
-  flujo.hls = hls;
-  hls.attachMedia(flujo.el);
-  hls.loadSource(`vivo/${flujo.id}.m3u8`);
+  stream.hls = hls;
+  hls.attachMedia(stream.el);
+  hls.loadSource(`live/${stream.id}.m3u8`);
 
   hls.on(Hls.Events.MANIFEST_PARSED, () => {
-    const conPdt = hls.levels?.[0]?.details?.hasProgramDateTime;
-    log(`${flujo.id}: lista cargada · PROGRAM-DATE-TIME: ${conPdt ? 'sí' : 'NO'}`);
-    flujo.el.play().catch((e) => log(`${flujo.id}: play rechazado — ${e.name}`));
+    const withPdt = hls.levels?.[0]?.details?.hasProgramDateTime;
+    log(`${stream.id}: playlist loaded · PROGRAM-DATE-TIME: ${withPdt ? 'yes' : 'NO'}`);
+    stream.el.play().catch((e) => log(`${stream.id}: play rejected — ${e.name}`));
   });
   hls.on(Hls.Events.ERROR, (_e, d) => {
-    if (d.fatal) log(`${flujo.id}: ERROR ${d.type} / ${d.details}`);
+    if (d.fatal) log(`${stream.id}: ERROR ${d.type} / ${d.details}`);
   });
-  flujo.el.addEventListener('waiting', () => log(`${flujo.id}: sin búfer`));
+  stream.el.addEventListener('waiting', () => log(`${stream.id}: out of buffer`));
 }
 
-/* ------------------------------------------------------------- medición --- */
+/* ------------------------------------------------------------ measuring --- */
 
-/** Hora absoluta de la posición actual. `null` si la lista no trae la etiqueta. */
-function horaDe(flujo) {
-  const d = flujo.hls?.playingDate;
+/** Absolute time of the current position. `null` if the playlist lacks the tag. */
+function timeOf(stream) {
+  const d = stream.hls?.playingDate;
   return d instanceof Date && !Number.isNaN(d.getTime()) ? d.getTime() : null;
 }
 
-function medir() {
-  const [a, b] = flujos;
-  const ha = horaDe(a), hb = horaDe(b);
+function measure() {
+  const [a, b] = streams;
+  const ta = timeOf(a), tb = timeOf(b);
 
-  // Deriva verdadera: diferencia de hora absoluta entre las dos posiciones.
-  const porHora = (ha !== null && hb !== null) ? hb - ha : null;
-  // Lo único que se podría comparar sin la etiqueta.
-  const porTiempo = (b.el.currentTime - a.el.currentTime) * 1000;
+  // True drift: difference in absolute time between the two positions.
+  const byTime = (ta !== null && tb !== null) ? tb - ta : null;
+  // All that could be compared without the tag.
+  const byCurrentTime = (b.el.currentTime - a.el.currentTime) * 1000;
+  // Delay behind live: how far behind the real time it is playing.
+  const delay = ta !== null ? Date.now() - ta : null;
 
-  // Retraso respecto al directo: cuánto va por detrás de la hora real.
-  const retraso = ha !== null ? Date.now() - ha : null;
-
-  return { porHora, porTiempo, retraso, t: performance.now() };
+  return { byTime, byCurrentTime, delay, t: performance.now() };
 }
 
-function pintar(m) {
+function render(m) {
   const fmt = (v, u = 'ms') => v === null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(0)} ${u}`;
-  $('porHora').textContent = fmt(m.porHora);
-  $('porHora').className = 'val ' + (m.porHora === null ? ''
-    : Math.abs(m.porHora) > 200 ? 'mal' : Math.abs(m.porHora) > 50 ? 'medio' : 'bien');
-  $('porTiempo').textContent = fmt(m.porTiempo);
-  $('retraso').textContent = m.retraso === null ? '—' : `${(m.retraso / 1000).toFixed(1)} s`;
-  $('muestras').textContent = String(muestras.length);
+  $('byTime').textContent = fmt(m.byTime);
+  $('byTime').className = 'val ' + (m.byTime === null ? ''
+    : Math.abs(m.byTime) > 200 ? 'bad' : Math.abs(m.byTime) > 50 ? 'fair' : 'good');
+  $('byCurrentTime').textContent = fmt(m.byCurrentTime);
+  $('delay').textContent = m.delay === null ? '—' : `${(m.delay / 1000).toFixed(1)} s`;
+  $('samples').textContent = String(samples.length);
 
-  if (muestras.length > 1) {
-    const abs = muestras.map((x) => Math.abs(x.porHora ?? 0)).sort((p, q) => p - q);
-    $('mediana').textContent = `${abs[Math.floor(abs.length / 2)].toFixed(0)} ms`;
-    $('maxima').textContent = `${abs[abs.length - 1].toFixed(0)} ms`;
+  if (samples.length > 1) {
+    const abs = samples.map((x) => Math.abs(x.byTime ?? 0)).sort((p, q) => p - q);
+    $('median').textContent = `${abs[Math.floor(abs.length / 2)].toFixed(0)} ms`;
+    $('max').textContent = `${abs[abs.length - 1].toFixed(0)} ms`;
   }
 }
 
 setInterval(() => {
-  const m = medir();
-  if (midiendo && m.porHora !== null) muestras.push(m);
-  pintar(m);
+  const m = measure();
+  if (measuring && m.byTime !== null) samples.push(m);
+  render(m);
 }, 250);
 
-/* --------------------------------------------------------------- controles */
+/* --------------------------------------------------------------- controls */
 
-$('btn-cargar').onclick = () => {
-  if (!Hls.isSupported()) { log('hls.js no está soportado aquí'); return; }
-  for (const f of flujos) crear(f);
-  $('btn-cargar').disabled = true;
-  $('btn-medir').disabled = false;
-  $('btn-cortar').disabled = false;
+$('btn-load').onclick = () => {
+  if (!Hls.isSupported()) { log('hls.js is not supported here'); return; }
+  for (const s of streams) create(s);
+  $('btn-load').disabled = true;
+  $('btn-measure').disabled = false;
+  $('btn-cut').disabled = false;
   log(`liveSyncDurationCount = ${CFG.liveSyncDurationCount}`);
 };
 
-$('btn-medir').onclick = () => {
-  midiendo = !midiendo;
-  if (midiendo) { muestras.length = 0; arranque = performance.now(); log('midiendo…'); }
-  else log(`medición parada tras ${((performance.now() - arranque) / 1000).toFixed(0)} s`);
-  $('btn-medir').textContent = midiendo ? 'Parar medición' : 'Empezar medición';
+$('btn-measure').onclick = () => {
+  measuring = !measuring;
+  if (measuring) { samples.length = 0; startedAt = performance.now(); log('measuring…'); }
+  else log(`measurement stopped after ${((performance.now() - startedAt) / 1000).toFixed(0)} s`);
+  $('btn-measure').textContent = measuring ? 'Stop measuring' : 'Start measuring';
 };
 
-/** Corta el búfer de un flujo para ver si recupera o se queda descolgado. */
-$('btn-cortar').onclick = async () => {
-  const f = flujos[1];
-  log('cortando "slides" 3 s…');
-  f.el.pause();
+/** Cuts one stream's buffer to see whether it recovers or stays behind. */
+$('btn-cut').onclick = async () => {
+  const s = streams[1];
+  log('cutting "slides" for 3 s…');
+  s.el.pause();
   await new Promise((r) => setTimeout(r, 3000));
-  await f.el.play().catch(() => {});
-  log('reanudado');
+  await s.el.play().catch(() => {});
+  log('resumed');
 };
 
-$('btn-borde').onclick = () => {
-  for (const f of flujos) {
-    const d = f.hls?.liveSyncPosition;
-    if (typeof d === 'number') f.el.currentTime = d;
+$('btn-edge').onclick = () => {
+  for (const s of streams) {
+    const d = s.hls?.liveSyncPosition;
+    if (typeof d === 'number') s.el.currentTime = d;
   }
-  log('ambos llevados al borde del directo');
+  log('both taken to the live edge');
 };

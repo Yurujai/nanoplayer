@@ -1,54 +1,53 @@
 /*
- * Spike S1 — sincronización dual-stream.
+ * Spike S1 — dual-stream synchronisation.
  *
- * Código desechable: sirve para responder preguntas, no para reutilizarse.
- * Lo que sobrevive de aquí son las conclusiones, no las líneas.
+ * Throwaway code: it answers questions, it is not meant for reuse. What
+ * survives are the conclusions, not the lines.
  *
- * Modelo maestro/esclavo:
+ * Master/slave model:
  *
- *   - El maestro es el stream que lleva el audio. Nunca se le toca el
- *     playbackRate: alterar la velocidad del audio se oye, y un reproductor que
- *     hace "wow" en la voz del ponente es inaceptable.
- *   - El esclavo persigue al maestro. Toda la corrección se aplica sobre él.
+ *   - The master is the stream carrying the audio. Its playbackRate is never
+ *     touched: changing the speed of audio is audible, and a player that
+ *     "wows" the speaker's voice is unacceptable.
+ *   - The slave chases the master. All correction is applied to it.
  *
- * Dos regímenes de corrección:
+ * Two correction regimes:
  *
- *   - Deriva pequeña  -> control proporcional sobre playbackRate. Invisible.
- *   - Deriva grande   -> salto duro (asignar currentTime). Se ve, pero recupera.
+ *   - Small drift -> proportional control over playbackRate. Invisible.
+ *   - Large drift -> hard seek (assign currentTime). Visible, but it recovers.
  *
- * La franja entre ambos umbrales es la decisión de diseño importante: demasiado
- * estrecha y el esclavo salta constantemente; demasiado ancha y los dos vídeos
- * se ven desincronizados sin que el sistema reaccione.
+ * The band between both thresholds is the important design decision: too
+ * narrow and the slave keeps jumping; too wide and the two videos look out of
+ * sync without the system reacting.
  */
 
 const CFG = {
-  // Umbral de ENGANCHE: por debajo de esto no se empieza a corregir. Un frame a
-  // 30fps son 33ms; perseguir menos que un frame visible es perseguir ruido.
+  // ENGAGE threshold: below this no correction starts. One frame at 30 fps is
+  // 33 ms; chasing less than a visible frame is chasing noise.
   deadZone: 0.033,
-  // Umbral de SUELTA. Una vez enganchado, se corrige hasta bajar de aquí, no
-  // hasta rozar el umbral de enganche.
+  // RELEASE threshold. Once engaged, correction continues until drift drops
+  // below this, not until it just touches the engage threshold.
   //
-  // Sin esta histéresis el controlador tiene error de estado estacionario: se
-  // para justo al entrar en la zona muerta y deja un offset permanente de casi
-  // un frame. Medido en la primera pasada del spike: 28.8 ms de mediana, fijos.
+  // Without this hysteresis the controller has steady-state error: it stops
+  // right on entering the dead zone and leaves a permanent offset of almost a
+  // frame. Measured on the spike's first pass: a fixed 28.8 ms median.
   releaseZone: 0.008,
-  // Por encima de esto, salto duro: el control proporcional tardaría demasiado.
+  // Above this, hard seek: proportional control would take too long.
   hardSeek: 0.5,
-  // Ganancia del control proporcional. Medido en el barrido de parámetros: es
-  // ESTA la que gobierna el tiempo de recuperación, no el techo de abajo.
-  // Subirla de 0.6 a 1.2 pasó la recuperación de 3.4 s a 1.7 s, a cambio de
-  // 3 ms más de deriva en régimen estable. Buen cambio.
+  // Proportional gain. Measured in the parameter sweep: THIS governs recovery
+  // time, not the ceiling below. Raising it from 0.6 to 1.2 took recovery from
+  // 3.4 s to 1.7 s, at the cost of 3 ms more steady-state drift. A good trade.
   gain: 1.2,
-  // Techo de desviación de velocidad del esclavo. Puede ser generoso porque el
-  // esclavo NO lleva audio: el motivo habitual para limitarlo no aplica aquí.
+  // Ceiling on the slave's speed deviation. It can be generous because the
+  // slave carries NO audio: the usual reason to limit it does not apply.
   maxRateDelta: 0.25,
-  // Qué hacer cuando el esclavo se queda sin buffer.
-  //   'pauseBoth'  -> congela los dos. Coherente visualmente, corta el audio.
-  //   'letMasterRun' -> el maestro sigue, el esclavo recupera después.
+  // What to do when the slave runs out of buffer.
+  //   'pauseBoth'    -> freezes both. Visually coherent, cuts the audio.
+  //   'letMasterRun' -> the master keeps going, the slave catches up later.
   stallPolicy: 'pauseBoth',
 };
 
-// Sobrescribible por query string para barrer parámetros sin editar el fichero:
+// Overridable from the query string, to sweep parameters without editing:
 //   index.html?maxRateDelta=0.25&gain=0.9
 for (const [k, v] of new URLSearchParams(location.search)) {
   if (!(k in CFG)) continue;
@@ -78,22 +77,22 @@ class DualSync {
   _wire() {
     const { master, slave } = this;
 
-    // --- Propagación de estado -------------------------------------------
+    // --- State propagation ----------------------------------------------
     this.on(master, 'play', () => {
       if (!this._stalledByUs) slave.play().catch(() => {});
     });
     this.on(master, 'pause', () => slave.pause());
     this.on(master, 'ratechange', () => this._applyRate(0));
 
-    // Seek: el esclavo va directo al mismo punto. Con GOP de 2s el navegador
-    // decodifica desde el keyframe previo, así que esto tarda pero es exacto.
+    // Seek: the slave goes straight to the same point. With a 2 s GOP the
+    // browser decodes from the previous keyframe, so it is slow but exact.
     this.on(master, 'seeking', () => {
       slave.currentTime = this._clampToSlave(master.currentTime);
     });
 
     // --- Buffering --------------------------------------------------------
-    // El maestro se queda sin buffer: el esclavo debe esperarlo siempre, o
-    // seguiría avanzando y acumularía deriva imposible de recuperar en suave.
+    // The master runs out of buffer: the slave must always wait for it, or it
+    // would keep going and build up drift too large to recover smoothly.
     this.on(master, 'waiting', () => {
       this.stalls++;
       slave.pause();
@@ -102,7 +101,7 @@ class DualSync {
       if (!master.paused && !this._stalledByUs) slave.play().catch(() => {});
     });
 
-    // El esclavo se queda sin buffer: aquí sí hay decisión de diseño.
+    // The slave runs out of buffer: this is where a design decision is needed.
     this.on(slave, 'waiting', () => {
       this.stalls++;
       if (CFG.stallPolicy === 'pauseBoth' && !master.paused) {
@@ -123,7 +122,7 @@ class DualSync {
     return Number.isFinite(d) ? Math.min(t, Math.max(0, d - 0.05)) : t;
   }
 
-  /** Deriva instantánea. Negativa = el esclavo va por detrás del maestro. */
+  /** Instant drift. Negative = the slave is behind the master. */
   drift() {
     return this.slave.currentTime - this.master.currentTime;
   }
@@ -132,7 +131,7 @@ class DualSync {
     const base = this.master.playbackRate;
     const a = Math.abs(drift);
 
-    // Histéresis: engancha en deadZone, suelta en releaseZone.
+    // Hysteresis: engage at deadZone, release at releaseZone.
     if (!this._correcting && a > CFG.deadZone) this._correcting = true;
     else if (this._correcting && a < CFG.releaseZone) this._correcting = false;
 
@@ -140,7 +139,7 @@ class DualSync {
       this.slave.playbackRate = base;
       return base;
     }
-    // Control proporcional: si el esclavo va por detrás (drift < 0), acelera.
+    // Proportional control: if the slave is behind (drift < 0), speed it up.
     const delta = Math.max(
       -CFG.maxRateDelta,
       Math.min(CFG.maxRateDelta, -CFG.gain * drift)
@@ -150,7 +149,7 @@ class DualSync {
     return rate;
   }
 
-  /** Un paso del lazo de control. Devuelve el estado para la UI. */
+  /** One step of the control loop. Returns the state for the UI. */
   tick() {
     const drift = this.drift();
     const adrift = Math.abs(drift);
@@ -170,8 +169,8 @@ class DualSync {
       action = this._correcting ? 'correcting' : 'ok';
     }
 
-    // El maxDrift solo cuenta en reproducción estable: durante un seek la
-    // medida no significa nada.
+    // maxDrift only counts during steady playback: during a seek the reading
+    // means nothing.
     if (action !== 'seeking' && !this.master.paused) {
       this.maxDrift = Math.max(this.maxDrift, adrift);
       this.samples.push(drift);
@@ -201,7 +200,7 @@ const master = document.getElementById('master');
 const slave = document.getElementById('slave');
 const sync = new DualSync(master, slave);
 
-// Expuesto para el arnés de medición automática (measure.mjs).
+// Exposed for the automatic measurement harness (measure.mjs).
 window.__sync = sync;
 window.__CFG = CFG;
 
@@ -216,12 +215,12 @@ function fmt(n, d = 3) {
 function drawChart() {
   const w = canvas.width, h = canvas.height;
   const mid = h / 2;
-  // Escala: la zona visible llega hasta el umbral de salto duro.
+  // Scale: the visible area reaches the hard-seek threshold.
   const scale = mid / CFG.hardSeek;
 
   ctx.clearRect(0, 0, w, h);
 
-  // Bandas de referencia.
+  // Reference bands.
   ctx.fillStyle = 'rgba(136,255,0,0.10)';
   ctx.fillRect(0, mid - CFG.deadZone * scale, w, CFG.deadZone * scale * 2);
   ctx.strokeStyle = 'rgba(255,255,255,0.25)';
@@ -256,8 +255,8 @@ function render(state) {
   drawChart();
 }
 
-// requestVideoFrameCallback se dispara con la presentación real del frame, que
-// es más fiel que rAF para medir. Si no existe, rAF sirve.
+// requestVideoFrameCallback fires on the actual presentation of the frame,
+// which measures more faithfully than rAF. Where it does not exist, rAF will do.
 function loop() {
   render(sync.tick());
   if (master.requestVideoFrameCallback) {
@@ -268,7 +267,7 @@ function loop() {
 }
 loop();
 
-/* --------------------------------------------------- Escenarios de prueba - */
+/* ------------------------------------------------------- Test scenarios -- */
 
 el('btn-play').onclick = () => (master.paused ? master.play() : master.pause());
 el('btn-seek').onclick = () => {
@@ -276,8 +275,8 @@ el('btn-seek').onclick = () => {
 };
 el('btn-reset').onclick = () => { sync.reset(); };
 
-// Simula que el esclavo se queda sin buffer, que es el caso que no se puede
-// provocar a voluntad con la red.
+// Simulates the slave running out of buffer, which the network cannot be made
+// to do on demand.
 el('btn-stall').onclick = () => {
   const was = slave.playbackRate;
   slave.pause();
@@ -289,7 +288,7 @@ el('btn-stall').onclick = () => {
   }, 1500);
 };
 
-// Desincroniza a lo bruto para ver cuánto tarda en recuperar y por qué vía.
+// Knocks it out of sync on purpose, to see how long recovery takes and by which path.
 el('btn-nudge').onclick = () => { slave.currentTime += 0.25; };
 el('btn-shove').onclick = () => { slave.currentTime += 2.0; };
 

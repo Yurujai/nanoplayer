@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Spike S6 — encadenado de cabecera y cola</title>
-<link rel="icon" href="data:,"><!-- evita el 404 de favicon que ensucia el log -->
+<title>Spike S6 — intro and outro chaining</title>
+<link rel="icon" href="data:,"><!-- avoids the favicon 404 that clutters the log -->
 
 <style>
   :root { color-scheme: dark; }
@@ -18,17 +18,17 @@
   h1 { font-size: 1.1rem; margin: 0 0 .25rem; }
   p.sub { margin: 0 0 1.25rem; color: #9aa3ad; font-size: .875rem; }
 
-  /* Las piezas van apiladas en el mismo hueco: el cambio es solo opacidad.
-     El fondo es negro a propósito — si aparece, es que hubo hueco. */
-  .escenario {
+  /* The pieces are stacked in the same slot: the switch is only opacity.
+     The background is black on purpose — if it shows, there was a gap. */
+  .stage {
     position: relative; width: 100%; aspect-ratio: 16 / 9;
     background: #000; border-radius: 8px; overflow: hidden;
   }
-  .escenario video {
+  .stage video {
     position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: contain; display: block;
   }
-  .vacio {
+  .empty {
     position: absolute; inset: 0; display: grid; place-items: center;
     color: #6b727a; font-size: .875rem; text-align: center; padding: 1rem;
   }
@@ -53,23 +53,23 @@
   button:hover:not(:disabled), select:hover { background: #303740; }
   button:disabled { opacity: .45; cursor: default; }
   button:focus-visible, select:focus-visible { outline: 3px solid #6aa9ff; outline-offset: 2px; }
-  button.primario { background: #2f6fd0; border-color: #3f7fe0; }
-  button.saltar { background: #3a3f47; }
+  button.primary { background: #2f6fd0; border-color: #3f7fe0; }
+  button.skip { background: #3a3f47; }
   label { font-size: .8rem; color: #9aa3ad; display: inline-flex; gap: .35rem; align-items: center; }
 
   table { width: 100%; border-collapse: collapse; font-size: .84rem; margin-top: .6rem; }
   th, td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid #2a2f36; }
   th { color: #8b939c; font-weight: 600; font-size: .74rem; text-transform: uppercase; }
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
-  .tabla-scroll { overflow-x: auto; }
+  .table-scroll { overflow-x: auto; }
 
   pre {
     background: #101216; border: 1px solid #2a2f36; border-radius: 6px;
     padding: .75rem; overflow-x: auto; font-size: .76rem; line-height: 1.45;
     margin: .6rem 0 0; white-space: pre-wrap; word-break: break-word;
   }
-  .nota { font-size: .8rem; color: #8b939c; margin: .6rem 0 0; }
-  .aviso {
+  .note { font-size: .8rem; color: #8b939c; margin: .6rem 0 0; }
+  .notice {
     margin-top: 1rem; padding: .7rem .85rem; border-radius: 6px; font-size: .84rem;
     background: rgba(255,176,32,.1); border: 1px solid rgba(255,176,32,.45); color: #ffc65c;
   }
@@ -78,86 +78,86 @@
 <body>
 <main>
 
-<h1>Spike S6 — encadenado de cabecera y cola</h1>
+<h1>Spike S6 — intro and outro chaining</h1>
 <p class="sub">
-  Tres piezas de colores planos y distintos. Si entre una y otra aparece
-  <strong>negro</strong>, hubo hueco: el fondo del escenario es lo único negro
-  que hay en toda la página.
+  Three pieces in distinct flat colours. If <strong>black</strong> shows
+  between one and the next, there was a gap: the stage background is the only
+  black thing on the whole page.
 </p>
 
-<div class="escenario" id="escenario">
-  <div class="vacio" id="vacio">
-    Nada descargado todavía.<br>Los elementos se crean al pulsar reproducir.
+<div class="stage" id="stage">
+  <div class="empty" id="empty">
+    Nothing downloaded yet.<br>The elements are created when play is pressed.
   </div>
 </div>
 
 <div class="controls">
-  <button id="btn-play" class="primario">Reproducir</button>
-  <button id="btn-saltar" class="saltar" hidden>Saltar cabecera</button>
-  <button id="btn-pausa" disabled>Pausar</button>
-  <button id="btn-reiniciar" disabled>Reiniciar</button>
+  <button id="btn-play" class="primary">Play</button>
+  <button id="btn-skip" class="skip" hidden>Skip intro</button>
+  <button id="btn-pause" disabled>Pause</button>
+  <button id="btn-reset" disabled>Reset</button>
 </div>
 
 <div class="controls">
   <label>
-    Variante
-    <select id="sel-variante">
-      <option value="A">A · dos elementos, desbloqueados en el gesto</option>
-      <option value="B">B · dos elementos, sin desbloquear</option>
-      <option value="C">C · un elemento, cambiando src</option>
+    Variant
+    <select id="sel-variant">
+      <option value="A">A · two elements, unlocked in the gesture</option>
+      <option value="B">B · two elements, not unlocked</option>
+      <option value="C">C · one element, swapping src</option>
     </select>
   </label>
   <label>
-    Anticipación
+    Anticipation
     <select id="sel-lead">
-      <option value="0">0 ms · arrancar al terminar</option>
-      <option value="150">150 ms antes</option>
-      <option value="300">300 ms antes</option>
-      <option value="600">600 ms antes</option>
+      <option value="0">0 ms · start at the end</option>
+      <option value="150">150 ms before</option>
+      <option value="300">300 ms before</option>
+      <option value="600">600 ms before</option>
     </select>
   </label>
 </div>
 
 <div class="panel">
   <div class="stats">
-    <div class="stat"><div class="k">Pieza</div><div class="val" id="d-pieza">—</div></div>
-    <div class="stat"><div class="k">Hueco cabecera→principal</div><div class="val" id="d-costura1">—</div></div>
-    <div class="stat"><div class="k">Hueco principal→cola</div><div class="val" id="d-costura2">—</div></div>
-    <div class="stat"><div class="k">Play bloqueado</div><div class="val" id="d-bloqueo">—</div></div>
+    <div class="stat"><div class="k">Piece</div><div class="val" id="d-piece">—</div></div>
+    <div class="stat"><div class="k">Gap intro→main</div><div class="val" id="d-seam1">—</div></div>
+    <div class="stat"><div class="k">Gap main→outro</div><div class="val" id="d-seam2">—</div></div>
+    <div class="stat"><div class="k">Play blocked</div><div class="val" id="d-blocked">—</div></div>
   </div>
 
-  <div class="tabla-scroll">
+  <div class="table-scroll">
     <table>
       <thead>
-        <tr><th>Elemento</th><th>readyState</th><th class="num">Buffer</th>
-            <th class="num">Fotogramas</th><th>Desbloqueo</th></tr>
+        <tr><th>Element</th><th>readyState</th><th class="num">Buffer</th>
+            <th class="num">Frames</th><th>Unlock</th></tr>
       </thead>
-      <tbody id="tabla-elementos">
-        <tr><td colspan="5" style="color:#6b727a">Sin elementos: nada se ha creado todavía.</td></tr>
+      <tbody id="elements-table">
+        <tr><td colspan="5" style="color:#6b727a">No elements: nothing has been created yet.</td></tr>
       </tbody>
     </table>
   </div>
 
-  <p class="nota" id="nota-rvfc"></p>
+  <p class="note" id="rvfc-note"></p>
 </div>
 
 <div class="panel">
   <div class="controls" style="margin-top:0">
-    <strong style="font-size:.85rem">Informe</strong>
-    <button id="btn-copiar">Copiar informe</button>
+    <strong style="font-size:.85rem">Report</strong>
+    <button id="btn-copy">Copy report</button>
   </div>
-  <pre id="informe">Todavía no hay nada que informar.</pre>
-  <p class="nota">
-    Para que el informe sirva hay que dejar terminar las dos costuras, o saltar
-    la cabecera y dejar terminar la segunda.
+  <pre id="report">Nothing to report yet.</pre>
+  <p class="note">
+    For the report to be useful, let both seams finish, or skip the intro and
+    let the second one finish.
   </p>
 </div>
 
-<div class="aviso">
-  <strong>En iPhone, usar Safari.</strong> Chrome y Firefox en iOS son WebKit
-  por dentro, pero la política de autoplay no se comporta igual a través de su
-  capa. Y hay que probar <strong>sin</strong> el modo de bajo consumo: cambia
-  el comportamiento de reproducción y contamina la medida.
+<div class="notice">
+  <strong>On iPhone, use Safari.</strong> Chrome and Firefox on iOS are WebKit
+  underneath, but the autoplay policy does not behave the same through their
+  layer. And test <strong>without</strong> Low Power Mode: it changes playback
+  behaviour and contaminates the measurement.
 </div>
 
 </main>
@@ -168,178 +168,178 @@
   'use strict';
 
   const $ = (sel) => document.querySelector(sel);
-  const escenario = $('#escenario');
-  const vacio = $('#vacio');
+  const stage = $('#stage');
+  const empty = $('#empty');
 
-  let cadena = null;
+  let chain = null;
 
   const ms = (v) => (v === null || v === undefined ? '—' : Math.round(v) + ' ms');
 
-  function clasePara(hueco) {
-    if (hueco === null || hueco === undefined) return '';
-    // Un frame a 30 fps son 33 ms: por debajo de eso el hueco no llega a
-    // pintarse. Hasta 100 ms se percibe como un parpadeo; por encima, como un
-    // corte.
-    if (hueco <= 33) return 'good';
-    if (hueco <= 100) return 'warn';
+  function classFor(gap) {
+    if (gap === null || gap === undefined) return '';
+    // One frame at 30 fps is 33 ms: below that the gap never gets painted.
+    // Up to 100 ms it is perceived as a flicker; above, as a cut.
+    if (gap <= 33) return 'good';
+    if (gap <= 100) return 'warn';
     return 'bad';
   }
 
-  function pintar() {
-    if (!cadena) return;
-    const inf = cadena.informe;
+  function render() {
+    if (!chain) return;
+    const rep = chain.report;
 
-    $('#d-pieza').textContent = cadena.terminada
-      ? 'terminada'
-      : (cadena.piezaActual ? cadena.piezaActual.etiqueta : '—');
+    $('#d-piece').textContent = chain.finished
+      ? 'finished'
+      : (chain.currentPiece ? chain.currentPiece.label : '—');
 
-    const c1 = inf.costuras[0];
-    const c2 = inf.costuras[1];
-    for (const [sel, c] of [['#d-costura1', c1], ['#d-costura2', c2]]) {
+    const s1 = rep.seams[0];
+    const s2 = rep.seams[1];
+    for (const [sel, s] of [['#d-seam1', s1], ['#d-seam2', s2]]) {
       const el = $(sel);
-      el.textContent = c ? ms(c.hueco) : '—';
-      el.className = 'val ' + (c ? clasePara(c.hueco) : '');
+      el.textContent = s ? ms(s.gap) : '—';
+      el.className = 'val ' + (s ? classFor(s.gap) : '');
     }
 
-    const bloqueos = []
-      .concat(inf.arranque && inf.arranque.bloqueado ? ['arranque'] : [])
-      .concat(inf.costuras.filter((c) => c.bloqueado).map((c) => c.a));
-    const elBloqueo = $('#d-bloqueo');
-    elBloqueo.textContent = bloqueos.length ? bloqueos.join(', ') : 'no';
-    elBloqueo.className = 'val ' + (bloqueos.length ? 'bad' : 'good');
+    const blocks = []
+      .concat(rep.start && rep.start.blocked ? ['start'] : [])
+      .concat(rep.seams.filter((s) => s.blocked).map((s) => s.to));
+    const blockedEl = $('#d-blocked');
+    blockedEl.textContent = blocks.length ? blocks.join(', ') : 'no';
+    blockedEl.className = 'val ' + (blocks.length ? 'bad' : 'good');
 
-    const filas = cadena.elementos.map((el, i) => {
-      const marca = cadena.marcas.get(el);
-      const pieza = cadena.variante.unElemento ? cadena.piezaActual : window.PIEZAS[i];
-      const desbloqueo = inf.desbloqueos.find((d) => pieza && d.id === pieza.id);
+    const rows = chain.elements.map((el, i) => {
+      const mark = chain.marks.get(el);
+      const piece = chain.variant.singleElement ? chain.currentPiece : window.PIECES[i];
+      const unlock = rep.unlocks.find((u) => piece && u.id === piece.id);
       const buf = el.buffered.length ? el.buffered.end(el.buffered.length - 1) : 0;
       return '<tr>'
-        + '<td>' + (pieza ? pieza.etiqueta : '—') + '</td>'
+        + '<td>' + (piece ? piece.label : '—') + '</td>'
         + '<td>' + el.readyState + '</td>'
         + '<td class="num">' + buf.toFixed(1) + ' s</td>'
-        + '<td class="num">' + (marca ? marca.frames : 0) + '</td>'
-        + '<td>' + (desbloqueo ? (desbloqueo.ok ? 'sí' : 'NO — ' + desbloqueo.error) : '—') + '</td>'
+        + '<td class="num">' + (mark ? mark.frames : 0) + '</td>'
+        + '<td>' + (unlock ? (unlock.ok ? 'yes' : 'NO — ' + unlock.error) : '—') + '</td>'
         + '</tr>';
     });
-    $('#tabla-elementos').innerHTML = filas.length
-      ? filas.join('')
-      : '<tr><td colspan="5" style="color:#6b727a">Sin elementos.</td></tr>';
+    $('#elements-table').innerHTML = rows.length
+      ? rows.join('')
+      : '<tr><td colspan="5" style="color:#6b727a">No elements.</td></tr>';
 
-    $('#btn-saltar').hidden = !cadena.saltable;
-    $('#btn-pausa').disabled = !cadena.elementoActual;
-    $('#btn-reiniciar').disabled = false;
-    $('#informe').textContent = JSON.stringify(construirInforme(inf), null, 2);
+    $('#btn-skip').hidden = !chain.skippable;
+    $('#btn-pause').disabled = !chain.currentElement;
+    $('#btn-reset').disabled = false;
+    $('#report').textContent = JSON.stringify(buildReport(rep), null, 2);
   }
 
-  function construirInforme(inf) {
+  function buildReport(rep) {
     return {
-      fecha: new Date().toISOString(),
-      navegador: navigator.userAgent,
-      plataforma: navigator.platform,
-      pantalla: screen.width + 'x' + screen.height + ' @' + (devicePixelRatio || 1),
-      requestVideoFrameCallback: inf.rvfc,
-      variante: inf.etiqueta,
-      anticipacionMs: inf.leadMs,
-      arranque: inf.arranque,
-      desbloqueos: inf.desbloqueos,
-      costuras: inf.costuras.map((c) => ({
-        de: c.de, a: c.a, motivo: c.motivo,
-        huecoMs: c.hueco === null ? null : Math.round(c.hueco),
-        // Cuánto tardó el play() en dar el primer fotograma. Es lo que explica
-        // el hueco: separa "tardó en arrancar" de "se cambió demasiado pronto".
-        latenciaMs: (c.tPeticion && c.tPrimerFrameEntrante)
-          ? Math.round(c.tPrimerFrameEntrante - c.tPeticion) : null,
-        bloqueado: c.bloqueado,
-        error: c.error,
-        // Si la petición fue silenciada, la medida de política no vale: se
-        // publica para que quien lea el informe pueda descartarla.
-        conSonido: c.conSonido,
-        pausadaTrasSonido: c.pausadaTrasSonido,
-        anticipada: c.anticipada,
-        readyStateEntrante: c.readyStateEntrante,
+      date: new Date().toISOString(),
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      screen: screen.width + 'x' + screen.height + ' @' + (devicePixelRatio || 1),
+      requestVideoFrameCallback: rep.rvfc,
+      variant: rep.label,
+      leadMs: rep.leadMs,
+      start: rep.start,
+      unlocks: rep.unlocks,
+      seams: rep.seams.map((s) => ({
+        from: s.from, to: s.to, reason: s.reason,
+        gapMs: s.gap === null ? null : Math.round(s.gap),
+        // How long the play() took to give the first frame. It is what
+        // explains the gap: it separates "slow to start" from "switched too
+        // early".
+        latencyMs: (s.tRequest && s.tIncomingFirstFrame)
+          ? Math.round(s.tIncomingFirstFrame - s.tRequest) : null,
+        blocked: s.blocked,
+        error: s.error,
+        // If the request was muted, the policy measurement is not valid: it is
+        // published so whoever reads the report can discard it.
+        withSound: s.withSound,
+        pausedAfterUnmute: s.pausedAfterUnmute,
+        anticipated: s.anticipated,
+        incomingReadyState: s.incomingReadyState,
       })),
-      completa: inf.terminada,
+      complete: rep.finished,
     };
   }
 
-  function arrancarCadena() {
-    if (cadena) cadena.destruir();
-    vacio.hidden = true;
-    for (const v of escenario.querySelectorAll('video')) v.remove();
+  function startChain() {
+    if (chain) chain.destroy();
+    empty.hidden = true;
+    for (const v of stage.querySelectorAll('video')) v.remove();
 
-    cadena = new window.Cadena(escenario, {
-      variante: $('#sel-variante').value,
+    chain = new window.Chain(stage, {
+      variant: $('#sel-variant').value,
       leadMs: Number($('#sel-lead').value),
-      onCambio: pintar,
+      onChange: render,
     });
-    // Síncrono dentro del gesto: es la condición que hace válido el
-    // desbloqueo. Cualquier `await` antes de esta línea lo invalidaría.
-    cadena.arrancar();
+    // Synchronous inside the gesture: that is the condition that makes the
+    // unlock valid. Any `await` before this line would invalidate it.
+    chain.begin();
 
     $('#btn-play').disabled = true;
-    pintar();
+    render();
   }
 
-  $('#btn-play').addEventListener('click', arrancarCadena);
-  $('#btn-saltar').addEventListener('click', () => cadena && cadena.saltar());
-  $('#btn-pausa').addEventListener('click', () => {
-    if (!cadena) return;
-    const el = cadena.elementoActual;
-    // Se decide con el estado de ANTES: `play()` es asíncrono, así que releer
-    // `paused` después deja la etiqueta al revés de lo que acaba de pasar.
-    const estabaPausado = el ? el.paused : true;
-    if (estabaPausado) cadena.reanudar(); else cadena.pausar();
-    $('#btn-pausa').textContent = estabaPausado ? 'Pausar' : 'Reanudar';
+  $('#btn-play').addEventListener('click', startChain);
+  $('#btn-skip').addEventListener('click', () => chain && chain.skip());
+  $('#btn-pause').addEventListener('click', () => {
+    if (!chain) return;
+    const el = chain.currentElement;
+    // Decided with the state from BEFORE: `play()` is asynchronous, so
+    // re-reading `paused` afterwards leaves the label the wrong way round.
+    const wasPaused = el ? el.paused : true;
+    if (wasPaused) chain.resume(); else chain.pause();
+    $('#btn-pause').textContent = wasPaused ? 'Pause' : 'Resume';
   });
-  $('#btn-reiniciar').addEventListener('click', () => {
-    if (cadena) cadena.destruir();
-    cadena = null;
-    vacio.hidden = false;
+  $('#btn-reset').addEventListener('click', () => {
+    if (chain) chain.destroy();
+    chain = null;
+    empty.hidden = false;
     $('#btn-play').disabled = false;
-    $('#btn-saltar').hidden = true;
-    $('#btn-pausa').disabled = true;
-    $('#informe').textContent = 'Todavía no hay nada que informar.';
-    $('#tabla-elementos').innerHTML =
-      '<tr><td colspan="5" style="color:#6b727a">Sin elementos.</td></tr>';
-    for (const sel of ['#d-pieza', '#d-costura1', '#d-costura2', '#d-bloqueo']) {
+    $('#btn-skip').hidden = true;
+    $('#btn-pause').disabled = true;
+    $('#report').textContent = 'Nothing to report yet.';
+    $('#elements-table').innerHTML =
+      '<tr><td colspan="5" style="color:#6b727a">No elements.</td></tr>';
+    for (const sel of ['#d-piece', '#d-seam1', '#d-seam2', '#d-blocked']) {
       $(sel).textContent = '—'; $(sel).className = 'val';
     }
   });
 
-  $('#btn-copiar').addEventListener('click', async () => {
-    const texto = $('#informe').textContent;
+  $('#btn-copy').addEventListener('click', async () => {
+    const text = $('#report').textContent;
     try {
-      await navigator.clipboard.writeText(texto);
-      $('#btn-copiar').textContent = 'Copiado';
+      await navigator.clipboard.writeText(text);
+      $('#btn-copy').textContent = 'Copied';
     } catch {
-      // Sin permiso de portapapeles: se selecciona para copiar a mano, que en
-      // iOS es lo habitual si la página no es https.
+      // No clipboard permission: select it for copying by hand, which on iOS
+      // is the usual case if the page is not https.
       const r = document.createRange();
-      r.selectNodeContents($('#informe'));
+      r.selectNodeContents($('#report'));
       const s = getSelection(); s.removeAllRanges(); s.addRange(r);
-      $('#btn-copiar').textContent = 'Selecciona y copia';
+      $('#btn-copy').textContent = 'Select and copy';
     }
-    setTimeout(() => { $('#btn-copiar').textContent = 'Copiar informe'; }, 2500);
+    setTimeout(() => { $('#btn-copy').textContent = 'Copy report'; }, 2500);
   });
 
-  // La variante C no puede anticipar: no se puede cargar la pieza siguiente
-  // sin destruir la que suena. Se deshabilita el selector para que quede claro
-  // que es una imposibilidad, no un ajuste que se olvidó.
-  function ajustarLead() {
-    const esC = $('#sel-variante').value === 'C';
-    $('#sel-lead').disabled = esC;
-    $('#sel-lead').title = esC
-      ? 'La variante C no admite anticipación: solo hay un elemento.'
+  // Variant C cannot anticipate: the next piece cannot be loaded without
+  // destroying the one playing. The selector is disabled to make clear it is
+  // an impossibility, not a forgotten setting.
+  function adjustLead() {
+    const isC = $('#sel-variant').value === 'C';
+    $('#sel-lead').disabled = isC;
+    $('#sel-lead').title = isC
+      ? 'Variant C does not support anticipation: there is only one element.'
       : '';
   }
-  $('#sel-variante').addEventListener('change', ajustarLead);
-  ajustarLead();
+  $('#sel-variant').addEventListener('change', adjustLead);
+  adjustLead();
 
-  $('#nota-rvfc').textContent = window.HAY_RVFC
-    ? 'requestVideoFrameCallback disponible: los huecos se miden sobre fotogramas presentados.'
-    : 'Sin requestVideoFrameCallback: se estima con requestAnimationFrame. Los números salen más gruesos y NO son comparables con los de un navegador que sí la tiene.';
+  $('#rvfc-note').textContent = window.HAS_RVFC
+    ? 'requestVideoFrameCallback available: gaps are measured on presented frames.'
+    : 'No requestVideoFrameCallback: estimated with requestAnimationFrame. The numbers come out coarser and are NOT comparable with those of a browser that has it.';
 
-  setInterval(() => { if (cadena) pintar(); }, 400);
+  setInterval(() => { if (chain) render(); }, 400);
 })();
 </script>
 </body>

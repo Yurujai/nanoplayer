@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NanoPlayer · Diagnóstico de dispositivo</title>
+<title>NanoPlayer · Device probe</title>
 <link rel="icon" href="data:,">
 <style>
   :root{
@@ -57,64 +57,64 @@
 </head>
 <body>
 <main>
-  <h1>NanoPlayer · Diagnóstico de dispositivo</h1>
+  <h1>NanoPlayer · Device probe</h1>
   <p id="hint" hidden></p>
   <p class="lead">
-    Mide qué puede hacer este dispositivo con vídeo. Tarda menos de un minuto y
-    no instala nada. Al terminar sale un informe para copiar y enviar.
+    Measures what this device can do with video. It takes under a minute and
+    installs nothing. When it ends there is a report to copy and send.
   </p>
 
   <section>
-    <h2>1 · Entorno</h2>
+    <h2>1 · Environment</h2>
     <dl id="env"></dl>
   </section>
 
   <section>
-    <h2>2 · Capacidades</h2>
+    <h2>2 · Capabilities</h2>
     <dl id="caps"></dl>
   </section>
 
   <section>
-    <h2>3 · Pruebas de reproducción</h2>
-    <p class="status" id="status" role="status" aria-live="polite">Sin ejecutar.</p>
+    <h2>3 · Playback tests</h2>
+    <p class="status" id="status" role="status" aria-live="polite">Not run yet.</p>
     <progress id="prog" value="0" max="4" hidden></progress>
-    <button id="run">Iniciar pruebas</button>
+    <button id="run">Start tests</button>
     <p class="hint">
-      Sube el volumen si puedes: una de las pruebas comprueba si el dispositivo
-      deja sonar dos vídeos a la vez.
+      Turn the volume up if you can: one of the tests checks whether the device
+      lets two videos play sound at once.
     </p>
     <dl id="play"></dl>
     <div id="stage" aria-hidden="true"></div>
   </section>
 
   <section>
-    <h2>4 · Pantalla completa</h2>
+    <h2>4 · Full screen</h2>
     <p class="hint" style="margin-top:0">
-      La prueba decisiva para iPhone: si al pasar a pantalla completa se ven
-      <strong>los dos</strong> vídeos, el dual-stream funciona. Si solo se ve
-      uno, el sistema ha tomado el control.
+      The decisive test for iPhone: if <strong>both</strong> videos are visible
+      in full screen, dual-stream works. If only one is, the system has taken
+      over.
     </p>
     <div id="fsbox"></div>
-    <button id="fs" class="ghost">Probar pantalla completa</button>
+    <button id="fs" class="ghost">Test full screen</button>
     <dl id="fsres"></dl>
   </section>
 
   <section>
-    <h2>5 · Informe</h2>
+    <h2>5 · Report</h2>
     <ul id="checklist"></ul>
-    <button id="copy" class="ghost" disabled>Copiar informe</button>
-    <label for="out" class="hint">Si el botón no funciona, copia este texto a mano:</label>
+    <button id="copy" class="ghost" disabled>Copy report</button>
+    <label for="out" class="hint">If the button does not work, copy this text by hand:</label>
     <textarea id="out" readonly spellcheck="false"></textarea>
   </section>
 </main>
 
 <script>
-/* ------------------------------------------------------------------ medios --
- * En desarrollo se sirven como ficheros. build.mjs sustituye MEDIA_B64 por los
- * vídeos en base64 para producir un HTML autocontenido.
+/* ------------------------------------------------------------------- media --
+ * In development they are served as files. build.mjs replaces MEDIA_B64 with
+ * the videos in base64 to produce a self-contained HTML.
  *
- * Se convierten a blob: en vez de usar data: directamente porque Safari en iOS
- * maneja mal las URIs data: en elementos multimedia (problemas con Range).
+ * They are turned into blob: URLs instead of using data: directly because
+ * Safari on iOS handles data: URIs badly in media elements (Range problems).
  */
 const MEDIA_B64 = null; /* __MEDIA_B64__ */
 
@@ -127,7 +127,7 @@ const MEDIA = MEDIA_B64
   ? { a: b64Blob(MEDIA_B64.a, 'video/mp4'), b: b64Blob(MEDIA_B64.b, 'video/mp4') }
   : { a: 'media/probe-a.mp4', b: 'media/probe-b.mp4' };
 
-/* ----------------------------------------------------------------- utiles -- */
+/* ---------------------------------------------------------------- helpers -- */
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const report = { schema: 2, ts: new Date().toISOString() };
@@ -138,10 +138,10 @@ function row(dl, k, v, cls){
   if (cls) dd.className = cls;
   dl.append(dt, dd);
 }
-const yn = (b) => b ? 'sí' : 'no';
+const yn = (b) => b ? 'yes' : 'no';
 const cls = (b) => b ? 'ok' : 'bad';
 
-/* ------------------------------------------------------------- 1. entorno -- */
+/* --------------------------------------------------------- 1. environment -- */
 (function env(){
   const ua = navigator.userAgent;
   const e = report.env = {
@@ -152,7 +152,7 @@ const cls = (b) => b ? 'ok' : 'bad';
     cores: navigator.hardwareConcurrency ?? null,
     memoryGB: navigator.deviceMemory ?? null,
     touchPoints: navigator.maxTouchPoints ?? 0,
-    // iPadOS miente y se presenta como Mac; los puntos táctiles lo delatan.
+    // iPadOS lies and presents itself as a Mac; the touch points give it away.
     likelyIPadOS: /Macintosh/.test(ua) && (navigator.maxTouchPoints ?? 0) > 1,
   };
   const m = /OS (\d+)[_.](\d+)/.exec(ua);
@@ -160,9 +160,9 @@ const cls = (b) => b ? 'ok' : 'bad';
   const sv = /Version\/(\d+\.\d+).*Safari/.exec(ua);
   e.safariVersion = sv ? sv[1] : null;
 
-  // Identificar navegador y motor explícitamente. Sin esto es fácil recibir un
-  // informe de Chrome sobre un Mac creyendo que trae datos de WebKit: la UA de
-  // Chrome contiene las palabras "AppleWebKit" y "Safari", y despista.
+  // Identify browser and engine explicitly. Without it, it is easy to receive a
+  // report from Chrome on a Mac believing it carries WebKit data: Chrome's UA
+  // contains the words "AppleWebKit" and "Safari", which is misleading.
   e.browser =
       /CriOS\//.test(ua)   ? 'Chrome (iOS)'
     : /FxiOS\//.test(ua)   ? 'Firefox (iOS)'
@@ -172,41 +172,41 @@ const cls = (b) => b ? 'ok' : 'bad';
     : /Firefox\//.test(ua) ? 'Firefox'
     : /Chrome\//.test(ua)  ? 'Chrome'
     : (e.safariVersion || /Safari\//.test(ua)) ? 'Safari'
-    : 'desconocido';
+    : 'unknown';
 
-  const esIOS = /iPhone|iPad|iPod/.test(ua) || e.likelyIPadOS;
-  // En iOS todos los navegadores están obligados a usar WebKit, incluido Chrome.
-  e.engine = esIOS ? 'WebKit'
+  const isIOS = /iPhone|iPad|iPod/.test(ua) || e.likelyIPadOS;
+  // On iOS every browser is required to use WebKit, Chrome included.
+  e.engine = isIOS ? 'WebKit'
     : e.browser === 'Safari' ? 'WebKit'
     : e.browser === 'Firefox' ? 'Gecko'
-    : e.browser === 'desconocido' ? 'desconocido' : 'Blink';
+    : e.browser === 'unknown' ? 'unknown' : 'Blink';
 
-  e.isApple = esIOS || navigator.platform === 'MacIntel' || /Mac/.test(ua);
+  e.isApple = isIOS || navigator.platform === 'MacIntel' || /Mac/.test(ua);
 
   const dl = $('env');
-  row(dl, 'Navegador', `${e.browser} · ${e.engine}`);
+  row(dl, 'Browser', `${e.browser} · ${e.engine}`);
   row(dl, 'Viewport', e.viewport);
-  row(dl, 'Densidad', e.dpr + '×');
-  row(dl, 'Núcleos', e.cores ?? 'desconocido');
-  row(dl, 'Memoria', e.memoryGB ? e.memoryGB + ' GB' : 'no expuesta');
+  row(dl, 'Pixel density', e.dpr + '×');
+  row(dl, 'Cores', e.cores ?? 'unknown');
+  row(dl, 'Memory', e.memoryGB ? e.memoryGB + ' GB' : 'not exposed');
   if (e.iosVersion) row(dl, 'iOS', e.iosVersion);
   if (e.safariVersion) row(dl, 'Safari', e.safariVersion);
-  if (e.likelyIPadOS) row(dl, 'iPadOS disfrazado de Mac', 'sí', 'warn');
+  if (e.likelyIPadOS) row(dl, 'iPadOS disguised as a Mac', 'yes', 'warn');
 
-  // En un aparato Apple, los datos que faltan están en WebKit, no en Blink.
-  // Pedirlo aquí evita descubrirlo al recibir el informe.
+  // On an Apple device the missing data lives in WebKit, not Blink. Asking for
+  // it here avoids finding out when the report arrives.
   if (e.isApple && e.engine !== 'WebKit') {
     const h = $('hint');
     h.hidden = false;
-    h.innerHTML = `Estás en <strong>${e.browser}</strong>, que usa el motor
-      ${e.engine}. En un dispositivo Apple los datos que interesan son los de
-      <strong>Safari</strong>, que se comporta distinto. Puedes completar esta
-      prueba igualmente, pero por favor <strong>ábrela también en Safari</strong>
-      y envía los dos informes.`;
+    h.innerHTML = `You are on <strong>${e.browser}</strong>, which uses the
+      ${e.engine} engine. On an Apple device the data that matters is
+      <strong>Safari</strong>'s, which behaves differently. You can finish this
+      test anyway, but please <strong>open it in Safari too</strong> and send
+      both reports.`;
   }
 })();
 
-/* --------------------------------------------------------- 2. capacidades -- */
+/* -------------------------------------------------------- 2. capabilities -- */
 (function caps(){
   const v = document.createElement('video');
   const can = (t) => v.canPlayType(t) || 'no';
@@ -214,20 +214,20 @@ const cls = (b) => b ? 'ok' : 'bad';
 
   const c = report.caps = {
     rVFC: 'requestVideoFrameCallback' in HTMLVideoElement.prototype,
-    // La ruta que permite pantalla completa con UI propia y dos vídeos.
+    // The path that allows full screen with our own UI and two videos.
     containerFullscreen: !!(document.documentElement.requestFullscreen ||
                             document.documentElement.webkitRequestFullscreen),
-    // La ruta iPhone: se lleva el vídeo al reproductor del sistema.
+    // The iPhone path: the video is handed to the system player.
     videoOnlyFullscreen: 'webkitEnterFullscreen' in v,
     pip: !!document.pictureInPictureEnabled || 'webkitSetPresentationMode' in v,
     mediaSource: !!window.MediaSource,
-    // iPhone no tuvo MSE hasta que Safari 17 introdujo ManagedMediaSource.
-    // Sin alguna de las dos, hls.js no puede funcionar.
+    // iPhone had no MSE until Safari 17 introduced ManagedMediaSource. Without
+    // one of the two, hls.js cannot work.
     managedMediaSource: !!window.ManagedMediaSource,
     mseH264: MS && MS.isTypeSupported ? MS.isTypeSupported('video/mp4; codecs="avc1.42E01E"') : false,
-    // Valor CRUDO de canPlayType, no un booleano. Chrome devuelve "maybe" para
-    // el MIME de HLS aunque no lo reproduce sin MSE: convertirlo a sí/no da un
-    // falso positivo que llevaría a elegir el motor equivocado.
+    // The RAW canPlayType value, not a boolean. Chrome returns "maybe" for the
+    // HLS MIME type although it does not play it without MSE: turning it into
+    // yes/no gives a false positive that would pick the wrong engine.
     hlsMime: can('application/vnd.apple.mpegurl'),
     h264: can('video/mp4; codecs="avc1.42E01E"'),
     hevc: can('video/mp4; codecs="hvc1.1.6.L93.B0"'),
@@ -237,30 +237,30 @@ const cls = (b) => b ? 'ok' : 'bad';
     audioTracks: 'audioTracks' in v,
     textTracks: 'textTracks' in v,
     remotePlayback: 'remote' in v,
-    // No se comprueba window.chrome.cast: solo existe tras cargar el SDK de
-    // Cast, así que un false no distingue "no soportado" de "SDK no cargado".
-    // remotePlayback es la señal útil.
+    // window.chrome.cast is not checked: it only exists after loading the Cast
+    // SDK, so false does not tell "unsupported" from "SDK not loaded".
+    // remotePlayback is the useful signal.
   };
 
   const dl = $('caps');
   row(dl, 'requestVideoFrameCallback', yn(c.rVFC), cls(c.rVFC));
-  row(dl, 'Fullscreen del contenedor', yn(c.containerFullscreen), cls(c.containerFullscreen));
-  row(dl, 'Fullscreen solo del vídeo', yn(c.videoOnlyFullscreen), c.videoOnlyFullscreen ? 'warn' : '');
+  row(dl, 'Container fullscreen', yn(c.containerFullscreen), cls(c.containerFullscreen));
+  row(dl, 'Video-only fullscreen', yn(c.videoOnlyFullscreen), c.videoOnlyFullscreen ? 'warn' : '');
   row(dl, 'MediaSource (hls.js)', yn(c.mediaSource), cls(c.mediaSource));
   row(dl, 'ManagedMediaSource', yn(c.managedMediaSource), c.managedMediaSource ? 'ok' : '');
-  row(dl, 'MIME de HLS', c.hlsMime || 'no', c.hlsMime === 'probably' ? 'ok' : 'warn');
+  row(dl, 'HLS MIME type', c.hlsMime || 'no', c.hlsMime === 'probably' ? 'ok' : 'warn');
   row(dl, 'H.264', c.h264, cls(c.h264 !== 'no'));
   row(dl, 'HEVC', c.hevc, c.hevc !== 'no' ? 'ok' : '');
   row(dl, 'VP9', c.vp9, c.vp9 !== 'no' ? 'ok' : '');
   row(dl, 'AV1', c.av1, c.av1 !== 'no' ? 'ok' : '');
-  row(dl, 'Pistas de audio', yn(c.audioTracks), c.audioTracks ? 'ok' : 'warn');
+  row(dl, 'Audio tracks', yn(c.audioTracks), c.audioTracks ? 'ok' : 'warn');
   row(dl, 'Picture in Picture', yn(c.pip), c.pip ? 'ok' : '');
 })();
 
-/* --------------------------------------------- helpers de vídeo para 3 y 4 -- */
-// Quitar el elemento del DOM no basta: hay que soltar el recurso multimedia.
-// Con un presupuesto de 2 decodificadores (lo medido en iPhone), una limpieza
-// incompleta deja sin recursos a la prueba siguiente.
+/* ------------------------------------------------- video helpers for 3 and 4 -- */
+// Removing the element from the DOM is not enough: the media resource must be
+// released. Once, an incomplete cleanup left the next test without decoders
+// and the probe reported 2 simultaneous videos on an iPhone that holds 17.
 function release(v){
   try { v.pause(); v.removeAttribute('src'); v.load(); } catch {}
   v.remove();
@@ -272,14 +272,13 @@ function mkVideo(src, {muted = true} = {}){
   v.preload = 'auto'; v.setAttribute('playsinline', '');
   return v;
 }
-// Se conforma con `loadeddata` (readyState >= 2) en lugar de `canplay`, y
-// provoca la carga con load() si el elemento aún no ha empezado.
+// Settles for `loadeddata` (readyState >= 2) instead of `canplay`, and starts
+// loading with load() if the element has not started yet.
 //
-// Sin efectos sobre la reproducción a propósito: una versión anterior lanzaba
-// un play() para forzar el buffering en iOS, y su promesa pausaba el vídeo por
-// detrás cuando se resolvía después de que quien llamaba ya lo hubiera
-// arrancado. Provocar la carga y controlar la reproducción no pueden vivir en
-// la misma función.
+// No effect on playback, on purpose: an earlier version issued a play() to
+// force buffering on iOS, and its promise paused the video behind the
+// caller's back when it resolved after the caller had already started it.
+// Triggering the load and controlling playback cannot live in one function.
 const ready = (v) => new Promise((res) => {
   if (v.readyState >= 2) return res(true);
   const done = () => { clean(); res(v.readyState >= 2); };
@@ -297,11 +296,11 @@ const ready = (v) => new Promise((res) => {
   if (v.readyState === 0) { try { v.load(); } catch {} }
 });
 
-/* ------------------------------- autoplay en frío, sin gesto de usuario ---- */
-// Se mide al cargar, ANTES de cualquier clic. La prueba de la sección 3 corre
-// tras pulsar el botón, así que allí ya hay gesto concedido y mide otra cosa:
-// permiso con gesto, no la política del navegador. Para el diseño multi-instancia
-// lo que importa es esta, la de en frío.
+/* ------------------------------------ cold autoplay, with no user gesture -- */
+// Measured on load, BEFORE any click. The section 3 test runs after the button
+// is pressed, so a gesture has already been granted there and it measures
+// something else: permission with a gesture, not the browser's policy. For the
+// multi-instance design what matters is this cold one.
 (async function coldAutoplay(){
   const v = mkVideo(MEDIA.a);
   v.style.cssText = 'position:fixed;left:-9999px;width:1px;height:1px';
@@ -310,11 +309,11 @@ const ready = (v) => new Promise((res) => {
   const c = report.coldAutoplay = { mediaReady: okMedia, muted: null };
   if (okMedia) c.muted = await v.play().then(() => true).catch(() => false);
   release(v);
-  row($('caps'), 'Autoplay en frío (silenciado)', yn(c.muted), c.muted ? 'ok' : 'warn');
+  row($('caps'), 'Cold autoplay (muted)', yn(c.muted), c.muted ? 'ok' : 'warn');
   emit();
 })();
 
-/* ------------------------------------------------ 3. pruebas con playback -- */
+/* ------------------------------------------------------ 3. playback tests -- */
 $('run').onclick = async () => {
   const btn = $('run'); btn.disabled = true;
   const dl = $('play'); dl.innerHTML = '';
@@ -322,16 +321,16 @@ $('run').onclick = async () => {
   const say = (t) => { $('status').textContent = t; };
   const R = report.playback = { done: false };
 
-  // Envoltorio de captura: una excepción a mitad dejaba el informe con las
-  // pruebas a medias y sin rastro de la causa. Ocurrió en Safari de iPhone, y
-  // sin poder depurar el dispositivo no había forma de saber qué pasó.
+  // Catch-all wrapper: an exception halfway left the report with half the tests
+  // and no trace of the cause. It happened on iPhone Safari, and without being
+  // able to debug the device there was no way to know what had happened.
   try {
 
-  // --- 3a. Reproducción con gesto ya concedido ---
-  // OJO: esto NO es la política de autoplay. El usuario acaba de pulsar el
-  // botón, así que hay gesto. Mide si el dispositivo deja reproducir con
-  // permiso; la política en frío se mide al cargar la página.
-  say('Comprobando reproducción con gesto…');
+  // --- 3a. Playback with a gesture already granted ---
+  // CAREFUL: this is NOT the autoplay policy. The user has just pressed the
+  // button, so there is a gesture. It measures whether the device lets media
+  // play with permission; the cold policy is measured when the page loads.
+  say('Checking playback with a gesture…');
   const av = mkVideo(MEDIA.a); document.body.appendChild(av);
   av.style.cssText = 'position:fixed;left:-9999px;width:1px;height:1px';
   await ready(av);
@@ -339,13 +338,13 @@ $('run').onclick = async () => {
   av.pause(); av.currentTime = 0; av.muted = false;
   R.afterGestureUnmuted = await av.play().then(() => true).catch(() => false);
   release(av);
-  row(dl, 'Con gesto · silenciado', yn(R.afterGestureMuted), cls(R.afterGestureMuted));
-  row(dl, 'Con gesto · con sonido', yn(R.afterGestureUnmuted), R.afterGestureUnmuted ? 'ok' : 'warn');
+  row(dl, 'With gesture · muted', yn(R.afterGestureMuted), cls(R.afterGestureMuted));
+  row(dl, 'With gesture · with sound', yn(R.afterGestureUnmuted), R.afterGestureUnmuted ? 'ok' : 'warn');
   prog.value = 1;
 
-  // --- 3b. Decodificación simultánea ---
-  // Responde a la vez S2 (¿cuántos aguanta?) y S4 (presupuesto del registry).
-  say('Midiendo cuántos vídeos aguanta a la vez…');
+  // --- 3b. Simultaneous decoding ---
+  // Answers both S2 (how many does it hold?) and S4 (registry budget).
+  say('Measuring how many videos it holds at once…');
   const stage = $('stage'); stage.innerHTML = '';
   const vids = []; const MAXN = 24;
   let lastAllOk = 0; R.decodeDetail = [];
@@ -363,12 +362,12 @@ $('run').onclick = async () => {
   for (const v of vids) release(v);
   R.maxConcurrentVideos = lastAllOk;
   R.decodeCappedAtLimit = lastAllOk === MAXN;
-  row(dl, 'Vídeos simultáneos', lastAllOk + (R.decodeCappedAtLimit ? '+ (tope de la prueba)' : ''),
+  row(dl, 'Simultaneous videos', lastAllOk + (R.decodeCappedAtLimit ? '+ (test limit)' : ''),
       lastAllOk >= 4 ? 'ok' : lastAllOk >= 2 ? 'warn' : 'bad');
   prog.value = 2;
 
-  // --- 3c. Dos audios a la vez ---
-  say('Comprobando dos audios simultáneos…');
+  // --- 3c. Two audio tracks at once ---
+  say('Checking two simultaneous audio tracks…');
   const s1 = mkVideo(MEDIA.a, {muted:false}), s2 = mkVideo(MEDIA.a, {muted:false});
   s1.volume = 0.25; s2.volume = 0.25;
   for (const v of [s1, s2]){ v.style.cssText='position:fixed;left:-9999px;width:1px;height:1px';
@@ -379,37 +378,37 @@ $('run').onclick = async () => {
   await sleep(900);
   R.dualAudio = p1 && p2 && !s1.paused && !s2.paused;
   for (const v of [s1, s2]) release(v);
-  // Dar margen a que el sistema devuelva los decodificadores antes de la
-  // prueba de sincronización, que necesita dos.
+  // Give the system time to hand back the decoders before the sync test,
+  // which needs two.
   await sleep(600);
-  row(dl, 'Dos audios a la vez', yn(R.dualAudio), R.dualAudio ? 'ok' : 'warn');
+  row(dl, 'Two audio tracks at once', yn(R.dualAudio), R.dualAudio ? 'ok' : 'warn');
   prog.value = 3;
 
-  // --- 3d. Sincronización dual-stream (motor de S1) ---
-  say('Midiendo sincronización dual-stream (15 s)…');
+  // --- 3d. Dual-stream sync (S1's engine) ---
+  say('Measuring dual-stream sync (15 s)…');
   const sync = await runSync(15000);
   Object.assign(R, sync);
-  row(dl, 'Deriva mediana', sync.driftMedianMs === null ? 'n/d' : sync.driftMedianMs + ' ms',
+  row(dl, 'Median drift', sync.driftMedianMs === null ? 'n/a' : sync.driftMedianMs + ' ms',
       sync.driftMedianMs !== null && sync.driftMedianMs < 33 ? 'ok' : 'bad');
-  row(dl, 'Deriva p95', sync.driftP95Ms === null ? 'n/d' : sync.driftP95Ms + ' ms',
+  row(dl, 'Drift p95', sync.driftP95Ms === null ? 'n/a' : sync.driftP95Ms + ' ms',
       sync.driftP95Ms !== null && sync.driftP95Ms < 33 ? 'ok' : 'warn');
-  row(dl, 'Saltos duros', sync.hardSeeks);
-  row(dl, 'FPS del lazo de control', sync.loopFps);
+  row(dl, 'Hard seeks', sync.hardSeeks);
+  row(dl, 'Control loop FPS', sync.loopFps);
   prog.value = 4;
 
   R.done = true;
-  say('Pruebas terminadas.');
+  say('Tests finished.');
 
   } catch (e) {
     R.error = String((e && e.stack) || e);
-    say('Las pruebas fallaron. El informe recoge el error: envíalo igualmente.');
+    say('The tests failed. The report includes the error: please send it anyway.');
   } finally {
-    btn.textContent = 'Repetir pruebas'; btn.disabled = false;
+    btn.textContent = 'Run the tests again'; btn.disabled = false;
     emit();
   }
 };
 
-/* Motor S1 reducido: mismos umbrales, sin UI. */
+/* S1's engine, reduced: same thresholds, no UI. */
 async function runSync(ms){
   const CFG = { deadZone:0.033, releaseZone:0.008, gain:1.2, maxRateDelta:0.25, hardSeek:0.5 };
   const master = mkVideo(MEDIA.a), slave = mkVideo(MEDIA.b);
@@ -417,9 +416,9 @@ async function runSync(ms){
   stage.append(master, slave);
   const okA = await ready(master), okB = await ready(slave);
   if (!okA || !okB){
-    // Diagnóstico antes de soltar los elementos: en iOS esta rama se dispara y
-    // sin estos datos no hay forma de distinguir "no llegó a cargar" de
-    // "cargó pero el navegador no lo declara reproducible".
+    // Diagnostics before releasing the elements: on iOS this branch fires, and
+    // without this data there is no way to tell "never loaded" from "loaded but
+    // the browser does not declare it playable".
     const diag = {
       masterReadyState: master.readyState, slaveReadyState: slave.readyState,
       masterNetworkState: master.networkState, slaveNetworkState: slave.networkState,
@@ -428,7 +427,7 @@ async function runSync(ms){
     };
     release(master); release(slave);
     return { driftMedianMs:null, driftP95Ms:null, hardSeeks:0, loopFps:0,
-             syncError:'media no cargó', syncDiag: diag };
+             syncError:'media did not load', syncDiag: diag };
   }
 
   master.loop = true; slave.loop = true;
@@ -437,9 +436,8 @@ async function runSync(ms){
   const onSeek = () => { slave.currentTime = master.currentTime; };
   master.addEventListener('seeking', onSeek);
 
-  // Registrar por qué falla un play(): en iOS el gesto de usuario ya ha
-  // caducado a estas alturas y el rechazo es la explicación más probable de
-  // que no salga ninguna muestra.
+  // Record why a play() fails: on iOS the user gesture has expired by now, and
+  // the rejection is the most likely explanation for getting no samples.
   const playErrors = [];
   await master.play().catch((e) => playErrors.push(`master: ${e.name} — ${e.message}`));
   await slave.play().catch((e) => playErrors.push(`slave: ${e.name} — ${e.message}`));
@@ -479,7 +477,7 @@ async function runSync(ms){
 
   if (!samples.length) {
     return { driftMedianMs:null, driftP95Ms:null, hardSeeks, loopFps:Math.round(frames/elapsed),
-             syncError:'sin muestras: los vídeos no avanzaron',
+             syncError:'no samples: the videos did not advance',
              playErrors, masterPaused:master.paused, slavePaused:slave.paused };
   }
   const abs = samples.map(Math.abs).sort((x,y)=>x-y);
@@ -495,7 +493,7 @@ async function runSync(ms){
   };
 }
 
-/* ------------------------------------------------------ 4. pantalla completa */
+/* ----------------------------------------------------------- 4. full screen */
 $('fs').onclick = async () => {
   const box = $('fsbox'); box.innerHTML = '';
   const a = mkVideo(MEDIA.a), b = mkVideo(MEDIA.b);
@@ -509,8 +507,8 @@ $('fs').onclick = async () => {
   F.apiPresent = !!req;
 
   if (!req){
-    // Solo queda la ruta del vídeo suelto: el sistema se queda con la pantalla
-    // y el segundo stream desaparece. Es el escenario a evitar.
+    // Only the video-alone path is left: the system takes the screen and the
+    // second stream disappears. It is the scenario to avoid.
     F.entered = false;
     F.fallbackVideoOnly = 'webkitEnterFullscreen' in a;
     finishFs(F);
@@ -522,7 +520,7 @@ $('fs').onclick = async () => {
     const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
     F.entered = !!fsEl;
     F.elementIsContainer = fsEl === box;
-    // Si ambos siguen avanzando y visibles, el dual-stream sobrevive.
+    // If both keep advancing and are visible, dual-stream survives.
     const ta = a.currentTime, tb = b.currentTime;
     await sleep(700);
     F.bothStillPlaying = (a.currentTime > ta) && (b.currentTime > tb);
@@ -537,43 +535,43 @@ $('fs').onclick = async () => {
 
 function finishFs(F){
   const dl = $('fsres'); dl.innerHTML = '';
-  row(dl, 'API disponible', yn(F.apiPresent), cls(F.apiPresent));
-  row(dl, 'Entró en pantalla completa', yn(F.entered), cls(F.entered));
+  row(dl, 'API available', yn(F.apiPresent), cls(F.apiPresent));
+  row(dl, 'Entered full screen', yn(F.entered), cls(F.entered));
   if (F.entered){
-    row(dl, 'Los dos siguen reproduciendo', yn(F.bothStillPlaying), cls(F.bothStillPlaying));
-    row(dl, 'Los dos visibles', yn(F.bothVisible), cls(F.bothVisible));
+    row(dl, 'Both still playing', yn(F.bothStillPlaying), cls(F.bothStillPlaying));
+    row(dl, 'Both visible', yn(F.bothVisible), cls(F.bothVisible));
   } else if (F.fallbackVideoOnly){
-    row(dl, 'Solo fullscreen nativo del vídeo', 'sí', 'bad');
+    row(dl, 'Only the video\'s native fullscreen', 'yes', 'bad');
   }
   if (F.error) row(dl, 'Error', F.error, 'bad');
   $('fsbox').innerHTML = '';
   emit();
 }
 
-/* ------------------------------------------------------------- 5. informe -- */
-// El botón de copiar está activo desde que carga la página, así que sin este
-// aviso es fácil enviar un informe a medias. La prueba de pantalla completa es
-// la que más se salta —otra sección, otro botón— y es la decisiva en iPhone.
+/* -------------------------------------------------------------- 5. report -- */
+// The copy button is active from page load, so without this warning it is easy
+// to send half a report. The full screen test is the one most often skipped
+// —another section, another button— and it is the decisive one on iPhone.
 function copyLabel(){
-  return report.complete ? 'Copiar informe' : 'Copiar informe (incompleto)';
+  return report.complete ? 'Copy report' : 'Copy report (incomplete)';
 }
 
 function emit(){
-  const hecho = {
-    'Entorno y capacidades': !!report.caps,
-    // Comprobar que TERMINARON, no que empezaron. El objeto se crea al pulsar
-    // el botón, así que mirar su existencia marcaba la casilla al instante y
-    // daba por completo un informe al que le faltaba media sección.
-    'Pruebas de reproducción': report.playback?.done === true,
-    'Pantalla completa': !!report.fullscreen,
+  const done = {
+    'Environment and capabilities': !!report.caps,
+    // Check that they FINISHED, not that they started. The object is created
+    // when the button is pressed, so checking it exists ticked the box at once
+    // and passed as complete a report missing half a section.
+    'Playback tests': report.playback?.done === true,
+    'Full screen': !!report.fullscreen,
   };
-  report.complete = Object.values(hecho).every(Boolean);
+  report.complete = Object.values(done).every(Boolean);
 
   const ul = $('checklist');
   ul.innerHTML = '';
-  for (const [k, v] of Object.entries(hecho)) {
+  for (const [k, v] of Object.entries(done)) {
     const li = document.createElement('li');
-    li.textContent = v ? `✓ ${k}` : `○ ${k} — pendiente`;
+    li.textContent = v ? `✓ ${k}` : `○ ${k} — pending`;
     li.className = v ? 'ok' : 'warn';
     ul.appendChild(li);
   }
@@ -587,8 +585,8 @@ function emit(){
 
 $('copy').onclick = async () => {
   const ta = $('out');
-  try { await navigator.clipboard.writeText(ta.value); $('copy').textContent = 'Copiado'; }
-  catch { ta.select(); document.execCommand?.('copy'); $('copy').textContent = 'Selecciona y copia'; }
+  try { await navigator.clipboard.writeText(ta.value); $('copy').textContent = 'Copied'; }
+  catch { ta.select(); document.execCommand?.('copy'); $('copy').textContent = 'Select and copy'; }
   setTimeout(() => { $('copy').textContent = copyLabel(); }, 2500);
 };
 emit();

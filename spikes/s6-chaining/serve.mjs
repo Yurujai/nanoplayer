@@ -1,17 +1,17 @@
 /*
- * Servidor estático con soporte de peticiones Range.
+ * Static server with support for Range requests.
  *
- * Igual que el de S1 salvo en una cosa: **escucha en todas las interfaces**, no
- * solo en 127.0.0.1. La pregunta que este spike existe para responder solo se
- * contesta en un iPhone, y para abrirlo desde el móvil hace falta que el
- * servidor sea alcanzable desde la red local. Por eso imprime también las
- * direcciones LAN.
+ * The same as S1's except for one thing: **it listens on every interface**,
+ * not only on 127.0.0.1. The question this spike exists to answer can only be
+ * answered on an iPhone, and opening it from the phone needs the server to be
+ * reachable from the local network. That is why it also prints the LAN
+ * addresses.
  *
- * Range importa por lo mismo que en S1: sin él, `python -m http.server`
- * devuelve el fichero entero en cada salto y cualquier medición queda
- * contaminada por la descarga.
+ * Range matters for the same reason as in S1: without it,
+ * `python -m http.server` returns the whole file on every seek and any
+ * measurement is contaminated by the download.
  *
- *   node serve.mjs [puerto]
+ *   node serve.mjs [port]
  */
 import { createServer } from 'node:http';
 import { createReadStream, statSync } from 'node:fs';
@@ -40,9 +40,10 @@ createServer((req, res) => {
   let st;
   try {
     st = statSync(path);
-    // Un directorio se sirve por su index.html, que es lo que hace GitHub
-    // Pages. Sin esto, la ruta publicada —que termina en barra— daría 404 aquí
-    // y funcionaría en producción: el peor orden posible para enterarse.
+    // A directory is served through its index.html, which is what GitHub
+    // Pages does. Without this, the published path —which ends in a slash—
+    // would give a 404 here and work in production: the worst possible order
+    // to find out.
     if (st.isDirectory()) {
       path = join(path, 'index.html');
       st = statSync(path);
@@ -85,13 +86,13 @@ createServer((req, res) => {
   });
   createReadStream(path).pipe(res);
 }).listen(PORT, '0.0.0.0', () => {
-  console.log(`\n  http://127.0.0.1:${PORT}/   (este equipo)`);
-  for (const [nombre, addrs] of Object.entries(networkInterfaces())) {
+  console.log(`\n  http://127.0.0.1:${PORT}/   (this machine)`);
+  for (const [name, addrs] of Object.entries(networkInterfaces())) {
     for (const a of addrs ?? []) {
       if (a.family === 'IPv4' && !a.internal) {
-        console.log(`  http://${a.address}:${PORT}/   (${nombre} — para el móvil)`);
+        console.log(`  http://${a.address}:${PORT}/   (${name} — for the phone)`);
       }
     }
   }
-  console.log('\n  Range soportado. Ctrl+C para parar.\n');
+  console.log('\n  Range supported. Ctrl+C to stop.\n');
 });

@@ -1,172 +1,172 @@
-# Spike S2 — Matriz de dispositivos
+# Spike S2 — Device matrix
 
-**Preguntas que responde**, y que no se pueden contestar desde un solo equipo:
+**Questions it answers**, which cannot be answered from a single machine:
 
-1. ¿Cuántos vídeos simultáneos aguanta el dispositivo? → fija el presupuesto del
-   `PlayerRegistry` (también resuelve **S4**)
-2. ¿`requestFullscreen` sobre el contenedor funciona, o el sistema secuestra la
-   pantalla y mata el segundo stream? → **la pregunta decisiva para iPhone**
-3. ¿Hay `MediaSource` / `ManagedMediaSource`? → sin alguna, hls.js no funciona
-4. ¿Se sostiene la sincronización de S1 fuera de Chrome sobre escritorio?
-5. ¿Deja sonar dos vídeos a la vez? ¿Cuál es su política de autoplay?
+1. How many simultaneous videos does the device hold? → sets the budget of the
+   `PlayerRegistry` (it also settles **S4**)
+2. Does `requestFullscreen` on the container work, or does the system hijack
+   the screen and kill the second stream? → **the decisive question for iPhone**
+3. Is there `MediaSource` / `ManagedMediaSource`? → without either, hls.js does
+   not work
+4. Does S1's synchronisation hold outside desktop Chrome?
+5. Does it let two videos play sound at once? What is its autoplay policy?
 
-**Estado:** ✅ **completo.** Medido en Blink (Ubuntu, Mac M2 Pro), Safari de
-escritorio y dos iPhone (Safari 26 y Chrome iOS).
+**Status:** ✅ **complete.** Measured on Blink (Ubuntu, Mac M2 Pro), desktop
+Safari and two iPhones (Safari 26 and Chrome iOS).
 
 ---
 
-## Cómo se usa
+## How to use it
 
 ```bash
-./gen-media.sh      # requiere ffmpeg
+./gen-media.sh      # requires ffmpeg
 pnpm install
-node build.mjs      # -> dist/nanoplayer-probe.html  (autocontenido, ~558 KB)
-node verify.mjs     # comprueba la sonda contra Chrome local antes de repartirla
+node build.mjs      # -> dist/nanoplayer-probe.html  (self-contained, ~558 KB)
+node verify.mjs     # checks the probe against local Chrome before handing it out
 ```
 
-`dist/nanoplayer-probe.html` es **un único fichero sin recursos externos**. Se
-cuelga en cualquier hosting estático, o se abre en local. Los vídeos van
-incrustados en base64 y se convierten a `blob:` en tiempo de ejecución, porque
-Safari en iOS maneja mal las URIs `data:` en elementos multimedia.
+`dist/nanoplayer-probe.html` is **a single file with no external resources**. It
+can be put on any static hosting, or opened locally. The videos are embedded
+in base64 and turned into `blob:` URLs at run time, because Safari on iOS
+handles `data:` URIs badly in media elements.
 
-### Qué se pide a quien prueba
+### What testers are asked to do
 
-1. Abrir el enlace en el dispositivo.
-2. Pulsar **Iniciar pruebas** y esperar (menos de un minuto).
-3. Pulsar **Probar pantalla completa**. Es la más importante: mirar si se ven
-   **los dos** vídeos o solo uno.
-4. Pulsar **Copiar informe** y devolverlo.
+1. Open the link on the device.
+2. Press **Start tests** and wait (under a minute).
+3. Press **Test full screen**. It is the most important one: check whether
+   **both** videos are visible or only one.
+4. Press **Copy report** and send it back.
 
-Todo son datos técnicos del navegador. No recoge nada personal ni sale de la
-página: no hay ninguna petición de red.
+It is all technical browser data. It collects nothing personal and nothing
+leaves the page: there is not a single network request.
 
 ---
 
-## Resultados
+## Results
 
-| | Chrome · Ubuntu | Chrome · Mac M2 Pro | Safari 16.4 · Mac | **iPhone** (Safari 26 y Chrome iOS) |
+| | Chrome · Ubuntu | Chrome · Mac M2 Pro | Safari 16.4 · Mac | **iPhone** (Safari 26 and Chrome iOS) |
 |---|---|---|---|---|
-| Motor | Blink | Blink | WebKit | WebKit |
-| Vídeos simultáneos | 18 | 18 | 17 | **17** |
-| Fullscreen del contenedor | sí | sí | sí | **NO** |
-| Dos audios a la vez | sí | sí | sí | **no** |
-| Deriva mediana / p95 / máx | 7.8 / 15.1 / 39 ms | 8.3 / 19.6 / 41 ms | 30.6 / 53.9 / 118 ms | **28.1 / 209 / 405 ms** |
-| Saltos duros | 0 | 0 | 0 | **1** |
-| `audioTracks` | **no** | **no** | sí | sí |
-| MediaSource | sí | sí | sí | no |
-| ManagedMediaSource | no | no | no (Safari 16) | **sí** |
+| Engine | Blink | Blink | WebKit | WebKit |
+| Simultaneous videos | 18 | 18 | 17 | **17** |
+| Container fullscreen | yes | yes | yes | **NO** |
+| Two audio tracks at once | yes | yes | yes | **no** |
+| Drift median / p95 / max | 7.8 / 15.1 / 39 ms | 8.3 / 19.6 / 41 ms | 30.6 / 53.9 / 118 ms | **28.1 / 209 / 405 ms** |
+| Hard seeks | 0 | 0 | 0 | **1** |
+| `audioTracks` | **no** | **no** | yes | yes |
+| MediaSource | yes | yes | yes | no |
+| ManagedMediaSource | no | no | no (Safari 16) | **yes** |
 | AV1 | probably | probably | no | no |
 
-### Los cuatro hallazgos que cambian el diseño
+### The four findings that change the design
 
-**1. En iPhone no existe el fullscreen del contenedor.** `requestFullscreen`
-sobre un `<div>` no está implementado: solo queda `webkitEnterFullscreen()`
-sobre el vídeo suelto, que entrega la pantalla al reproductor del sistema y
-hace desaparecer el segundo stream. **El dual-stream a pantalla completa es
-imposible en iPhone.**
+**1. iPhone has no container fullscreen.** `requestFullscreen` on a `<div>` is
+not implemented: all that is left is `webkitEnterFullscreen()` on the video
+alone, which hands the screen to the system player and makes the second stream
+disappear. **Dual-stream in full screen is impossible on iPhone.**
 
-En Safari de escritorio sí funciona. **La limitación es de iOS, no de WebKit** —
-justo lo que el Mac estaba en la matriz para distinguir.
+On desktop Safari it works. **The limitation is iOS's, not WebKit's** — which is
+exactly what the Mac was in the matrix to tell apart.
 
-**2. El límite de vídeos simultáneos es del motor, no del hardware.** 18 en
-Blink, 17 en WebKit — y un iPhone de 4 núcleos da los mismos 17 que un Mac.
+**2. The simultaneous-video limit belongs to the engine, not the hardware.** 18
+on Blink, 17 on WebKit — and a 4-core iPhone gives the same 17 as a Mac.
 
-> **Corrección.** Una versión anterior de este documento afirmaba que el iPhone
-> aguantaba solo 2. Era un defecto de la sonda: las pruebas previas no liberaban
-> los decodificadores y la rampa arrancaba sin recursos. Corregido con
-> `release()`, y confirmado con dos navegadores del mismo iPhone. Sirva de aviso:
-> **un número sorprendente es más probable que sea un fallo del instrumento que
-> un hallazgo.**
+> **Correction.** An earlier version of this document claimed the iPhone held
+> only 2. It was a defect in the probe: the previous tests did not release the
+> decoders and the ramp started without resources. Fixed with `release()`, and
+> confirmed with two browsers on the same iPhone. Take it as a warning: **a
+> surprising number is more likely a fault in the instrument than a finding.**
 
-Matiz: la métrica es "cuántos elementos siguen avanzando su `currentTime`". No
-prueba que se rendericen con fluidez, y los vídeos de prueba son de 320x180. El
-presupuesto del `PlayerRegistry` debe seguir midiéndose en ejecución, pero
-partiendo de que el orden de magnitud es holgado y no de 2.
+Caveat: the metric is "how many elements keep advancing their `currentTime`".
+It does not prove they render smoothly, and the test videos are 320x180. The
+`PlayerRegistry` budget still has to be measured at run time, but starting
+from the fact that the order of magnitude is generous, not 2.
 
-**3. El ajuste de S1 es de Chrome, no universal** — y falla de forma distinta
-en cada sitio.
+**3. S1's tuning is Chrome's, not universal** — and it fails differently in
+each place.
 
-En Safari de escritorio la degradación es uniforme: 30.6 ms de mediana frente a
-7.8. Eso es calibración.
+On desktop Safari the degradation is uniform: a 30.6 ms median against 7.8.
+That is calibration.
 
-En iPhone la firma es otra y más interesante: **mediana de 28.1 ms (buena, por
-debajo del frame) con un p95 de 209 ms y un máximo de 405**. No es un desajuste
-de ganancia — si las constantes estuvieran mal, la mediana también lo estaría.
-Son **excursiones puntuales severas** sobre un comportamiento base correcto.
+On iPhone the signature is different and more interesting: **a 28.1 ms median
+(good, below a frame) with a 209 ms p95 and a 405 ms maximum**. It is not a gain
+mismatch — if the constants were wrong, the median would be wrong too. They are
+**occasional severe excursions** on top of correct baseline behaviour.
 
-Dos causas plausibles, sin distinguir todavía:
-- Buffering momentáneo por contención de decodificación en el dispositivo.
-- WebKit en móvil no aplica los cambios de `playbackRate` con la finura que el
-  controlador da por supuesta.
+Two plausible causes, not yet told apart:
+- Momentary buffering from decoding contention on the device.
+- Mobile WebKit does not apply `playbackRate` changes with the precision the
+  controller assumes.
 
-Consecuencia para la Fase 3: el arreglo **no es subir la ganancia** sino bajar
-el umbral de salto duro en el perfil de WebKit, para que una excursión de 200 ms
-se corrija en vez de quedarse. Distinguir entre ambas causas requiere
-instrumentar los eventos de stall durante la reproducción, y se hace mejor con
-el reproductor real que con la sonda.
+Consequence for Phase 3: the fix is **not raising the gain** but lowering the
+hard-seek threshold in the WebKit profile, so that a 200 ms excursion gets
+corrected instead of staying. Telling both causes apart requires instrumenting
+stall events during playback, and is better done with the real player than
+with the probe.
 
-**4. `audioTracks` está invertido respecto a lo esperado:** existe en WebKit y
-no en Blink. El `AudioTrackProvider` necesita las dos vías desde el principio
-—nativa en Safari, hls.js en Chrome—, y es la excepción legítima a la regla de
-"una sola implementación hasta que haya consumidor real": aquí ya hay dos.
+**4. `audioTracks` is the opposite of what was expected:** it exists on WebKit
+and not on Blink. The `AudioTrackProvider` needs both paths from the start
+—native on Safari, hls.js on Chrome—, and it is the legitimate exception to the
+rule of "a single implementation until there is a real consumer": here there
+are already two.
 
-Y una buena noticia: iOS 26.5 trae `ManagedMediaSource`, así que hls.js es
-viable en iPhone pese a no haber `MediaSource` clásico.
+And a piece of good news: iOS 26.5 ships `ManagedMediaSource`, so hls.js is
+viable on iPhone despite there being no classic `MediaSource`.
 
-### Lo que queda fuera del alcance de este spike
+### What falls outside this spike
 
-- **Distinguir la causa de las excursiones en iPhone** (stalls vs. `playbackRate`
-  no honrado). Necesita instrumentar eventos de stall durante la reproducción;
-  se hace mejor con el reproductor real en la Fase 3.
-- **HLS.** La sonda usa MP4 progresivo para mantenerse autocontenida. Con MSE y
-  hls.js el buffering es otro mundo y hay que repetir la medición.
-- **Red real.** Todo son blobs en memoria: sin latencia ni ancho de banda
-  limitado.
-- **Consumo de batería y CPU** sostenido.
+- **Telling apart the cause of the iPhone excursions** (stalls vs.
+  `playbackRate` not honoured). It needs stall events instrumented during
+  playback; better done with the real player in Phase 3.
+- **HLS.** The probe uses progressive MP4 to stay self-contained. With MSE and
+  hls.js buffering is another world and the measurement must be repeated.
+- **Real network.** Everything is in-memory blobs: no latency or limited
+  bandwidth.
+- **Sustained battery and CPU** use.
 
 ---
 
-## Cómo se leerán los resultados
+## How the results will be read
 
-| Hallazgo | Consecuencia para el producto |
+| Finding | Consequence for the product |
 |---|---|
-| `maxConcurrentVideos` < 4 | Sospechar primero de la sonda: medido 17-18 en todos los motores. Si se confirma, el degradado es obligatorio |
-| `containerFullscreen: false` | En ese dispositivo no hay dual-stream a pantalla completa. Hay que decidir: conmutar a un stream, o desactivar el botón |
-| `mediaSource` y `managedMediaSource` ambos `false` | hls.js no funciona: solo HLS nativo, sin control de calidad propio |
-| `hlsMime` es `"maybe"` | **No es prueba de nada.** Chrome lo devuelve sin soportar HLS nativo. Solo `"probably"` junto a la ausencia de MSE indica HLS nativo real |
-| `audioTracks: false` | El multi-audio no puede ir por la API nativa en ese navegador |
-| `coldAutoplay.muted: false` | Ni siquiera silenciado se puede autoarrancar: el póster y el botón de play son obligatorios, no una optimización |
-| `dualAudio: false` | Confirma que el audio debe venir de un solo stream, como ya asume el diseño maestro/esclavo |
-| `driftP95Ms` > 33 | La sincronización de S1 no se sostiene ahí; hay que revisar umbrales por plataforma |
-| `loopFps` muy bajo | El lazo de control está limitado por CPU; hay que espaciarlo |
+| `maxConcurrentVideos` < 4 | Suspect the probe first: 17-18 measured on every engine. If confirmed, degrading is mandatory |
+| `containerFullscreen: false` | On that device there is no dual-stream in full screen. A decision is needed: switch to one stream, or disable the button |
+| `mediaSource` and `managedMediaSource` both `false` | hls.js does not work: native HLS only, with no quality control of our own |
+| `hlsMime` is `"maybe"` | **It proves nothing.** Chrome returns it without supporting native HLS. Only `"probably"` together with no MSE indicates real native HLS |
+| `audioTracks: false` | Multi-audio cannot go through the native API in that browser |
+| `coldAutoplay.muted: false` | Not even muted can it autostart: the poster and play button are mandatory, not an optimisation |
+| `dualAudio: false` | Confirms audio must come from a single stream, as the master/slave design already assumes |
+| `driftP95Ms` > 33 | S1's synchronisation does not hold there; thresholds must be reviewed per platform |
+| very low `loopFps` | The control loop is CPU-bound; it has to be spaced out |
 
 ---
 
-## Dispositivos que interesan
+## Devices of interest
 
-Prioridad por lo que más puede cambiar el diseño:
+Priority by how much each can change the design:
 
-1. **iPhone reciente** — la pregunta del fullscreen del contenedor
-2. **iPhone o iPad antiguo** — el suelo de decodificación simultánea
-3. **iPad** — se espera que sí soporte fullscreen del contenedor; hay que
-   confirmar que iPad y iPhone divergen
-4. **Safari en Mac** — separa "es Safari" de "es iOS"
-5. **Android de gama baja** — el otro suelo de decodificación
+1. **A recent iPhone** — the container fullscreen question
+2. **An old iPhone or iPad** — the floor for simultaneous decoding
+3. **iPad** — expected to support container fullscreen; confirm that iPad and
+   iPhone diverge
+4. **Safari on Mac** — separates "it is Safari" from "it is iOS"
+5. **Low-end Android** — the other decoding floor
 
-Un iPad mini antiguo **no es un mal dispositivo de prueba, es uno de los
-buenos**: los límites de hardware solo aparecen en equipos modestos. Lo que hay
-que decidir es si queda por debajo del suelo de soporte declarado — pero eso se
-decide *con* el dato, no antes de tenerlo.
+An old iPad mini **is not a bad test device, it is one of the good ones**:
+hardware limits only show up on modest machines. What has to be decided is
+whether it falls below the declared support floor — but that is decided *with*
+the data, not before having it.
 
 ---
 
-## Limitaciones de la sonda
+## Limitations of the probe
 
-- **No prueba HLS.** Necesitaría un stream externo, lo que rompería la
-  autocontención. La sincronización sobre HLS/MSE hay que medirla aparte, con
-  hosting propio.
-- **No prueba red real.** Todo es local; no hay latencia ni ancho de banda
-  limitado.
-- El tope de la prueba de decodificación son 24 vídeos. Si un dispositivo llega
-  ahí, el informe lo marca con `decodeCappedAtLimit`, y el número real es mayor.
-- El consumo de batería y CPU sostenido no se mide.
+- **It does not test HLS.** It would need an external stream, which would break
+  self-containment. Synchronisation over HLS/MSE has to be measured separately,
+  with our own hosting.
+- **It does not test a real network.** Everything is local; no latency or
+  limited bandwidth.
+- The decoding test stops at 24 videos. If a device reaches that, the report
+  flags it with `decodeCappedAtLimit`, and the real number is higher.
+- Sustained battery and CPU use is not measured.

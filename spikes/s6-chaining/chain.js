@@ -1,555 +1,556 @@
 'use strict';
 /*
- * Encadenado de piezas: las tres variantes que este spike compara.
+ * Chaining pieces: the three variants this spike compares.
  *
- * La pregunta es si se puede pasar de la cabecera al contenido sin que se vea
- * el salto, y si el segundo `play()` sobrevive a la política de autoplay. Son
- * dos preguntas y se estorban entre sí:
+ * The question is whether the intro can hand over to the content without the
+ * cut being visible, and whether the second `play()` survives the autoplay
+ * policy. They are two questions and they get in each other's way:
  *
- *   - Dos elementos `<video>` distintos permiten tener el segundo ya
- *     decodificando cuando el primero termina, que es la única forma de que no
- *     haya hueco. Pero un elemento que nunca ha reproducido está bloqueado.
- *   - Un solo elemento al que se le cambia el `src` no tiene ese problema
- *     —quedó desbloqueado por el gesto inicial— pero obliga a `load()` y a
- *     rellenar búfer, y eso se ve.
+ *   - Two distinct `<video>` elements let the second one already be decoding
+ *     when the first ends, which is the only way to have no gap. But an
+ *     element that has never played is locked.
+ *   - A single element whose `src` is swapped does not have that problem
+ *     —it was unlocked by the initial gesture— but it forces a `load()` and a
+ *     buffer refill, and that shows.
  *
- * De ahí las tres variantes. La A es la que se propone para el reproductor;
- * las otras dos existen para poder decir en qué se nota la diferencia.
+ * Hence the three variants. A is the one proposed for the player; the other
+ * two exist to be able to say where the difference shows.
  *
- * NADA se descarga hasta que el usuario pulsa reproducir: los elementos se
- * crean dentro del propio gestor del clic. No es celo estético, es lo que
- * obliga el principio 2 del reproductor, y además es la parte difícil —hay que
- * desbloquear un elemento que en ese instante todavía no tiene un byte.
+ * NOTHING is downloaded until the user presses play: the elements are created
+ * inside the click handler itself. It is not aesthetic zeal, it is what the
+ * player's principle 2 demands, and it is also the hard part —an element must
+ * be unlocked while it does not yet have a single byte.
  */
 
-const HAY_RVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
-const ahora = () => performance.now();
+const HAS_RVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
+const now = () => performance.now();
 
-/** Las piezas de la cadena. La cola entra por el mismo mecanismo que la cabecera. */
-const PIEZAS = [
-  { id: 'intro', src: 'media/intro.mp4', etiqueta: 'CABECERA', saltable: true },
-  { id: 'main', src: 'media/main.mp4', etiqueta: 'PRINCIPAL' },
-  { id: 'outro', src: 'media/outro.mp4', etiqueta: 'COLA' },
+/** The pieces of the chain. The outro goes in through the same mechanism as the intro. */
+const PIECES = [
+  { id: 'intro', src: 'media/intro.mp4', label: 'INTRO', skippable: true },
+  { id: 'main', src: 'media/main.mp4', label: 'MAIN' },
+  { id: 'outro', src: 'media/outro.mp4', label: 'OUTRO' },
 ];
 
-const VARIANTES = {
+const VARIANTS = {
   A: {
     id: 'A',
-    label: 'A · dos elementos, desbloqueados en el gesto',
-    unElemento: false,
-    desbloquear: true,
+    label: 'A · two elements, unlocked in the gesture',
+    singleElement: false,
+    unlock: true,
   },
   B: {
     id: 'B',
-    label: 'B · dos elementos, sin desbloquear',
-    unElemento: false,
-    desbloquear: false,
+    label: 'B · two elements, not unlocked',
+    singleElement: false,
+    unlock: false,
   },
   C: {
     id: 'C',
-    label: 'C · un elemento, cambiando src',
-    unElemento: true,
-    desbloquear: false,
+    label: 'C · one element, swapping src',
+    singleElement: true,
+    unlock: false,
   },
 };
 
 /**
- * Encadena las piezas y mide cada costura.
+ * Chains the pieces and measures each seam.
  *
- * Una costura se mide con tres instantes, no con uno: cuándo se pidió el play
- * de la entrante, cuándo presentó su primer fotograma, y cuándo presentó el
- * suyo último la saliente. El hueco visible es la distancia entre los dos
- * últimos; lo demás es diagnóstico para saber *por qué* salió ese número.
+ * A seam is measured with three instants, not one: when the incoming piece's
+ * play was requested, when it presented its first frame, and when the
+ * outgoing one presented its last. The visible gap is the distance between
+ * the last two; the rest is diagnostics, to know *why* that number came out.
  */
-class Cadena {
-  constructor(escenario, opciones) {
-    this.escenario = escenario;
-    this.variante = VARIANTES[opciones.variante] ?? VARIANTES.A;
-    // La variante C no admite anticipación: no se puede cargar la pieza
-    // siguiente sin destruir la que está sonando. Esa imposibilidad es en sí
-    // misma un resultado del spike, así que se fuerza aquí y se deja escrito.
-    this.leadMs = this.variante.unElemento ? 0 : (opciones.leadMs ?? 0);
-    this.onCambio = opciones.onCambio ?? (() => {});
+class Chain {
+  constructor(stage, options) {
+    this.stage = stage;
+    this.variant = VARIANTS[options.variant] ?? VARIANTS.A;
+    // Variant C cannot anticipate: the next piece cannot be loaded without
+    // destroying the one playing. That impossibility is itself a result of
+    // the spike, so it is forced here and written down.
+    this.leadMs = this.variant.singleElement ? 0 : (options.leadMs ?? 0);
+    this.onChange = options.onChange ?? (() => {});
 
-    this.indice = 0;
-    this.elementos = [];
-    this.marcas = new Map();
-    this.costuras = [];
-    this.desbloqueos = [];
-    this.arranque = null;
-    this.preparacion = null;
-    this.transitando = false;
-    this.terminada = false;
-    this.temporizador = null;
+    this.index = 0;
+    this.elements = [];
+    this.marks = new Map();
+    this.seams = [];
+    this.unlocks = [];
+    this.start = null;
+    this.preparation = null;
+    this.transitioning = false;
+    this.finished = false;
+    this.timer = null;
   }
 
-  get piezaActual() { return PIEZAS[this.indice]; }
-  get elementoActual() {
-    return this.variante.unElemento ? this.elementos[0] : this.elementos[this.indice];
+  get currentPiece() { return PIECES[this.index]; }
+  get currentElement() {
+    return this.variant.singleElement ? this.elements[0] : this.elements[this.index];
   }
-  get haySiguiente() { return this.indice < PIEZAS.length - 1; }
-  get saltable() {
-    return !!this.piezaActual && !!this.piezaActual.saltable && this.haySiguiente
-      && !this.terminada;
+  get hasNext() { return this.index < PIECES.length - 1; }
+  get skippable() {
+    return !!this.currentPiece && !!this.currentPiece.skippable && this.hasNext
+      && !this.finished;
   }
 
-  /* ------------------------------------------------------------- arranque -- */
+  /* ---------------------------------------------------------------- start -- */
 
   /**
-   * Arranca la cadena. **Tiene que llamarse desde el gestor del clic**, y todo
-   * lo que hay hasta el primer `await` corre dentro del gesto del usuario.
+   * Starts the chain. **It must be called from the click handler**, and
+   * everything up to the first `await` runs inside the user gesture.
    *
-   * Ese detalle es el spike entero: la activación por gesto solo vale mientras
-   * la pila de llamadas viene del evento. Un `await` antes de desbloquear y el
-   * permiso ya se perdió.
+   * That detail is the whole spike: gesture activation is only valid while the
+   * call stack comes from the event. One `await` before unlocking and the
+   * permission is gone.
    */
-  arrancar() {
-    if (this.elementos.length) return;
+  begin() {
+    if (this.elements.length) return;
 
-    if (this.variante.unElemento) {
-      this.elementos.push(this.#crearElemento(PIEZAS[0], 0));
+    if (this.variant.singleElement) {
+      this.elements.push(this.#createElement(PIECES[0], 0));
     } else {
-      PIEZAS.forEach((pieza, i) => this.elementos.push(this.#crearElemento(pieza, i)));
+      PIECES.forEach((piece, i) => this.elements.push(this.#createElement(piece, i)));
     }
 
-    // Desbloquear TODO lo que no sea la primera pieza, todavía dentro del
-    // gesto. Se hace antes de arrancar la cabecera a propósito: si se hiciera
-    // después, un `play()` pendiente podría colarse entre medias.
-    if (this.variante.desbloquear) {
-      for (let i = 1; i < this.elementos.length; i++) {
-        this.#desbloquear(this.elementos[i], PIEZAS[i].id);
+    // Unlock EVERYTHING except the first piece, still inside the gesture. It
+    // is done before starting the intro on purpose: done afterwards, a pending
+    // `play()` could slip in between.
+    if (this.variant.unlock) {
+      for (let i = 1; i < this.elements.length; i++) {
+        this.#unlock(this.elements[i], PIECES[i].id);
       }
     }
 
-    for (const el of this.elementos) this.#instrumentar(el);
+    for (const el of this.elements) this.#instrument(el);
 
-    const primero = this.elementos[0];
-    this.arranque = { id: PIEZAS[0].id, t: ahora(), bloqueado: false, error: null };
-    this.#pedirPlay(primero, this.arranque);
-    this.#activar(0);
-    this.#vigilar();
-    this.onCambio();
+    const first = this.elements[0];
+    this.start = { id: PIECES[0].id, t: now(), blocked: false, error: null };
+    this.#requestPlay(first, this.start);
+    this.#activate(0);
+    this.#watch();
+    this.onChange();
   }
 
-  #crearElemento(pieza, indice) {
+  #createElement(piece, index) {
     const el = document.createElement('video');
-    el.src = pieza.src;
+    el.src = piece.src;
     el.preload = 'auto';
     el.playsInline = true;
-    // Safari antiguo solo mira el atributo, no la propiedad. Mismo motivo que
-    // en el motor nativo del reproductor.
+    // Old Safari only looks at the attribute, not the property. Same reason
+    // as in the player's native engine.
     el.setAttribute('playsinline', '');
-    el.dataset.pieza = pieza.id;
-    el.className = 'pieza';
-    // Todas apiladas en el mismo hueco. Se oculta con opacidad y no con
-    // `display:none` ni `visibility:hidden`: hace falta que el navegador siga
-    // componiendo el elemento para que tenga un fotograma listo que enseñar en
-    // el instante del cambio. Ocultarlo del todo invita a que lo descarte, que
-    // es justo el hueco negro que se intenta evitar.
-    el.style.opacity = indice === 0 ? '1' : '0';
-    el.style.zIndex = indice === 0 ? '2' : '1';
-    this.escenario.appendChild(el);
+    el.dataset.piece = piece.id;
+    el.className = 'piece';
+    // All stacked in the same slot. Hidden with opacity and not with
+    // `display:none` or `visibility:hidden`: the browser must keep compositing
+    // the element so it has a frame ready to show at the moment of the switch.
+    // Hiding it completely invites the browser to discard it, which is exactly
+    // the black gap being avoided.
+    el.style.opacity = index === 0 ? '1' : '0';
+    el.style.zIndex = index === 0 ? '2' : '1';
+    this.stage.appendChild(el);
     return el;
   }
 
   /**
-   * Desbloquea un elemento para poder reproducirlo después sin gesto.
+   * Unlocks an element so it can be played later without a gesture.
    *
-   * Dos decisiones que parecen detalles y no lo son:
+   * Two decisions that look like details and are not:
    *
-   * **Volumen a cero, y NO `muted`.** Con `muted = true` el navegador concede
-   * el play por la política de autoplay silencioso, y entonces esto no
-   * probaría nada: el permiso que interesa es el de reproducir con sonido.
+   * **Volume to zero, and NOT `muted`.** With `muted = true` the browser grants
+   * the play under the muted-autoplay policy, and then this would prove
+   * nothing: the permission that matters is playing with sound.
    *
-   * **`pause()` inmediato, sin esperar a la promesa.** Si se espera, el vídeo
-   * llega a sonar. Interrumpirlo así hace que la promesa de `play()` se
-   * rechace con `AbortError`, y ese rechazo es **el camino bueno**: significa
-   * que el play llegó a concederse. El que delata un bloqueo es
+   * **Immediate `pause()`, without waiting for the promise.** If it waits, the
+   * video gets to be heard. Interrupting it like this makes the `play()`
+   * promise reject with `AbortError`, and that rejection is **the good path**:
+   * it means the play was granted. The one that betrays a block is
    * `NotAllowedError`.
    */
-  #desbloquear(el, id) {
-    const registro = { id, ok: false, error: null };
-    this.desbloqueos.push(registro);
+  #unlock(el, id) {
+    const record = { id, ok: false, error: null };
+    this.unlocks.push(record);
 
-    const volumenPrevio = el.volume;
+    const previousVolume = el.volume;
     el.volume = 0;
 
-    let promesa;
+    let promise;
     try {
-      promesa = el.play();
+      promise = el.play();
     } catch (error) {
-      registro.error = String((error && error.name) || error);
-      el.volume = volumenPrevio;
+      record.error = String((error && error.name) || error);
+      el.volume = previousVolume;
       return;
     }
 
     el.pause();
 
-    Promise.resolve(promesa)
-      .then(() => { registro.ok = true; })
+    Promise.resolve(promise)
+      .then(() => { record.ok = true; })
       .catch((error) => {
-        const nombre = (error && error.name) || String(error);
-        registro.ok = nombre === 'AbortError';
-        if (!registro.ok) registro.error = nombre;
+        const name = (error && error.name) || String(error);
+        record.ok = name === 'AbortError';
+        if (!record.ok) record.error = name;
       })
       .finally(() => {
-        el.volume = volumenPrevio;
-        try { el.currentTime = 0; } catch { /* aún sin metadatos: da igual */ }
-        this.onCambio();
+        el.volume = previousVolume;
+        try { el.currentTime = 0; } catch { /* no metadata yet: does not matter */ }
+        this.onChange();
       });
   }
 
-  /** Pide reproducción y anota si la política la rechazó. */
-  #pedirPlay(el, registro) {
-    let promesa;
+  /** Requests playback and records whether the policy rejected it. */
+  #requestPlay(el, record) {
+    let promise;
     try {
-      promesa = el.play();
+      promise = el.play();
     } catch (error) {
-      registro.bloqueado = true;
-      registro.error = String((error && error.name) || error);
+      record.blocked = true;
+      record.error = String((error && error.name) || error);
       return Promise.resolve();
     }
-    return Promise.resolve(promesa).catch((error) => {
-      const nombre = (error && error.name) || String(error);
-      // Un AbortError aquí es una carrera con nuestro propio pause, no un veto.
-      if (nombre === 'NotAllowedError') registro.bloqueado = true;
-      registro.error = nombre;
-      this.onCambio();
+    return Promise.resolve(promise).catch((error) => {
+      const name = (error && error.name) || String(error);
+      // An AbortError here is a race with our own pause, not a veto.
+      if (name === 'NotAllowedError') record.blocked = true;
+      record.error = name;
+      this.onChange();
     });
   }
 
-  /* -------------------------------------------------------- instrumentación */
+  /* ------------------------------------------------------ instrumentation -- */
 
   /**
-   * Anota cuándo se presentó cada fotograma.
+   * Records when each frame was presented.
    *
-   * `requestVideoFrameCallback` es la única fuente que dice cuándo un fotograma
-   * llegó **a la pantalla**. `timeupdate` llega a unos 4 Hz y mide otra cosa, y
-   * con él un hueco de 200 ms es indistinguible de uno de 20. Donde no existe
-   * la API se degrada a `requestAnimationFrame` y el informe lo advierte: los
-   * números salen más gruesos y no se pueden comparar con los de un navegador
-   * que sí la tiene.
+   * `requestVideoFrameCallback` is the only source that says when a frame
+   * reached **the screen**. `timeupdate` arrives at about 4 Hz and measures
+   * something else, and with it a 200 ms gap is indistinguishable from a 20 ms
+   * one. Where the API does not exist it degrades to `requestAnimationFrame`
+   * and the report warns about it: the numbers come out coarser and cannot be
+   * compared with those of a browser that has it.
    */
-  #instrumentar(el) {
-    const marca = { ultimo: 0, ultimoMedia: 0, frames: 0, primeroTras: null, desde: 0 };
-    this.marcas.set(el, marca);
+  #instrument(el) {
+    const mark = { last: 0, lastMedia: 0, frames: 0, firstAfter: null, since: 0 };
+    this.marks.set(el, mark);
 
-    if (HAY_RVFC) {
-      const paso = (tiempo, meta) => {
-        marca.ultimo = tiempo;
-        marca.ultimoMedia = meta ? meta.mediaTime : el.currentTime;
-        marca.frames++;
-        if (marca.desde && marca.primeroTras === null && tiempo >= marca.desde) {
-          marca.primeroTras = tiempo;
+    if (HAS_RVFC) {
+      const step = (time, meta) => {
+        mark.last = time;
+        mark.lastMedia = meta ? meta.mediaTime : el.currentTime;
+        mark.frames++;
+        if (mark.since && mark.firstAfter === null && time >= mark.since) {
+          mark.firstAfter = time;
         }
-        marca.handle = el.requestVideoFrameCallback(paso);
+        mark.handle = el.requestVideoFrameCallback(step);
       };
-      marca.handle = el.requestVideoFrameCallback(paso);
+      mark.handle = el.requestVideoFrameCallback(step);
     } else {
-      const paso = () => {
-        const t = ahora();
-        // Sin rVFC solo se sabe que el elemento avanza, no cuándo pintó. Se
-        // exige que `currentTime` haya cambiado para no contar fotogramas
-        // que no existen mientras está parado.
-        if (el.currentTime !== marca.ultimoMedia) {
-          marca.ultimo = t;
-          marca.ultimoMedia = el.currentTime;
-          marca.frames++;
-          if (marca.desde && marca.primeroTras === null && t >= marca.desde) {
-            marca.primeroTras = t;
+      const step = () => {
+        const t = now();
+        // Without rVFC all that is known is that the element advances, not
+        // when it painted. `currentTime` is required to have changed so as not
+        // to count frames that do not exist while it is stopped.
+        if (el.currentTime !== mark.lastMedia) {
+          mark.last = t;
+          mark.lastMedia = el.currentTime;
+          mark.frames++;
+          if (mark.since && mark.firstAfter === null && t >= mark.since) {
+            mark.firstAfter = t;
           }
         }
-        marca.raf = requestAnimationFrame(paso);
+        mark.raf = requestAnimationFrame(step);
       };
-      marca.raf = requestAnimationFrame(paso);
+      mark.raf = requestAnimationFrame(step);
     }
   }
 
-  /* ------------------------------------------------------------- transición */
+  /* ----------------------------------------------------------- transition -- */
 
-  /** Vigila el final de la pieza en curso para empezar la siguiente a tiempo. */
-  #vigilar() {
-    clearInterval(this.temporizador);
-    this.temporizador = setInterval(() => {
-      const el = this.elementoActual;
-      if (!el || this.transitando || this.terminada) return;
+  /** Watches for the end of the current piece to start the next one in time. */
+  #watch() {
+    clearInterval(this.timer);
+    this.timer = setInterval(() => {
+      const el = this.currentElement;
+      if (!el || this.transitioning || this.finished) return;
 
-      if (!this.haySiguiente) {
-        if (el.ended) { this.terminada = true; clearInterval(this.temporizador); this.onCambio(); }
+      if (!this.hasNext) {
+        if (el.ended) { this.finished = true; clearInterval(this.timer); this.onChange(); }
         return;
       }
 
       /*
-       * Anticipar: arrancar la entrante `leadMs` antes del final, para que
-       * tenga fotograma listo cuando haya que enseñarla.
+       * Anticipate: start the incoming piece `leadMs` before the end, so it
+       * has a frame ready when it has to be shown.
        *
-       * Se exige duración conocida. Mientras `readyState` es 0 la duración es
-       * NaN, y dando por buena esa lectura el restante salía 0 y la
-       * anticipación se disparaba en el primer fotograma: la pieza siguiente
-       * arrancaba a la vez que la cabecera y no se medía nada.
+       * A known duration is required. While `readyState` is 0 the duration is
+       * NaN, and taking that reading at face value made the remaining time
+       * come out as 0 and fired the anticipation on the first frame: the next
+       * piece started together with the intro and nothing was measured.
        */
-      const duracion = el.duration;
-      if (this.leadMs > 0 && Number.isFinite(duracion) && duracion > 0) {
-        const restante = duracion - el.currentTime;
-        if (restante * 1000 <= this.leadMs) void this.#preparar(true);
+      const duration = el.duration;
+      if (this.leadMs > 0 && Number.isFinite(duration) && duration > 0) {
+        const remaining = duration - el.currentTime;
+        if (remaining * 1000 <= this.leadMs) void this.#prepare(true);
       }
-      if (el.ended) void this.#transitar('fin');
+      if (el.ended) void this.#transition('end');
     }, 50);
   }
 
   /**
-   * Arranca la pieza siguiente sin enseñarla todavía.
+   * Starts the next piece without showing it yet.
    *
-   * Es la mitad del truco: cuando llegue el momento de cambiar, la entrante ya
-   * está decodificando y el cambio es solo un `opacity`. La otra mitad es no
-   * hacer el cambio hasta que haya presentado un fotograma de verdad.
+   * It is half of the trick: when the time comes to switch, the incoming one
+   * is already decoding and the switch is just an `opacity`. The other half is
+   * not switching until it has presented a real frame.
    */
-  #preparar(anticipada = false, silenciada = anticipada) {
-    if (this.preparacion) return this.preparacion;
-    if (this.variante.unElemento || !this.haySiguiente) return Promise.resolve(null);
+  #prepare(anticipated = false, muted = anticipated) {
+    if (this.preparation) return this.preparation;
+    if (this.variant.singleElement || !this.hasNext) return Promise.resolve(null);
 
-    const entrante = this.elementos[this.indice + 1];
-    const marca = this.marcas.get(entrante);
+    const incoming = this.elements[this.index + 1];
+    const mark = this.marks.get(incoming);
 
     /*
-     * Silenciada cuando la saliente todavía suena: en la anticipación y en el
-     * salto. Durante unos cientos de milisegundos coexisten, y dos audios a la
-     * vez se oyen.
+     * Muted while the outgoing one is still playing: in the anticipation and
+     * in the skip. For a few hundred milliseconds they coexist, and two audio
+     * tracks at once are heard.
      *
-     * El salto arrancaba antes con sonido, y en iPhone eso **detiene la
-     * saliente** en cuanto se pide el `play()`: 321 ms de hueco (README §5),
-     * porque iOS no reproduce dos audios a la vez. Ahora arranca muda, como lo
-     * hace el reproductor, para medir lo que de verdad se va a usar.
+     * The skip used to start with sound, and on iPhone that **stops the
+     * outgoing one** as soon as the `play()` is requested: a 321 ms gap
+     * (README §5), because iOS does not play two audio tracks at once. Now it
+     * starts muted, as the player does, to measure what will really be used.
      *
-     * En el camino normal sin anticipación arranca CON sonido, y eso no es un
-     * detalle: un `play()` silenciado lo concede siempre la política de
-     * autoplay, así que si la entrante arrancara siempre muda la variante B
-     * pasaría sin probar nada. El informe publica `conSonido` para que se pueda
-     * comprobar que la medición era válida en vez de tener que fiarse.
+     * On the normal path without anticipation it starts WITH sound, and that
+     * is not a detail: a muted `play()` is always granted by the autoplay
+     * policy, so if the incoming one always started muted variant B would
+     * pass without proving anything. The report publishes `withSound` so it
+     * can be checked that the measurement was valid instead of having to
+     * trust it.
      */
-    entrante.muted = silenciada;
+    incoming.muted = muted;
 
-    const registro = {
-      tPeticion: ahora(),
-      readyState: entrante.readyState,
-      buffered: entrante.buffered.length ? entrante.buffered.end(0) : 0,
-      anticipada,
-      conSonido: !silenciada,
-      bloqueado: false,
+    const record = {
+      tRequest: now(),
+      readyState: incoming.readyState,
+      buffered: incoming.buffered.length ? incoming.buffered.end(0) : 0,
+      anticipated,
+      withSound: !muted,
+      blocked: false,
       error: null,
     };
-    marca.desde = registro.tPeticion;
-    marca.primeroTras = null;
+    mark.since = record.tRequest;
+    mark.firstAfter = null;
 
-    this.preparacion = this.#pedirPlay(entrante, registro).then(() => registro);
-    return this.preparacion;
+    this.preparation = this.#requestPlay(incoming, record).then(() => record);
+    return this.preparation;
   }
 
-  /** Salta la pieza actual. Mismo camino que el final natural. */
-  saltar() {
-    if (!this.saltable) return;
-    void this.#transitar('salto');
+  /** Skips the current piece. Same path as the natural end. */
+  skip() {
+    if (!this.skippable) return;
+    void this.#transition('skip');
   }
 
-  async #transitar(motivo) {
-    if (this.transitando || this.terminada || !this.haySiguiente) return;
-    this.transitando = true;
+  async #transition(reason) {
+    if (this.transitioning || this.finished || !this.hasNext) return;
+    this.transitioning = true;
 
-    const saliente = this.elementoActual;
-    const piezaSaliente = this.piezaActual;
-    const piezaEntrante = PIEZAS[this.indice + 1];
+    const outgoing = this.currentElement;
+    const outgoingPiece = this.currentPiece;
+    const incomingPiece = PIECES[this.index + 1];
 
-    const costura = {
-      de: piezaSaliente.id,
-      a: piezaEntrante.id,
-      motivo,
+    const seam = {
+      from: outgoingPiece.id,
+      to: incomingPiece.id,
+      reason,
       lead: this.leadMs,
-      anticipada: this.preparacion !== null,
-      bloqueado: false,
+      anticipated: this.preparation !== null,
+      blocked: false,
       error: null,
-      conSonido: null,
-      pausadaTrasSonido: false,
-      readyStateEntrante: null,
-      hueco: null,
-      tPeticion: null,
-      tPrimerFrameEntrante: null,
-      tUltimoFrameSaliente: null,
+      withSound: null,
+      pausedAfterUnmute: false,
+      incomingReadyState: null,
+      gap: null,
+      tRequest: null,
+      tIncomingFirstFrame: null,
+      tOutgoingLastFrame: null,
     };
 
-    if (this.variante.unElemento) {
-      await this.#transitarMismoElemento(saliente, piezaEntrante, costura);
+    if (this.variant.singleElement) {
+      await this.#transitionSameElement(outgoing, incomingPiece, seam);
     } else {
-      await this.#transitarDosElementos(saliente, piezaEntrante, costura);
+      await this.#transitionTwoElements(outgoing, incomingPiece, seam);
     }
 
-    this.costuras.push(costura);
-    this.indice++;
-    this.preparacion = null;
-    this.transitando = false;
-    this.#activar(this.indice);
-    this.onCambio();
+    this.seams.push(seam);
+    this.index++;
+    this.preparation = null;
+    this.transitioning = false;
+    this.#activate(this.index);
+    this.onChange();
   }
 
-  /** Variante A/B: la entrante ya existe; solo hay que arrancarla y descubrirla. */
-  async #transitarDosElementos(saliente, piezaEntrante, costura) {
-    const entrante = this.elementos[this.indice + 1];
-    const marcaEntrante = this.marcas.get(entrante);
-    const marcaSaliente = this.marcas.get(saliente);
+  /** Variant A/B: the incoming element already exists; it only has to be started and revealed. */
+  async #transitionTwoElements(outgoing, incomingPiece, seam) {
+    const incoming = this.elements[this.index + 1];
+    const incomingMark = this.marks.get(incoming);
+    const outgoingMark = this.marks.get(outgoing);
 
-    // Sin anticipación se conmuta ya: al final natural la entrante arranca
-    // con sonido y la medida de política vale; al saltar arranca muda, porque
-    // la saliente sigue sonando hasta que la entrante tiene imagen.
-    const preparacion = this.#preparar(false, costura.motivo === 'salto');
-    const registro = await preparacion;
-    if (registro) {
-      costura.tPeticion = registro.tPeticion;
-      costura.readyStateEntrante = registro.readyState;
-      costura.bloqueado = registro.bloqueado;
-      costura.error = registro.error;
-      costura.anticipada = registro.anticipada;
-      costura.conSonido = registro.conSonido;
+    // Without anticipation the switch happens now: at the natural end the
+    // incoming one starts with sound and the policy measurement is valid; on a
+    // skip it starts muted, because the outgoing one keeps playing until the
+    // incoming one has a picture.
+    const preparation = this.#prepare(false, seam.reason === 'skip');
+    const record = await preparation;
+    if (record) {
+      seam.tRequest = record.tRequest;
+      seam.incomingReadyState = record.readyState;
+      seam.blocked = record.blocked;
+      seam.error = record.error;
+      seam.anticipated = record.anticipated;
+      seam.withSound = record.withSound;
     }
 
-    // Esperar al primer fotograma **presentado** de la entrante antes de
-    // descubrirla. Cambiar la opacidad antes de eso es exactamente lo que
-    // produce el destello negro: el elemento está visible y todavía no tiene
-    // nada que enseñar.
-    if (!costura.bloqueado) {
-      costura.tPrimerFrameEntrante = await this.#esperarPrimerFrame(marcaEntrante, 3000);
+    // Wait for the incoming one's first **presented** frame before revealing
+    // it. Changing the opacity before that is exactly what produces the black
+    // flash: the element is visible and has nothing to show yet.
+    if (!seam.blocked) {
+      seam.tIncomingFirstFrame = await this.#waitFirstFrame(incomingMark, 3000);
     }
 
-    // La saliente sigue presentando fotogramas hasta este instante, así que su
-    // último frame se lee **aquí**, no cuando se pidió el play.
-    costura.tUltimoFrameSaliente = marcaSaliente.ultimo;
+    // The outgoing one keeps presenting frames until this instant, so its last
+    // frame is read **here**, not when the play was requested.
+    seam.tOutgoingLastFrame = outgoingMark.last;
 
-    saliente.muted = true;
-    entrante.muted = false;
-    saliente.style.opacity = '0';
-    saliente.style.zIndex = '1';
-    entrante.style.opacity = '1';
-    entrante.style.zIndex = '2';
-    saliente.pause();
+    outgoing.muted = true;
+    incoming.muted = false;
+    outgoing.style.opacity = '0';
+    outgoing.style.zIndex = '1';
+    incoming.style.opacity = '1';
+    incoming.style.zIndex = '2';
+    outgoing.pause();
 
-    costura.hueco = this.#hueco(costura);
+    seam.gap = this.#gap(seam);
 
     /*
-     * Si arrancó muda —por la anticipación o por el salto—, quitarle el
-     * silencio es otra operación sin gesto detrás, y algunos navegadores
-     * responden pausando el elemento en vez de rechazar nada. Se comprueba un
-     * instante después en lugar de darlo por bueno: un fallo así es invisible
-     * salvo que se mire.
+     * If it started muted —through anticipation or a skip—, unmuting it is
+     * another operation with no gesture behind it, and some browsers respond
+     * by pausing the element instead of rejecting anything. It is checked a
+     * moment later rather than taken for granted: a failure like that is
+     * invisible unless someone looks.
      */
-    if (costura.conSonido === false && !costura.bloqueado) {
+    if (seam.withSound === false && !seam.blocked) {
       await new Promise((r) => setTimeout(r, 250));
-      if (entrante.paused) {
-        costura.pausadaTrasSonido = true;
-        this.#pedirPlay(entrante, costura);
+      if (incoming.paused) {
+        seam.pausedAfterUnmute = true;
+        this.#requestPlay(incoming, seam);
       }
     }
   }
 
-  /** Variante C: un elemento al que se le cambia la fuente. */
-  async #transitarMismoElemento(el, piezaEntrante, costura) {
-    const marca = this.marcas.get(el);
-    costura.tUltimoFrameSaliente = marca.ultimo;
-    costura.readyStateEntrante = 0;
+  /** Variant C: one element whose source is swapped. */
+  async #transitionSameElement(el, incomingPiece, seam) {
+    const mark = this.marks.get(el);
+    seam.tOutgoingLastFrame = mark.last;
+    seam.incomingReadyState = 0;
 
-    el.src = piezaEntrante.src;
+    el.src = incomingPiece.src;
     el.load();
 
-    const registro = { bloqueado: false, error: null };
-    // El elemento es el que ya estaba sonando, así que la petición va con
-    // sonido y la prueba de política es válida sin hacer nada más.
-    costura.conSonido = true;
-    costura.tPeticion = ahora();
-    marca.desde = costura.tPeticion;
-    marca.primeroTras = null;
+    const record = { blocked: false, error: null };
+    // The element is the one that was already playing, so the request goes
+    // with sound and the policy test is valid without doing anything else.
+    seam.withSound = true;
+    seam.tRequest = now();
+    mark.since = seam.tRequest;
+    mark.firstAfter = null;
 
-    await this.#pedirPlay(el, registro);
-    costura.bloqueado = registro.bloqueado;
-    costura.error = registro.error;
+    await this.#requestPlay(el, record);
+    seam.blocked = record.blocked;
+    seam.error = record.error;
 
-    if (!costura.bloqueado) {
-      costura.tPrimerFrameEntrante = await this.#esperarPrimerFrame(marca, 5000);
+    if (!seam.blocked) {
+      seam.tIncomingFirstFrame = await this.#waitFirstFrame(mark, 5000);
     }
-    costura.hueco = this.#hueco(costura);
+    seam.gap = this.#gap(seam);
   }
 
-  #esperarPrimerFrame(marca, limiteMs) {
-    const t0 = ahora();
+  #waitFirstFrame(mark, limitMs) {
+    const t0 = now();
     return new Promise((resolve) => {
-      const mirar = () => {
-        if (marca.primeroTras !== null) return resolve(marca.primeroTras);
-        if (ahora() - t0 > limiteMs) return resolve(null);
-        requestAnimationFrame(mirar);
+      const check = () => {
+        if (mark.firstAfter !== null) return resolve(mark.firstAfter);
+        if (now() - t0 > limitMs) return resolve(null);
+        requestAnimationFrame(check);
       };
-      mirar();
+      check();
     });
   }
 
   /**
-   * El hueco visible.
+   * The visible gap.
    *
-   * Se acota por abajo en cero a propósito: con anticipación la entrante
-   * presenta fotogramas **antes** de que la saliente termine, y la resta sale
-   * negativa. Eso no es un hueco de -200 ms, es que no hubo hueco.
+   * Clamped at zero on purpose: with anticipation the incoming one presents
+   * frames **before** the outgoing one ends, and the subtraction comes out
+   * negative. That is not a -200 ms gap, it means there was no gap.
    */
-  #hueco(costura) {
-    if (costura.bloqueado) return null;
-    if (costura.tPrimerFrameEntrante === null || !costura.tUltimoFrameSaliente) return null;
-    return Math.max(0, costura.tPrimerFrameEntrante - costura.tUltimoFrameSaliente);
+  #gap(seam) {
+    if (seam.blocked) return null;
+    if (seam.tIncomingFirstFrame === null || !seam.tOutgoingLastFrame) return null;
+    return Math.max(0, seam.tIncomingFirstFrame - seam.tOutgoingLastFrame);
   }
 
-  #activar(indice) {
-    if (this.variante.unElemento) return;
-    this.elementos.forEach((el, i) => {
-      el.style.opacity = i === indice ? '1' : '0';
-      el.style.zIndex = i === indice ? '2' : '1';
-      el.muted = i !== indice;
+  #activate(index) {
+    if (this.variant.singleElement) return;
+    this.elements.forEach((el, i) => {
+      el.style.opacity = i === index ? '1' : '0';
+      el.style.zIndex = i === index ? '2' : '1';
+      el.muted = i !== index;
     });
   }
 
-  /* ----------------------------------------------------------------- estado */
+  /* ---------------------------------------------------------------- state -- */
 
-  pausar() { this.elementoActual?.pause(); this.onCambio(); }
-  reanudar() {
-    const el = this.elementoActual;
-    if (el) this.#pedirPlay(el, { bloqueado: false, error: null });
-    this.onCambio();
+  pause() { this.currentElement?.pause(); this.onChange(); }
+  resume() {
+    const el = this.currentElement;
+    if (el) this.#requestPlay(el, { blocked: false, error: null });
+    this.onChange();
   }
 
-  destruir() {
-    clearInterval(this.temporizador);
-    for (const el of this.elementos) {
-      const marca = this.marcas.get(el);
-      if (marca && marca.raf) cancelAnimationFrame(marca.raf);
-      if (marca && marca.handle && el.cancelVideoFrameCallback) {
-        el.cancelVideoFrameCallback(marca.handle);
+  destroy() {
+    clearInterval(this.timer);
+    for (const el of this.elements) {
+      const mark = this.marks.get(el);
+      if (mark && mark.raf) cancelAnimationFrame(mark.raf);
+      if (mark && mark.handle && el.cancelVideoFrameCallback) {
+        el.cancelVideoFrameCallback(mark.handle);
       }
       el.pause();
       el.removeAttribute('src');
       el.load();
       el.remove();
     }
-    this.elementos = [];
-    this.marcas.clear();
+    this.elements = [];
+    this.marks.clear();
   }
 
-  get informe() {
+  get report() {
     return {
-      variante: this.variante.id,
-      etiqueta: this.variante.label,
+      variant: this.variant.id,
+      label: this.variant.label,
       leadMs: this.leadMs,
-      rvfc: HAY_RVFC,
-      arranque: this.arranque,
-      desbloqueos: this.desbloqueos.slice(),
-      costuras: this.costuras.slice(),
-      terminada: this.terminada,
+      rvfc: HAS_RVFC,
+      start: this.start,
+      unlocks: this.unlocks.slice(),
+      seams: this.seams.slice(),
+      finished: this.finished,
     };
   }
 }
 
-window.Cadena = Cadena;
-window.PIEZAS = PIEZAS;
-window.VARIANTES = VARIANTES;
-window.HAY_RVFC = HAY_RVFC;
+window.Chain = Chain;
+window.PIECES = PIECES;
+window.VARIANTS = VARIANTS;
+window.HAS_RVFC = HAS_RVFC;

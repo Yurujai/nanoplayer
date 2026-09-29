@@ -1,126 +1,125 @@
-# Spike S5 — Directo dual-stream
+# Spike S5 — Live dual-stream
 
-**Pregunta:** ¿puede el reproductor mantener sincronizados dos directos HLS
-independientes?
+**Question:** can the player keep two independent live HLS streams in sync?
 
-**Respuesta: sí, pero solo con `EXT-X-PROGRAM-DATE-TIME`.** Sin esa etiqueta no
-es que la corrección sea peor: es que **no hay forma de medir** si están
-sincronizados, y actuar sobre la medida equivocada empeora las cosas.
+**Answer: yes, but only with `EXT-X-PROGRAM-DATE-TIME`.** Without that tag it
+is not that correction gets worse: **there is no way to measure** whether they
+are in sync, and acting on the wrong measurement makes things worse.
 
-> Código desechable. Lo que sobrevive son las conclusiones de §4.
+> Throwaway code. What survives are the conclusions in §4.
 
 ---
 
-## 1. Cómo se ejecuta
+## 1. How to run it
 
 ```bash
-./stream.sh                 # dos emisiones en vivo, arrancadas a la vez
-./stream-desfasado.sh       # el segundo flujo arranca 8 s más tarde
-PDT=0 ./stream.sh           # sin la etiqueta de hora, para comparar
-node serve.mjs 8170         # sirve las listas SIN caché (imprescindible en directo)
-node measure.mjs 30         # medición automática
+./stream.sh                 # two live broadcasts, started together
+./stream-offset.sh          # the second stream starts 8 s later
+PDT=0 ./stream.sh           # without the time tag, for comparison
+node serve.mjs 8170         # serves the playlists WITHOUT caching (essential for live)
+node measure.mjs 30         # automatic measurement
 ```
 
-Banco manual en `http://127.0.0.1:8170/`.
+Manual bench at `http://127.0.0.1:8170/`.
 
-Las dos emisiones salen del mismo proceso y llevan **el reloj de pared
-incrustado**: dos fotogramas con la misma hora son el mismo instante, así que la
-deriva se comprueba a ojo además de medirse. Framerates distintos (30 y 25) a
-propósito, como en S1.
+Both broadcasts come from the same process and carry **the wall clock burned
+in**: two frames showing the same time are the same instant, so drift can be
+checked by eye as well as measured. Different frame rates (30 and 25) on
+purpose, as in S1.
 
-**El montaje alinea las fuentes por construcción.** Es deliberado: la pregunta
-no es si el servidor de emisión alinea bien —eso es su trabajo— sino si el
-navegador es capaz de no separarlas.
+**The setup aligns the sources by construction.** On purpose: the question is
+not whether the broadcast server aligns them well —that is its job— but whether
+the browser manages not to pull them apart.
 
 ---
 
-## 2. Resultados
+## 2. Results
 
-### Régimen estable
+### Steady state
 
-| | Con PDT |
+| | With PDT |
 |---|---|
-| Deriva real (mediana) | **20–31 ms** |
-| Retraso sobre el directo | 6,1–6,7 s |
-| Estabilidad en 30 s | sin variación apreciable |
+| Real drift (median) | **20–31 ms** |
+| Delay behind live | 6.1–6.7 s |
+| Stability over 30 s | no noticeable variation |
 
-Con fuentes alineadas, dos instancias de hls.js se mantienen dentro de un frame.
+With aligned sources, two hls.js instances stay within one frame.
 
-### Tras un corte de 3 s en un flujo
-
-```
-+ 1 s tras el corte   deriva real = -2 982 ms
-+ 5 s                 deriva real = -2 981 ms
-+12 s                 deriva real = -2 981 ms
-```
-
-**No recupera nunca.** El flujo cortado se queda tres segundos por detrás de
-forma permanente.
-
-### La medida sin PDT es inservible
-
-Cargando los dos flujos **con 20 s de diferencia** —lo que ocurre cuando el
-presupuesto de recursos desaloja uno y lo vuelve a enganchar:
+### After a 3 s cut in one stream
 
 ```
-deriva REAL        =     -28 ms     ← están sincronizados
-por currentTime    = -20 053 ms     ← dice que van 20 s separados
++ 1 s after the cut   real drift = -2 982 ms
++ 5 s                 real drift = -2 981 ms
++12 s                 real drift = -2 981 ms
+```
+
+**It never recovers.** The stream that was cut stays three seconds behind for
+good.
+
+### The measurement without PDT is useless
+
+Loading both streams **20 s apart** —what happens when the resource budget
+evicts one and attaches it again:
+
+```
+REAL drift         =     -28 ms     ← they are in sync
+by currentTime     = -20 053 ms     ← says they are 20 s apart
 ```
 
 ---
 
-## 3. Por qué `currentTime` no sirve
+## 3. Why `currentTime` does not work
 
-`currentTime` en un directo es la posición dentro de la ventana de la lista, y
-su origen lo fija **el momento en que ese reproductor empezó a cargar**. Dos
-instancias que arrancan juntas tienen orígenes parecidos y la medida parece
-funcionar; en cuanto una carga más tarde, la medida miente por la diferencia
-entera.
+In a live stream `currentTime` is the position within the playlist window, and
+its origin is set by **the moment that player started loading**. Two instances
+that start together have similar origins and the measurement seems to work; as
+soon as one loads later, the measurement is wrong by the whole difference.
 
-Y no es un caso rebuscado: pasa cada vez que un flujo se desaloja y se vuelve a
-enganchar, que es justo lo que hace el presupuesto de recursos del
-`PlayerRegistry`.
+And it is not a contrived case: it happens every time a stream is evicted and
+attached again, which is exactly what the `PlayerRegistry`'s resource budget
+does.
 
-Un sincronizador que se fiara de esa medida daría un salto duro para "corregir"
-20 segundos que no existen, **destrozando una reproducción correcta**.
-
----
-
-## 4. Conclusiones para la implementación
-
-1. **`EXT-X-PROGRAM-DATE-TIME` es requisito, no mejora.** Para dual-stream en
-   vivo hay que exigirla en ambas listas. En Wowza es la propiedad
-   `cupertinoEnableProgramDateTime`, que **viene desactivada por defecto**.
-
-2. **El sincronizador necesita un modo directo** que compare `playingDate` en
-   lugar de `currentTime`. El resto del modelo —maestro/esclavo, histéresis,
-   control proporcional— sirve igual; lo que cambia es de dónde sale la medida.
-
-3. **Sin la etiqueta, el único comportamiento honesto es no corregir.** Poner
-   ambos en el borde del directo y avisar de que pueden separarse. Fingir una
-   sincronización que no se puede medir es peor que no ofrecerla.
-
-4. **Hay que corregir tras cada corte.** hls.js no recupera solo, y el desfase
-   que deja un stall de 3 segundos es de 3 segundos, permanente. Aquí conviene
-   un salto duro por hora absoluta en lugar de corrección suave: absorber 3
-   segundos al 25 % de velocidad extra tardaría doce.
-
-5. **Detectar si un flujo ha empezado** es aparte y más sencillo: la lista
-   devuelve 404, o existe sin segmentos. Hay que distinguir "aún no ha
-   empezado" de "se ha cortado", porque quien lleva veinte minutos viendo algo
-   no debería leer que aún no ha empezado.
+A synchroniser trusting that measurement would hard-seek to "correct" 20
+seconds that do not exist, **wrecking a correct playback**.
 
 ---
 
-## 5. Lo que este spike NO responde
+## 4. Conclusions for the implementation
 
-- **Wowza de verdad.** Aquí las fuentes salen del mismo proceso con el mismo
-  reloj. Con dos codificadores reales, la marca de hora refleja *cuándo llegó*
-  el flujo al empaquetador, no cuándo se capturó: latencias de subida distintas
-  desplazan las marcas. Hay que medirlo con emisiones reales.
-- **Safari y iOS.** Todo medido en Chrome. S2 ya demostró que la calibración de
-  sincronización no es portable entre motores.
-- **Red inestable.** Todo en localhost, sin pérdida de paquetes ni ancho de
-  banda variable, que es donde los stalls se vuelven frecuentes.
-- **Latencia baja.** No se ha probado LL-HLS, donde las ventanas y los tiempos
-  de segmento cambian bastante.
+1. **`EXT-X-PROGRAM-DATE-TIME` is a requirement, not an improvement.** For live
+   dual-stream it must be required in both playlists. In Wowza it is the
+   `cupertinoEnableProgramDateTime` property, which **is off by default**.
+
+2. **The synchroniser needs a live mode** that compares `playingDate` instead
+   of `currentTime`. The rest of the model —master/slave, hysteresis,
+   proportional control— works the same; what changes is where the
+   measurement comes from.
+
+3. **Without the tag, the only honest behaviour is not to correct.** Put both
+   at the live edge and warn that they may drift apart. Faking a
+   synchronisation that cannot be measured is worse than not offering it.
+
+4. **Correction is needed after every cut.** hls.js does not recover on its
+   own, and the offset a 3-second stall leaves is 3 seconds, for good. Here a
+   hard seek by absolute time beats smooth correction: absorbing 3 seconds at
+   25 % extra speed would take twelve.
+
+5. **Detecting whether a stream has started** is separate and simpler: the
+   playlist returns 404, or exists with no segments. "Not started yet" must be
+   told apart from "interrupted", because someone who has been watching for
+   twenty minutes should not read that it has not started.
+
+---
+
+## 5. What this spike does NOT answer
+
+- **Real Wowza.** Here the sources come from the same process with the same
+  clock. With two real encoders, the timestamp reflects *when the stream
+  reached* the packager, not when it was captured: different upload latencies
+  shift the timestamps. It has to be measured with real broadcasts.
+- **Safari and iOS.** Everything measured on Chrome. S2 already showed that the
+  sync calibration does not carry over between engines.
+- **Unstable network.** Everything on localhost, with no packet loss or
+  varying bandwidth, which is where stalls become frequent.
+- **Low latency.** LL-HLS has not been tested, where windows and segment
+  durations change quite a lot.

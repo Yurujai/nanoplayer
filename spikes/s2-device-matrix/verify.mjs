@@ -1,9 +1,9 @@
 /*
- * Verifica la sonda empaquetada antes de mandársela a nadie.
+ * Checks the packed probe before sending it to anyone.
  *
- * Enviar a otras personas una página de diagnóstico rota cuesta mucho más que
- * un fallo propio: no se puede depurar en su dispositivo y se gasta el favor de
- * pedirles la prueba. Esto la ejecuta entera contra Chrome local.
+ * Sending other people a broken diagnostics page costs far more than a failure
+ * of our own: it cannot be debugged on their device, and it spends the favour
+ * of asking them to test. This runs it in full against local Chrome.
  *
  *   node verify.mjs [--headed]
  */
@@ -34,26 +34,26 @@ page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 
 await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'load' });
 
-// Las secciones 1 y 2 se rellenan solas al cargar.
+// Sections 1 and 2 fill in by themselves on load.
 const filled = await page.evaluate(() => ({
   env: document.getElementById('env').children.length,
   caps: document.getElementById('caps').children.length,
 }));
-console.log(`\nFilas rellenadas sin interacción: entorno ${filled.env / 2}, capacidades ${filled.caps / 2}`);
-if (!filled.env || !filled.caps) { console.error('FALLO: secciones pasivas vacías'); process.exit(1); }
+console.log(`\nRows filled with no interaction: environment ${filled.env / 2}, capabilities ${filled.caps / 2}`);
+if (!filled.env || !filled.caps) { console.error('FAILURE: passive sections are empty'); process.exit(1); }
 
-console.log('Ejecutando pruebas de reproducción…');
+console.log('Running playback tests…');
 await page.click('#run');
-// Ojo: el 2.º argumento de waitForFunction es el ARGUMENTO de la función, no
-// las opciones. Pasando las opciones ahí se ignoran silenciosamente y aplica el
-// timeout por defecto de 30 s, que no llega para una pasada completa.
+// Careful: waitForFunction's 2nd parameter is the function's ARGUMENT, not the
+// options. Passing the options there silently ignores them and the default
+// 30 s timeout applies, which is not enough for a full pass.
 await page.waitForFunction(
-  () => document.getElementById('status').textContent.includes('terminadas'),
+  () => document.getElementById('status').textContent.includes('finished'),
   null,
   { timeout: 180000 }
 );
 
-console.log('Ejecutando prueba de pantalla completa…');
+console.log('Running the full screen test…');
 await page.click('#fs');
 await page.waitForFunction(
   () => document.getElementById('fsres').children.length > 0,
@@ -65,27 +65,27 @@ const report = JSON.parse(await page.inputValue('#out'));
 await browser.close();
 server.close();
 
-console.log('\n─── Informe ───────────────────────────────────────────────');
+console.log('\n─── Report ────────────────────────────────────────────────');
 console.log(JSON.stringify(report, null, 2));
 console.log('───────────────────────────────────────────────────────────\n');
 
-// Comprobaciones de que la SONDA funciona. No se juzga al dispositivo aquí:
-// un "0 vídeos simultáneos" en un móvil viejo es un resultado válido; en Chrome
-// de escritorio significa que la sonda está rota.
+// Checks that the PROBE works. The device is not judged here: "0 simultaneous
+// videos" on an old phone is a valid result; on desktop Chrome it means the
+// probe is broken.
 const fails = [];
 const p = report.playback ?? {};
-if (!report.env?.viewport) fails.push('entorno sin recoger');
-if (report.caps?.rVFC === undefined) fails.push('capacidades sin recoger');
-if (!p.maxConcurrentVideos) fails.push('la prueba de decodificación no midió nada');
-if (p.driftMedianMs === null || p.driftMedianMs === undefined) fails.push('la sincronización no midió nada');
-if (p.driftMedianMs > 33) fails.push(`deriva ${p.driftMedianMs} ms por encima de un frame en Chrome`);
-if (!p.loopFps) fails.push('el lazo de control no corrió');
-if (!report.fullscreen) fails.push('la prueba de pantalla completa no reportó');
-if (errors.length) fails.push('errores JS: ' + [...new Set(errors)].join(' | '));
+if (!report.env?.viewport) fails.push('environment not collected');
+if (report.caps?.rVFC === undefined) fails.push('capabilities not collected');
+if (!p.maxConcurrentVideos) fails.push('the decoding test measured nothing');
+if (p.driftMedianMs === null || p.driftMedianMs === undefined) fails.push('the sync test measured nothing');
+if (p.driftMedianMs > 33) fails.push(`drift ${p.driftMedianMs} ms above one frame on Chrome`);
+if (!p.loopFps) fails.push('the control loop did not run');
+if (!report.fullscreen) fails.push('the full screen test did not report');
+if (errors.length) fails.push('JS errors: ' + [...new Set(errors)].join(' | '));
 
 if (fails.length) {
-  console.log('SONDA NO VÁLIDA:');
+  console.log('PROBE NOT VALID:');
   for (const f of fails) console.log('  · ' + f);
   process.exit(1);
 }
-console.log('SONDA VÁLIDA: recoge las cuatro familias de datos sin errores.\n');
+console.log('PROBE VALID: it collects the four families of data with no errors.\n');

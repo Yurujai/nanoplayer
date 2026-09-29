@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Spike S1 — sincronización dual-stream</title>
-<link rel="icon" href="data:,"><!-- evita el 404 de favicon que ensucia el log -->
+<title>Spike S1 — dual-stream sync</title>
+<link rel="icon" href="data:,"><!-- avoids the favicon 404 that clutters the log -->
 
 
 <style>
@@ -47,47 +47,47 @@
 </head>
 <body>
 
-<h1>Spike S1 — sincronización dual-stream</h1>
+<h1>Spike S1 — dual-stream sync</h1>
 <p class="sub">
-  Los dos vídeos llevan el timecode incrustado: si divergen, se ve sin instrumentos.
-  Framerates distintos (30 / 25 fps) a propósito.
+  Both videos carry a burned-in timecode: if they drift apart, you can see it without instruments.
+  Different frame rates (30 / 25 fps) on purpose.
 </p>
 
 <div class="videos">
   <div>
-    <div class="label">MAESTRO · presenter · 30fps · con audio</div>
+    <div class="label">MASTER · presenter · 30fps · with audio</div>
     <video id="master" src="media/presenter.mp4" controls playsinline preload="auto"></video>
   </div>
   <div>
-    <div class="label">ESCLAVO · slides · 25fps · sin audio</div>
+    <div class="label">SLAVE · slides · 25fps · no audio</div>
     <video id="slave" src="media/slides.mp4" muted playsinline preload="auto"></video>
   </div>
 </div>
 
 <div class="panel">
   <div class="stats">
-    <div class="stat"><div class="k">Deriva</div><div class="val" id="drift">—</div></div>
-    <div class="stat"><div class="k">Deriva máx.</div><div class="val" id="maxdrift">—</div></div>
-    <div class="stat"><div class="k">Rate esclavo</div><div class="val" id="rate">—</div></div>
-    <div class="stat"><div class="k">Acción</div><div class="val" id="action">—</div></div>
-    <div class="stat"><div class="k">Saltos duros</div><div class="val" id="hardseeks">0</div></div>
+    <div class="stat"><div class="k">Drift</div><div class="val" id="drift">—</div></div>
+    <div class="stat"><div class="k">Max drift</div><div class="val" id="maxdrift">—</div></div>
+    <div class="stat"><div class="k">Slave rate</div><div class="val" id="rate">—</div></div>
+    <div class="stat"><div class="k">Action</div><div class="val" id="action">—</div></div>
+    <div class="stat"><div class="k">Hard seeks</div><div class="val" id="hardseeks">0</div></div>
     <div class="stat"><div class="k">Stalls</div><div class="val" id="stalls">0</div></div>
   </div>
 
   <canvas id="chart" width="1200" height="130"></canvas>
   <div class="chart-legend">
-    Deriva en el tiempo. La banda verde es la zona muerta (±33 ms, un frame);
-    el borde del gráfico es el umbral de salto duro (±500 ms).
+    Drift over time. The green band is the dead zone (±33 ms, one frame);
+    the edge of the chart is the hard-seek threshold (±500 ms).
   </div>
 
   <div class="controls">
     <button id="btn-play">Play / Pause</button>
-    <button id="btn-seek">Seek aleatorio</button>
-    <button id="btn-nudge">Desviar +250 ms</button>
-    <button id="btn-shove">Desviar +2 s</button>
-    <button id="btn-stall">Simular stall del esclavo</button>
-    <button id="btn-reset">Reiniciar métricas</button>
-    <label>Velocidad
+    <button id="btn-seek">Random seek</button>
+    <button id="btn-nudge">Offset +250 ms</button>
+    <button id="btn-shove">Offset +2 s</button>
+    <button id="btn-stall">Simulate slave stall</button>
+    <button id="btn-reset">Reset metrics</button>
+    <label>Speed
       <select id="rate-sel">
         <option value="0.5">0.5×</option>
         <option value="1" selected>1×</option>
@@ -95,16 +95,16 @@
         <option value="2">2×</option>
       </select>
     </label>
-    <label>Política de stall
+    <label>Stall policy
       <select id="stall-sel">
-        <option value="pauseBoth" selected>Pausar ambos</option>
-        <option value="letMasterRun">Dejar correr al maestro</option>
+        <option value="pauseBoth" selected>Pause both</option>
+        <option value="letMasterRun">Let the master run</option>
       </select>
     </label>
   </div>
 
   <div class="times">
-    maestro <span id="mt">0.000</span>s · esclavo <span id="st">0.000</span>s
+    master <span id="mt">0.000</span>s · slave <span id="st">0.000</span>s
   </div>
 </div>
 

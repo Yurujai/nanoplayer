@@ -1,12 +1,12 @@
 /*
- * Servidor estático con soporte de peticiones Range.
+ * Static server with support for Range requests.
  *
- * No es un detalle menor: `python -m http.server` ignora la cabecera Range y
- * devuelve el fichero entero. Con eso, cada seek obliga al navegador a
- * redescargar el vídeo completo desde el principio, y cualquier medición de
- * sincronización queda contaminada por la descarga, no por el algoritmo.
+ * Not a minor detail: `python -m http.server` ignores the Range header and
+ * returns the whole file. With that, every seek forces the browser to download
+ * the whole video again from the start, and any synchronisation measurement is
+ * polluted by the download, not by the algorithm.
  *
- *   node serve.mjs [puerto]
+ *   node serve.mjs [port]
  */
 import { createServer } from 'node:http';
 import { createReadStream, statSync } from 'node:fs';
@@ -76,5 +76,5 @@ createServer((req, res) => {
   });
   createReadStream(path).pipe(res);
 }).listen(PORT, '127.0.0.1', () => {
-  console.log(`http://127.0.0.1:${PORT}/  (Range soportado)`);
+  console.log(`http://127.0.0.1:${PORT}/  (Range supported)`);
 });

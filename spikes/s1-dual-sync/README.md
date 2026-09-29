@@ -1,131 +1,129 @@
-# Spike S1 — Sincronización dual-stream
+# Spike S1 — Dual-stream synchronisation
 
-**Pregunta:** ¿se pueden mantener dos flujos de vídeo sincronizados dentro de un
-frame usando solo `<video>` nativo, sin biblioteca externa?
+**Question:** can two video streams be kept in sync within one frame using only
+the native `<video>` element, with no external library?
 
-**Respuesta: sí.** Deriva mediana de ~10 ms y p95 de ~14 ms en régimen estable
-(un frame a 30 fps son 33 ms), con recuperación en todos los escenarios probados.
+**Answer: yes.** Median drift of ~10 ms and p95 of ~14 ms in steady state (one
+frame at 30 fps is 33 ms), with recovery in every scenario tested.
 
-> Código desechable. Lo que se lleva a producción son las conclusiones de §4, no
-> estos ficheros.
+> Throwaway code. What goes to production are the conclusions in §4, not these
+> files.
 
 ---
 
-## 1. Cómo ejecutarlo
+## 1. How to run it
 
 ```bash
-./gen-media.sh          # genera los vídeos de prueba (requiere ffmpeg)
+./gen-media.sh          # generates the test videos (requires ffmpeg)
 pnpm install
-node serve.mjs 8099     # servidor estático CON soporte de Range
+node serve.mjs 8099     # static server WITH Range support
 ```
 
-- **Manual:** abrir `http://127.0.0.1:8099/` — gráfico de deriva en vivo y
-  botones para provocar cada perturbación.
-- **Automático:** `node measure.mjs` (o `HEADED=1 node measure.mjs`).
+- **Manual:** open `http://127.0.0.1:8099/` — live drift chart and buttons to
+  trigger each disturbance.
+- **Automatic:** `node measure.mjs` (or `HEADED=1 node measure.mjs`).
 
-Barrido de parámetros sin tocar código:
+Parameter sweep without touching code:
 
 ```bash
 URL="http://127.0.0.1:8099/index.html?gain=1.2&maxRateDelta=0.25" node measure.mjs
 ```
 
-### Medios de prueba
+### Test media
 
-Dos vídeos de 90 s con **timecode incrustado**, para que la deriva sea visible a
-simple vista además de medible. Framerates **distintos a propósito** (30 y
-25 fps): en dual-stream real las fuentes rara vez coinciden. GOP de 2 s, que es
-lo realista en producción y limita la precisión del seek.
+Two 90 s videos with a **burned-in timecode**, so drift is visible to the naked
+eye as well as measurable. **Deliberately different** frame rates (30 and
+25 fps): in real dual-stream the sources rarely match. A 2 s GOP, which is
+realistic in production and limits seek precision.
 
 ---
 
-## 2. Resultados
+## 2. Results
 
-Chrome 1xx, headless, Linux. `requestVideoFrameCallback` disponible.
+Chrome 1xx, headless, Linux. `requestVideoFrameCallback` available.
 
-| Escenario | Deriva mediana | p95 | Recuperación | Saltos duros |
+| Scenario | Median drift | p95 | Recovery | Hard seeks |
 |---|---|---|---|---|
-| Estable 1× (25 s) | 9.8 ms | 14.3 ms | — | 0 |
-| Estable 2× (15 s) | 12.9 ms | 22.4 ms | — | 0 |
-| Desvío +250 ms | — | pico 260 ms | 1905 ms | 0 |
-| Desvío +2 s | — | pico 2003 ms | 67 ms | 1 |
-| Seek del maestro | — | pico 81 ms | 900 ms | 0 |
-| Stall del esclavo 1.5 s | — | pico 7 ms | 3 ms | 0 |
+| Steady 1× (25 s) | 9.8 ms | 14.3 ms | — | 0 |
+| Steady 2× (15 s) | 12.9 ms | 22.4 ms | — | 0 |
+| Offset +250 ms | — | peak 260 ms | 1905 ms | 0 |
+| Offset +2 s | — | peak 2003 ms | 67 ms | 1 |
+| Master seek | — | peak 81 ms | 900 ms | 0 |
+| Slave stall 1.5 s | — | peak 7 ms | 3 ms | 0 |
 
-Todo por debajo de un frame en régimen estable, incluso a 2×.
-
----
-
-## 3. Diseño que funcionó
-
-**Maestro/esclavo.** El maestro es el stream con audio y **no se le toca nunca
-el `playbackRate`**: alterar la velocidad del audio se oye. Toda la corrección
-recae en el esclavo, que es mudo.
-
-**Dos regímenes:**
-- Deriva pequeña → control proporcional sobre el `playbackRate` del esclavo.
-  Invisible para el usuario.
-- Deriva > 500 ms → salto duro (asignar `currentTime`). Se nota, pero recupera
-  en ~67 ms.
-
-**Histéresis obligatoria.** Engancha a 33 ms, suelta a 8 ms.
-
-**Política ante stall:** pausar ambos. Si el esclavo se queda sin buffer y se
-deja correr al maestro, la deriva crece por encima del umbral de salto duro y el
-usuario ve un salto en lugar de una pausa breve. Pausando ambos, el pico de
-deriva medido fue de 7 ms.
+Everything below one frame in steady state, even at 2×.
 
 ---
 
-## 4. Conclusiones para la implementación real
+## 3. The design that worked
 
-1. **Es viable con `<video>` nativo.** No hace falta biblioteca de sincronización.
+**Master/slave.** The master is the stream with audio, and **its
+`playbackRate` is never touched**: changing the speed of audio is audible. All
+the correction falls on the slave, which is muted.
 
-2. **La histéresis no es opcional.** Sin ella, el controlador tiene error de
-   estado estacionario: se para al entrar en la zona muerta y deja un offset
-   permanente. Medido en la primera pasada: **28.8 ms fijos de mediana**. Con
-   histéresis (engancha 33 ms / suelta 8 ms): **9.8 ms**.
+**Two regimes:**
+- Small drift → proportional control over the slave's `playbackRate`.
+  Invisible to the user.
+- Drift > 500 ms → hard seek (assign `currentTime`). Noticeable, but it
+  recovers in ~67 ms.
 
-3. **La ganancia gobierna la recuperación, no el techo de velocidad.** Subir
-   `maxRateDelta` de 0.12 a 0.25 no cambió nada (3.4 s → 3.7 s, ruido). Subir la
-   ganancia de 0.6 a 1.2 la redujo a la mitad (**1.7 s**) a cambio de 3 ms más de
-   deriva estable. El techo puede ser generoso: el esclavo no lleva audio, que es
-   el único motivo real para limitarlo.
+**Hysteresis is mandatory.** Engages at 33 ms, releases at 8 ms.
 
-4. **Valores de partida:** `deadZone 33 ms`, `releaseZone 8 ms`, `gain 1.2`,
+**Stall policy:** pause both. If the slave runs out of buffer and the master is
+left running, drift grows beyond the hard-seek threshold and the user sees a
+jump instead of a short pause. Pausing both, the measured drift peak was 7 ms.
+
+---
+
+## 4. Conclusions for the real implementation
+
+1. **It is feasible with native `<video>`.** No synchronisation library needed.
+
+2. **Hysteresis is not optional.** Without it the controller has steady-state
+   error: it stops on entering the dead zone and leaves a permanent offset.
+   Measured on the first pass: **a fixed 28.8 ms median**. With hysteresis
+   (engage 33 ms / release 8 ms): **9.8 ms**.
+
+3. **Gain governs recovery, not the speed ceiling.** Raising `maxRateDelta`
+   from 0.12 to 0.25 changed nothing (3.4 s → 3.7 s, noise). Raising the gain
+   from 0.6 to 1.2 halved it (**1.7 s**) at the cost of 3 ms more steady drift.
+   The ceiling can be generous: the slave carries no audio, which is the only
+   real reason to limit it.
+
+4. **Starting values:** `deadZone 33 ms`, `releaseZone 8 ms`, `gain 1.2`,
    `maxRateDelta 0.25`, `hardSeek 500 ms`.
 
-5. **Usar `requestVideoFrameCallback`** para el lazo de control cuando exista: se
-   dispara con la presentación real del frame, no con el repintado. Con fallback
-   a `requestAnimationFrame`.
+5. **Use `requestVideoFrameCallback`** for the control loop where it exists: it
+   fires on the actual presentation of the frame, not on repaint. Fall back to
+   `requestAnimationFrame`.
 
-6. **Pausar ambos ante stall de cualquiera de los dos.** Coherencia visual por
-   encima de continuidad de audio.
-
----
-
-## 5. Trampa encontrada en el banco de pruebas
-
-`python -m http.server` **ignora la cabecera Range**. Cada seek obliga al
-navegador a redescargar el vídeo entero desde el principio. Con eso, la primera
-medición dio 300+ saltos duros y derivas de 36 segundos — todo artefacto del
-servidor, cero relación con el algoritmo.
-
-Por eso este spike incluye `serve.mjs`, con Range real.
-
-**Lección que trasciende el spike:** cualquier medida de sincronización es
-inseparable de las condiciones de red. Antes de culpar al algoritmo, verificar
-que el transporte responde `206 Partial Content`. Lo mismo aplicará al depurar
-en producción.
+6. **Pause both when either one stalls.** Visual coherence over audio
+   continuity.
 
 ---
 
-## 6. Lo que este spike NO responde
+## 5. Trap found in the test bench
 
-- **Safari / iOS.** Es el objeto del spike **S2**. Lo medido aquí es Chrome sobre
-  Linux; nada garantiza el mismo comportamiento donde `requestVideoFrameCallback`
-  puede no existir y el fullscreen funciona distinto.
-- **HLS.** Aquí son MP4 progresivos. Con MSE y hls.js, el buffering es otro
-  mundo: hay que repetir la medición.
-- **Red real.** Todo en localhost. Falta medir con latencia y ancho de banda
-  limitados.
-- **Consumo de CPU/batería** del lazo de control en dispositivos modestos.
+`python -m http.server` **ignores the Range header**. Every seek forces the
+browser to download the whole video again from the start. Because of that, the
+first measurement showed 300+ hard seeks and 36-second drifts — all an artefact
+of the server, nothing to do with the algorithm.
+
+That is why this spike includes `serve.mjs`, with real Range support.
+
+**A lesson beyond the spike:** any synchronisation measurement is inseparable
+from network conditions. Before blaming the algorithm, check that the transport
+answers `206 Partial Content`. The same applies when debugging in production.
+
+---
+
+## 6. What this spike does NOT answer
+
+- **Safari / iOS.** That is the subject of spike **S2**. What was measured here
+  is Chrome on Linux; nothing guarantees the same behaviour where
+  `requestVideoFrameCallback` may not exist and fullscreen works differently.
+- **HLS.** These are progressive MP4s. With MSE and hls.js, buffering is another
+  world: the measurement has to be repeated.
+- **Real network.** Everything on localhost. Measuring with limited latency and
+  bandwidth is still pending.
+- **CPU/battery cost** of the control loop on modest devices.

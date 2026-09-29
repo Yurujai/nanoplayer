@@ -1,307 +1,317 @@
-# Spike S6 — Encadenado de cabecera y cola
+# Spike S6 — Intro and outro chaining
 
-**Pregunta:** ¿se puede pasar de la cabecera al contenido —y de éste a la
-cola— sin que se vea el salto, y sobrevive el segundo `play()` a la política de
-autoplay?
+**Question:** can the player go from the intro to the content —and from the
+content to the outro— without the cut being visible, and does the second
+`play()` survive the autoplay policy?
 
-**Respuesta: sí, pero solo con anticipación.** Arrancar la pieza siguiente al
-terminar la anterior deja un hueco de **340–445 ms** — diez fotogramas, se ve
-perfectamente. Arrancarla unos cientos de milisegundos antes lo deja en **0 ms**
-en los dos motores de escritorio.
+**Answer: yes, but only with anticipation.** Starting the next piece when the
+previous one ends leaves a gap of **340–445 ms** — ten frames, perfectly
+visible. Starting it a few hundred milliseconds earlier brings it down to
+**0 ms** in both desktop engines.
 
-**En iPhone también, y sin desbloqueo** (medido el 2026-09-28 en un iPhone 17
-Pro con Safari 26.5): con 600 ms de anticipación el hueco es **0 ms** en las
-dos costuras, desbloqueando en el gesto o sin hacerlo, y quitarle el silencio a
-la entrante no la pausa. Es un solo dispositivo con un solo Safari: la política
-por elemento es histórica en iOS y falta confirmarlo en un iOS anterior.
+**On iPhone too, and without unlocking** (measured on 2026-09-28 on an iPhone 17
+Pro with Safari 26.5): with 600 ms of anticipation the gap is **0 ms** at both
+seams, whether unlocking in the gesture or not, and unmuting the incoming piece
+does not pause it. It is a single device with a single Safari: the per-element
+policy is historical on iOS and still has to be confirmed on an earlier iOS.
 
-> Código desechable. Lo que sobrevive son las conclusiones de §5.
-
----
-
-## 1. Por qué hay que medirlo antes de escribir el reproductor
-
-Son dos preguntas, y la respuesta a una estorba a la otra:
-
-**Para que no se vea el salto** hace falta que la pieza siguiente ya esté
-decodificando cuando la actual termina. Eso obliga a tener **dos elementos
-`<video>` distintos**: uno visible y otro esperando detrás.
-
-**Pero un elemento `<video>` que nunca ha reproducido está bloqueado.** Cuando
-la cabecera acabe y haya que llamar a `play()` sobre el segundo, esa llamada no
-viene de un gesto del usuario: viene de un `ended`. En iOS el permiso de
-reproducción es **de cada elemento**, no de la página, así que ese segundo
-elemento puede rechazar el `play()` con `NotAllowedError` y dejar la cabecera
-terminada y el contenido parado.
-
-La salida conocida es **desbloquear el segundo elemento dentro del mismo gesto
-que arrancó la cabecera**: un `play()` seguido de `pause()` inmediato, en el
-propio manejador del clic. Funciona en la teoría y es lo que hacen los
-reproductores con publicidad. Este spike existe para comprobar si funciona de
-verdad, y a qué precio.
-
-La alternativa —**un solo elemento al que se le cambia el `src`**— no tiene
-problema de permisos, porque el elemento quedó desbloqueado por el gesto
-inicial. A cambio obliga a `load()` y a rellenar búfer, y eso se ve. Cuánto se
-ve es precisamente lo que hay que cuantificar antes de descartarla.
+> Throwaway code. What survives are the conclusions in §5.
 
 ---
 
-## 2. Las tres variantes
+## 1. Why it has to be measured before writing the player
 
-| | Elementos | Desbloqueo en el gesto | Anticipación |
+There are two questions, and the answer to one gets in the way of the other:
+
+**For the cut not to be visible**, the next piece must already be decoding
+when the current one ends. That forces **two distinct `<video>` elements**: one
+visible and another waiting behind it.
+
+**But a `<video>` element that has never played is locked.** When the intro
+ends and `play()` has to be called on the second one, that call does not come
+from a user gesture: it comes from an `ended`. On iOS the playback permission
+belongs **to each element**, not to the page, so that second element can
+reject the `play()` with `NotAllowedError` and leave the intro finished and the
+content stopped.
+
+The known way out is **unlocking the second element inside the same gesture
+that started the intro**: a `play()` followed by an immediate `pause()`, in the
+click handler itself. It works in theory and it is what players with
+advertising do. This spike exists to check whether it really works, and at
+what cost.
+
+The alternative —**a single element whose `src` is swapped**— has no
+permission problem, because the element was unlocked by the initial gesture.
+In exchange it forces a `load()` and a buffer refill, and that shows. How much
+it shows is precisely what has to be quantified before ruling it out.
+
+---
+
+## 2. The three variants
+
+| | Elements | Unlock in the gesture | Anticipation |
 |---|---|---|---|
-| **A** | Uno por pieza | Sí | Configurable |
-| **B** | Uno por pieza | **No** | Configurable |
-| **C** | Uno solo, cambiando `src` | No hace falta | **Imposible** |
+| **A** | One per piece | Yes | Configurable |
+| **B** | One per piece | **No** | Configurable |
+| **C** | A single one, swapping `src` | Not needed | **Impossible** |
 
-**A es la propuesta.** B es su control: la misma mecánica sin el desbloqueo,
-para poder decir si el desbloqueo aporta algo o es superstición. C es la
-alternativa simple, para saber qué se pierde eligiéndola.
+**A is the proposal.** B is its control: the same mechanics without the
+unlock, to be able to say whether the unlock contributes anything or is
+superstition. C is the simple alternative, to know what is lost by choosing
+it.
 
-Que C no admita anticipación no es una limitación del banco: **no se puede
-cargar la pieza siguiente sin destruir la que está sonando**, porque solo hay
-un elemento. Esa imposibilidad ya es un resultado.
+That C does not support anticipation is not a limitation of the bench: **the
+next piece cannot be loaded without destroying the one playing**, because
+there is only one element. That impossibility is already a result.
 
-### La anticipación
+### Anticipation
 
-Arrancar la pieza entrante unos milisegundos **antes** de que termine la
-saliente, para que tenga fotograma listo en el instante del cambio. Durante ese
-solape la entrante va **silenciada** —si no, se oirían las dos— y se le quita
-el silencio al descubrirla.
+Starting the incoming piece a few milliseconds **before** the outgoing one
+ends, so it has a frame ready at the moment of the switch. During that overlap
+the incoming piece is **muted** —otherwise both would be heard— and it is
+unmuted when revealed.
 
-Eso introduce una tercera pregunta que el banco también mide: quitarle el
-silencio a un vídeo en marcha es otra operación sin gesto detrás, y algunos
-navegadores responden **pausándolo**. La columna `pausada` del informe es eso.
+That introduces a third question the bench also measures: unmuting a playing
+video is another operation with no gesture behind it, and some browsers
+respond by **pausing it**. The report's `pausedAfterUnmute` field is that.
 
 ---
 
-## 3. Cómo se ejecuta
+## 3. How to run it
 
 ```bash
-./gen-media.sh                 # requiere ffmpeg
+./gen-media.sh                 # requires ffmpeg
 pnpm install
-node serve.mjs 8180            # imprime también la IP de la red local
+node serve.mjs 8180            # also prints the local network IP
 ```
 
-> **ffmpeg sin `drawtext`.** El de Homebrew en macOS se compila sin libfreetype
-> y no trae ese filtro. El script lo detecta y genera los vídeos **sin texto**,
-> avisando: el instrumento de verdad es el color plano, y el cuadro blanco que
-> cruza la pantalla basta para ver si el vídeo avanza o está congelado. Para
-> tener el texto hay que instalar `homebrew-ffmpeg/ffmpeg/ffmpeg --with-freetype`.
+> **ffmpeg without `drawtext`.** Homebrew's on macOS is built without
+> libfreetype and lacks that filter. The script detects it and generates the
+> videos **without text**, with a warning: the real instrument is the flat
+> colour, and the white box crossing the screen is enough to see whether the
+> video advances or is frozen. To get the text, install
+> `homebrew-ffmpeg/ffmpeg/ffmpeg --with-freetype`.
 
-Banco manual en `http://127.0.0.1:8180/`, y desde el móvil en la dirección LAN
-que imprime el servidor.
+Manual bench at `http://127.0.0.1:8180/`, and from the phone at the LAN
+address the server prints.
 
 ```bash
-node measure.mjs               # Chrome del sistema, o el Chromium de Playwright
-ENGINE=webkit node measure.mjs # el motor de Safari
-HEADED=1 node measure.mjs      # con ventana
-DUR_MAIN=12 ./gen-media.sh     # principal corto, para no esperar en cada pasada
+node measure.mjs               # system Chrome, or Playwright's Chromium
+ENGINE=webkit node measure.mjs # Safari's engine
+HEADED=1 node measure.mjs      # with a window
+DUR_MAIN=12 ./gen-media.sh     # short main piece, so as not to wait on every pass
 ```
 
-El arnés prefiere Google Chrome si está instalado y si no cae al Chromium de
-Playwright. S1 y S5 exigen el del sistema porque el empaquetado no traía
-códecs H.264; **eso ya no es cierto** en las versiones actuales, y se comprueba
-antes de medir: si el navegador no decodifica las piezas, aborta en vez de
-devolver ceros que parecerían un resultado.
+The harness prefers Google Chrome if installed and otherwise falls back to
+Playwright's Chromium. S1 and S5 require the system one because the bundled
+one did not ship H.264 codecs; **that is no longer true** in current versions,
+and it is checked before measuring: if the browser does not decode the pieces,
+it aborts instead of returning zeros that would look like a result.
 
-### Qué se le pide a quien prueba en el móvil
+### What the phone tester is asked to do
 
-1. Abrirlo **en Safari** si es un iPhone. Chrome y Firefox en iOS son WebKit por
-   dentro, pero su capa cambia el comportamiento de autoplay.
-2. Desactivar el **modo de bajo consumo**: altera la reproducción y contamina la
-   medida.
-3. Probar las tres variantes, dejando terminar las dos costuras en cada una.
-4. Probar también el botón de **saltar cabecera**.
-5. Pulsar **Copiar informe** y devolverlo.
+1. Open it **in Safari** if it is an iPhone. Chrome and Firefox on iOS are
+   WebKit underneath, but their layer changes the autoplay behaviour.
+2. Turn off **Low Power Mode**: it alters playback and contaminates the
+   measurement.
+3. Try the three variants, letting both seams finish in each one.
+4. Also try the **Skip intro** button.
+5. Press **Copy report** and send it back.
 
-Mirar la pantalla importa tanto como el número: **si entre dos piezas aparece
-negro, hubo hueco**. Las tres piezas son de color plano y saturado, y el fondo
-del escenario es lo único negro de la página.
+Watching the screen matters as much as the number: **if black shows between
+two pieces, there was a gap**. The three pieces are in flat, saturated colours,
+and the stage background is the only black thing on the page.
 
 ---
 
-## 4. Qué se mide
+## 4. What is measured
 
-**El hueco**, en milisegundos, entre el último fotograma **presentado** de la
-pieza saliente y el primero de la entrante. La fuente es
-`requestVideoFrameCallback`, que es la única API que dice cuándo un fotograma
-llegó a la pantalla: con `timeupdate`, que llega a unos 4 Hz, un hueco de 200 ms
-es indistinguible de uno de 20.
+**The gap**, in milliseconds, between the last **presented** frame of the
+outgoing piece and the first of the incoming one. The source is
+`requestVideoFrameCallback`, which is the only API that says when a frame
+reached the screen: with `timeupdate`, which arrives at about 4 Hz, a 200 ms
+gap is indistinguishable from a 20 ms one.
 
-Donde no existe esa API se estima con `requestAnimationFrame` y **el informe lo
-advierte**. Esos números no son comparables con los de un navegador que sí la
-tiene.
+Where that API does not exist it is estimated with `requestAnimationFrame` and
+**the report warns about it**. Those numbers are not comparable with those of a
+browser that has it.
 
-Además, por cada costura:
+Also, for each seam:
 
-| Campo | |
+| Field | |
 |---|---|
-| `bloqueado` | El `play()` fue rechazado con `NotAllowedError` |
-| `conSonido` | Si la petición iba con sonido. **Si es `false`, esa fila no prueba nada sobre la política**: un `play()` silenciado se concede siempre |
-| `pausadaTrasSonido` | Al quitarle el silencio, el navegador la pausó |
-| `readyStateEntrante` | Cuánto tenía cargado la entrante al pedirle el play. Menos de 2 significa que el hueco es de búfer, no de política |
+| `blocked` | The `play()` was rejected with `NotAllowedError` |
+| `withSound` | Whether the request went with sound. **If it is `false`, that row proves nothing about the policy**: a muted `play()` is always granted |
+| `pausedAfterUnmute` | When unmuted, the browser paused it |
+| `incomingReadyState` | How much the incoming piece had loaded when its play was requested. Below 2 means the gap is a buffer gap, not a policy one |
 
-Ese `conSonido` está publicado a propósito: la trampa más fácil al montar esto
-es silenciar la pieza entrante para que arranque siempre, y acabar concluyendo
-que no hay problema de autoplay cuando lo que pasa es que no se ha probado.
+> The report field names were translated to English after the measurements
+> below were taken: the raw reports from those runs use the earlier Spanish
+> names (`huecoMs`, `latenciaMs`, `bloqueado`, `conSonido`,
+> `pausadaTrasSonido`, `anticipada`, `readyStateEntrante`, `costuras`,
+> `desbloqueos`…). The data is the same; only the keys changed.
 
-**Nada se descarga hasta que se pulsa reproducir.** Los elementos se crean
-dentro del propio manejador del clic, que es lo que obliga el principio 2 del
-reproductor y además es la parte difícil: hay que desbloquear un elemento que en
-ese instante todavía no tiene un byte.
+That `withSound` is published on purpose: the easiest trap when building this
+is muting the incoming piece so it always starts, and ending up concluding
+there is no autoplay problem when what is really happening is that it was
+never tested.
 
-### Al leer la salida de `measure.mjs`
+**Nothing is downloaded until play is pressed.** The elements are created
+inside the click handler itself, which is what the player's principle 2
+demands and is also the hard part: an element has to be unlocked while it does
+not yet have a single byte.
 
-**Chrome de escritorio concede la activación por página, no por elemento.** Un
-clic en cualquier sitio desbloquea todos los `<video>` de la página, así que es
-de esperar que la variante B pase. **Eso no dice nada sobre iOS**, donde el
-permiso es de cada elemento. El arnés no pasa
-`--autoplay-policy=no-user-gesture-required` —al contrario que los de S1 y S5—
-precisamente para no falsear esto más de lo que ya lo hace la plataforma.
+### When reading the output of `measure.mjs`
+
+**Desktop Chrome grants activation per page, not per element.** A click
+anywhere unlocks every `<video>` on the page, so variant B is expected to pass.
+**That says nothing about iOS**, where the permission belongs to each element.
+The harness does not pass `--autoplay-policy=no-user-gesture-required` —unlike
+those of S1 and S5— precisely so as not to skew this any more than the
+platform already does.
 
 ---
 
-## 5. Resultados
+## 5. Results
 
-Medido el 2026-09-19, macOS arm64, Chromium 141 y WebKit 26.5 de Playwright,
-piezas de 8 / 12 / 6 s servidas desde localhost. Huecos en milisegundos.
+Measured on 2026-09-19, macOS arm64, Playwright's Chromium 141 and WebKit
+26.5, 8 / 12 / 6 s pieces served from localhost. Gaps in milliseconds.
 
-### Sin anticipación, el hueco es visible siempre
+### Without anticipation, the gap is always visible
 
-| Variante | Motor | intro→main | main→outro |
+| Variant | Engine | intro→main | main→outro |
 |---|---|---:|---:|
-| A (dos elementos, desbloqueados) | Chromium | 340 | 91 |
+| A (two elements, unlocked) | Chromium | 340 | 91 |
 | A | WebKit | 444 | 444 |
-| B (sin desbloquear) | Chromium | 375 | 90 |
+| B (not unlocked) | Chromium | 375 | 90 |
 | B | WebKit | 445 | 445 |
-| C (un elemento, cambiando `src`) | Chromium | 187 | 180 |
+| C (one element, swapping `src`) | Chromium | 187 | 180 |
 | C | WebKit | 236 | 235 |
 
-Un fotograma a 30 fps son 33 ms. Todo eso se ve.
+One frame at 30 fps is 33 ms. All of that is visible.
 
-Y hay una sorpresa: **C sale mejor que A**. Recargar el elemento entero es más
-rápido que despertar a uno que llevaba ocho segundos pausado con `opacity: 0`.
-La causa está en la columna de latencia: el `play()` de un elemento parado tarda
-unos **250 ms en Chromium y 375–430 ms en WebKit** en dar el primer fotograma,
-mientras que el `load()` + `play()` de C tarda 65–180 ms. Tener el elemento
-listo no significa que arranque instantáneamente.
+And there is a surprise: **C does better than A**. Reloading the whole element
+is faster than waking one that had spent eight seconds paused with
+`opacity: 0`. The cause is in the latency column: the `play()` of a stopped
+element takes about **250 ms in Chromium and 375–430 ms in WebKit** to give
+the first frame, while C's `load()` + `play()` takes 65–180 ms. Having the
+element ready does not mean it starts instantly.
 
-### Con anticipación, el hueco desaparece
+### With anticipation, the gap disappears
 
-| Anticipación | Motor | intro→main | main→outro |
+| Anticipation | Engine | intro→main | main→outro |
 |---|---|---:|---:|
 | 300 ms | Chromium | 21 | 0 |
 | 300 ms | WebKit | **0** | **0** |
 | 600 ms | Chromium | **0** | **0** |
 | 600 ms | WebKit | **0** | **0** |
 
-**La anticipación tiene que superar la latencia del `play()`**, y esa latencia
-depende del motor. Con 300 ms Chromium todavía deja 21 ms porque su `play()`
-tarda ~250 y el lazo de vigilancia muestrea cada 50. Con 600 ms va sobrado en
-los dos.
+**The anticipation has to exceed the `play()` latency**, and that latency
+depends on the engine. With 300 ms Chromium still leaves 21 ms because its
+`play()` takes ~250 and the watch loop samples every 50. With 600 ms there is
+plenty of margin in both.
 
-### El salto es gratis
+### The skip is free
 
-Saltar la cabecera a mitad da **0–28 ms**, y por una razón que conviene
-entender: al saltar, la pieza saliente **sigue reproduciéndose** hasta que la
-entrante tiene fotograma. No hay hueco porque no se deja de enseñar nada. Es el
-mismo mecanismo que la anticipación, disparado a mano.
+Skipping the intro halfway gives **0–28 ms**, and for a reason worth
+understanding: when skipping, the outgoing piece **keeps playing** until the
+incoming one has a frame. There is no gap because nothing stops being shown.
+It is the same mechanism as the anticipation, triggered by hand.
 
-### Lo que NO se ha podido medir
+### What could NOT be measured
 
-`bloq` salió **no** en todas las filas, incluida la variante B. **Eso no
-significa que el desbloqueo sobre.** En escritorio, tanto Chromium como WebKit
-conceden la activación por página: el clic en «Reproducir» desbloquea todos los
-`<video>` del documento, así que B no llega a ponerse a prueba. En iOS el
-permiso es de cada elemento y es donde B debería fallar.
+`blocked` came out **no** in every row, including variant B. **That does not
+mean the unlock is unnecessary.** On desktop, both Chromium and WebKit grant
+activation per page: the click on "Play" unlocks every `<video>` in the
+document, so B never gets put to the test. On iOS the permission belongs to
+each element and that is where B should fail.
 
-`pausadaTrasSonido` salió **no** en todas: quitarle el silencio a la pieza
-entrante a mitad de reproducción no la pausó en ninguno de los dos motores.
-Buena señal para la anticipación, pendiente de confirmar en iOS.
+`pausedAfterUnmute` came out **no** in every row: unmuting the incoming piece
+mid-playback did not pause it in either engine. A good sign for the
+anticipation, pending confirmation on iOS.
 
 ### iPhone
 
-Medido el 2026-09-28 a mano, en un iPhone 17 Pro con Safari 26.5 (el UA dice
-«iPhone OS 18_7» porque Safari congela esa cifra desde la versión 26).
+Measured on 2026-09-28 by hand, on an iPhone 17 Pro with Safari 26.5 (the UA
+says "iPhone OS 18_7" because Safari has frozen that number since version 26).
 
-| Variante | Anticipación | intro→main | main→outro | bloq | pausada al quitar el silencio |
+| Variant | Anticipation | intro→main | main→outro | blocked | paused when unmuted |
 |---|---:|---:|---:|---|---|
-| A · desbloqueada | 0 | 434 | 384 | no | — |
-| B · sin desbloquear | 0 | 433 | 384 | no | — |
-| C · un elemento | 0 | 269 | 234 | no | — |
-| A · desbloqueada | 600 | **0** | **0** | no | no |
-| B · sin desbloquear | 600 | **0** | **0** | no | no |
+| A · unlocked | 0 | 434 | 384 | no | — |
+| B · not unlocked | 0 | 433 | 384 | no | — |
+| C · one element | 0 | 269 | 234 | no | — |
+| A · unlocked | 600 | **0** | **0** | no | no |
+| B · not unlocked | 600 | **0** | **0** | no | no |
 
-**B pasa, y es lo que decide.** Sin anticipación, el `play()` con sonido de la
-entrante sale de un `ended` unos 8 s después del toque, sin desbloqueo previo,
-y no se rechaza. Con anticipación, quitarle el silencio sin gesto tampoco la
-pausa. En este Safari el permiso se comporta como de página, igual que en
-escritorio. La latencia del `play()` va de 324 a 392 ms: los 600 ms cubren.
+**B passes, and that is what decides it.** Without anticipation, the incoming
+piece's `play()` with sound comes from an `ended` some 8 s after the tap, with
+no prior unlock, and it is not rejected. With anticipation, unmuting it without
+a gesture does not pause it either. In this Safari the permission behaves as
+per page, just as on desktop. The `play()` latency ranges from 324 to 392 ms:
+600 ms covers it.
 
-**El salto con sonido sí deja hueco: 321 ms.** El salto del banco arranca la
-entrante **con sonido**, y el hueco es casi igual a su latencia (361 ms): la
-saliente deja de pintar en cuanto se pide ese `play()`. Encaja con lo que midió
-S2 —iPhone no reproduce dos audios a la vez—, y no ocurre en las costuras
-anticipadas, donde la entrante arranca muda. En escritorio el mismo salto daba
-0–28 ms.
+**The skip with sound does leave a gap: 321 ms.** The bench's skip starts the
+incoming piece **with sound**, and the gap is almost equal to its latency
+(361 ms): the outgoing piece stops painting as soon as that `play()` is
+requested. It fits what S2 measured —iPhone does not play two audio tracks at
+once—, and it does not happen at the anticipated seams, where the incoming
+piece starts muted. On desktop the same skip gave 0–28 ms.
 
-**Arrancándola muda, el salto queda en 0 ms.** Se cambió el banco para saltar
-como lo hace el reproductor —entrante silenciada, sonido al descubrirla— y se
-volvió a medir en el mismo iPhone, variante A con 600 ms:
+**Starting it muted, the skip drops to 0 ms.** The bench was changed to skip
+the way the player does —incoming piece muted, sound on reveal— and measured
+again on the same iPhone, variant A with 600 ms:
 
-| Salto | Hueco | Latencia | Con sonido | Pausada al quitar el silencio |
+| Skip | Gap | Latency | With sound | Paused when unmuted |
 |---|---:|---:|---|---|
-| Entrante con sonido | 321 | 361 | sí | — |
-| Entrante muda | **0** | 364 | no | no |
+| Incoming with sound | 321 | 361 | yes | — |
+| Incoming muted | **0** | 364 | no | no |
 
-La latencia no cambia: lo que cambia es que la cabecera sigue pintando hasta
-que el contenido tiene imagen.
+The latency does not change: what changes is that the intro keeps painting
+until the content has a picture.
 
 ---
 
-## 6. Conclusiones para la implementación
+## 6. Conclusions for the implementation
 
-1. **La anticipación no es una optimización, es el mecanismo.** Sin ella no hay
-   forma de encadenar sin hueco visible, en ningún motor y con ninguna de las
-   tres variantes. El reproductor tiene que arrancar la pieza siguiente antes
-   de que termine la actual.
+1. **Anticipation is not an optimisation, it is the mechanism.** Without it
+   there is no way to chain without a visible gap, in any engine and with any
+   of the three variants. The player has to start the next piece before the
+   current one ends.
 
-2. **Margen de 600 ms, y medido, no supuesto.** Tiene que superar la latencia
-   del `play()`, que va de 250 ms (Chromium) a 430 ms (WebKit) para un elemento
-   parado. 300 ms es suficiente en WebKit y se queda corto en Chromium.
+2. **A 600 ms margin, measured, not assumed.** It has to exceed the `play()`
+   latency, which ranges from 250 ms (Chromium) to 430 ms (WebKit) for a
+   stopped element. 300 ms is enough on WebKit and falls short on Chromium.
 
-3. **Durante el solape, la entrante va silenciada y se le quita el silencio al
-   descubrirla.** Ninguno de los dos motores la pausó al hacerlo.
+3. **During the overlap, the incoming piece is muted and unmuted when
+   revealed.** Neither engine paused it when doing so.
 
-4. **Tener el elemento enganchado no basta.** `readyState` 4 y un `play()` que
-   tarda un cuarto de segundo conviven sin problema. Cualquier diseño que
-   asuma que «ya está cargado, luego arranca ya» está mal.
+4. **Having the element attached is not enough.** `readyState` 4 and a
+   `play()` that takes a quarter of a second coexist without trouble. Any
+   design that assumes "it is already loaded, so it starts right away" is
+   wrong.
 
-5. **El botón de saltar reutiliza exactamente el mismo camino:** arrancar la
-   entrante **en silencio**, esperar su primer fotograma, conmutar. Lo del
-   silencio no es un detalle: en iPhone, arrancarla con sonido detiene la
-   saliente y deja 321 ms de hueco; muda, 0 ms (§5). El reproductor ya lo
-   hace así.
+5. **The skip button reuses exactly the same path:** start the incoming piece
+   **muted**, wait for its first frame, switch. The muting is not a detail: on
+   iPhone, starting it with sound stops the outgoing piece and leaves a 321 ms
+   gap; muted, 0 ms (§5). The player already does it this way.
 
-6. **El desbloqueo no hizo falta en iOS 26** (variante B, §5). Se mantiene de
-   momento: es un solo dispositivo, y un iOS anterior podría seguir aplicando la
-   política por elemento. Si B también pasa en iOS 17 o 18, se quita, y con él
-   la necesidad de enganchar la cola desde el principio de la reproducción.
+6. **The unlock was not needed on iOS 26** (variant B, §5). It is kept for now:
+   it is a single device, and an earlier iOS could still apply the per-element
+   policy. If B also passes on iOS 17 or 18, it is removed, and with it the
+   need to attach the outro from the start of playback.
 
-## 7. Lo que este spike NO responde
+## 7. What this spike does NOT answer
 
-- **HLS.** Todo es MP4 progresivo. Con HLS el arranque pasa por parsear la
-  lista y traer el primer segmento, así que los huecos serán otros — y el motor
-  de hls.js tiene su propio ciclo de enganche.
-- **Dual-stream.** La cabecera es mono-stream, que es lo realista, pero el
-  contenido principal puede ser dual, y ahí el cambio tiene que coordinarse con
-  el sincronizador.
-- **Directo.** Una cabecera delante de un directo cambia el problema: mientras
-  la cabecera suena, el borde de la emisión se aleja.
-- **Pantalla completa.** No se ha probado el encadenado con el reproductor en
-  pantalla completa, donde el cambio de elemento visible podría comportarse
-  distinto. En iPhone además no existe el fullscreen de contenedor (S2).
-- **Android.** Ni Chrome ni Samsung Internet. La política de autoplay de
-  Android tiene sus propias reglas.
+- **HLS.** Everything is progressive MP4. With HLS the start goes through
+  parsing the playlist and fetching the first segment, so the gaps will be
+  different — and the hls.js engine has its own attach cycle.
+- **Dual-stream.** The intro is single-stream, which is realistic, but the
+  main content can be dual, and there the switch has to be coordinated with
+  the synchroniser.
+- **Live.** An intro in front of a live stream changes the problem: while the
+  intro plays, the broadcast's edge moves away.
+- **Full screen.** Chaining has not been tested with the player in full
+  screen, where switching the visible element could behave differently. On
+  iPhone, moreover, container fullscreen does not exist (S2).
+- **Android.** Neither Chrome nor Samsung Internet. Android's autoplay policy
+  has its own rules.
