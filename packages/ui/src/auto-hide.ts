@@ -28,7 +28,10 @@ export class AutoHide {
 
   sleep(): void {
     if (!this.canHide()) return;
-    if (this.root.contains(this.root.ownerDocument.activeElement)) return;
+    // The player itself takes focus when the video is clicked: only a control
+    // inside it holding focus keeps the bar up, or a click disabled hiding.
+    const active = this.root.ownerDocument.activeElement;
+    if (active !== this.root && this.root.contains(active)) return;
     this.root.classList.add('np--inactive');
   }
 

@@ -43,7 +43,7 @@ export const CSS = `
   line-height:1;
 }
 .np:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:2px}
-.np__stage{position:relative;display:flex;width:100%}
+.np__stage{position:relative;display:flex;width:100%;touch-action:manipulation}
 .np__stage>[data-stream]{position:relative;flex:1;min-width:0}
 /* A live stream not on air has no video, hence no height for its notice. */
 .np__stage>[data-stream]:not(:has(video)){aspect-ratio:16/9;background:#000}
@@ -237,6 +237,18 @@ button.np__error-retry{
   font:inherit;font-size:.9375rem;font-weight:600;cursor:pointer;
 }
 button.np__error-retry:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:2px}
+
+/* --- double-tap seek --- */
+.np__seek-hint{
+  position:absolute;top:50%;z-index:var(--np-z-overlay);
+  padding:.55rem 1rem;border-radius:99px;
+  background:rgba(0,0,0,.62);font-size:1rem;font-weight:600;
+  font-variant-numeric:tabular-nums;pointer-events:none;
+  transform:translateY(-50%);animation:np-hint .7s ease-out both;
+}
+.np__seek-hint[data-side="back"]{left:12%}
+.np__seek-hint[data-side="forward"]{right:12%}
+@keyframes np-hint{0%{opacity:0}15%,70%{opacity:1}100%{opacity:0}}
 
 /* --- live waiting notice --- */
 .np__waiting{

@@ -1,4 +1,5 @@
 import type { Player } from '@nanoplayer/core';
+import { seekBy } from './seek.js';
 
 const SHORT_SEEK = 5;
 const LONG_SEEK = 10;
@@ -42,14 +43,13 @@ export class KeyboardShortcuts {
   readonly #shortcuts: readonly Shortcut[];
 
   constructor(private readonly player: Player, private readonly actions: ShortcutActions) {
-    const seekBy = (delta: number) => (p: Player) =>
-      p.seek(Math.min(p.duration || 0, Math.max(0, p.currentTime + delta)));
+    const by = (delta: number) => (p: Player) => seekBy(p, delta);
     this.#shortcuts = [
       { keys: [' ', 'k', 'K'], seeks: false, run: () => actions.togglePlay() },
-      { keys: ['ArrowLeft'], seeks: true, run: seekBy(-SHORT_SEEK) },
-      { keys: ['ArrowRight'], seeks: true, run: seekBy(SHORT_SEEK) },
-      { keys: ['j', 'J'], seeks: true, run: seekBy(-LONG_SEEK) },
-      { keys: ['l', 'L'], seeks: true, run: seekBy(LONG_SEEK) },
+      { keys: ['ArrowLeft'], seeks: true, run: by(-SHORT_SEEK) },
+      { keys: ['ArrowRight'], seeks: true, run: by(SHORT_SEEK) },
+      { keys: ['j', 'J'], seeks: true, run: by(-LONG_SEEK) },
+      { keys: ['l', 'L'], seeks: true, run: by(LONG_SEEK) },
       { keys: ['ArrowUp'], seeks: false, run: () => actions.stepVolume(1) },
       { keys: ['ArrowDown'], seeks: false, run: () => actions.stepVolume(-1) },
       { keys: ['m', 'M'], seeks: false, run: () => actions.toggleMute() },

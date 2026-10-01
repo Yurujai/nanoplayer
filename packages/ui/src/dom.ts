@@ -27,9 +27,11 @@ export function createRange(
 export class Listeners {
   #undo: Array<() => void> = [];
 
-  on(target: EventTarget, type: string, fn: (ev: never) => void): void {
-    target.addEventListener(type, fn as EventListener);
-    this.#undo.push(() => target.removeEventListener(type, fn as EventListener));
+  on(
+    target: EventTarget, type: string, fn: (ev: never) => void, capture = false,
+  ): void {
+    target.addEventListener(type, fn as EventListener, capture);
+    this.#undo.push(() => target.removeEventListener(type, fn as EventListener, capture));
   }
 
   add(undo: () => void): void {

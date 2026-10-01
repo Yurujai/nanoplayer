@@ -24,6 +24,7 @@ import { Poster } from './poster.js';
 import { ProgressBar } from './progress-bar.js';
 import { SettingsMenu } from './settings-menu.js';
 import { injectStyles } from './styles.js';
+import { VideoGestures } from './video-gestures.js';
 import { VolumeControl } from './volume-control.js';
 
 export interface ControlBarOptions {
@@ -61,6 +62,7 @@ export class ControlBar implements UiSlots {
   #progress!: ProgressBar;
   #loading!: LoadingIndicator;
   #error!: ErrorDisplay;
+  #gestures!: VideoGestures;
   #autoHide: AutoHide;
   #poster: Poster | null = null;
   #resizeObserver: ResizeObserver | null = null;
@@ -292,9 +294,29 @@ export class ControlBar implements UiSlots {
       used: () => this.#wake(),
     });
     l.on(this.#root, 'keydown', (ev: KeyboardEvent) => shortcuts.handle(ev));
-    l.on(this.#root, 'pointermove', () => this.#wake());
-    l.on(this.#root, 'pointerleave', () => this.#autoHide.sleep());
-    l.on(this.#root, 'focusin', () => this.#wake());
+
+    this.#gestures = new VideoGestures(this.#stage, this.#root, p, {
+      togglePlay: () => this.#togglePlay(),
+      toggleFullscreen: () => this.#fullscreen.toggle(),
+      toggleControls: () => {
+        if (this.#root.classList.contains('np--inactive')) this.#wake();
+        else this.#autoHide.sleep();
+      },
+      isMenuOpen: () => this.#menu.isOpen,
+    });
+    // Touch has no hover: a finger lifting fires `pointerleave`, and hiding
+    // there undid the tap that toggles them (test: "taps show and hide the controls").
+    l.on(this.#root, 'pointermove', (ev: PointerEvent) => {
+      if (ev.pointerType !== 'touch') this.#wake();
+    });
+    l.on(this.#root, 'pointerleave', (ev: PointerEvent) => {
+      if (ev.pointerType !== 'touch') this.#autoHide.sleep();
+    });
+    // A tap or click focuses the player itself; showing the controls then
+    // undid the tap that toggles them. Only keyboard focus there wakes them.
+    l.on(this.#root, 'focusin', (ev: FocusEvent) => {
+      if (ev.target !== this.#root || this.#root.matches(':focus-visible')) this.#wake();
+    });
 
     if (typeof ResizeObserver !== 'undefined') {
       this.#resizeObserver = new ResizeObserver(() => this.#pluginControls.render());
@@ -352,6 +374,7 @@ export class ControlBar implements UiSlots {
     this.#progress.destroy();
     this.#loading.destroy();
     this.#error.destroy();
+    this.#gestures.destroy();
     this.#bar.remove();
     this.#skipButton.remove();
     this.#liveRegion.remove();

@@ -72,6 +72,18 @@ During the **intro** seek keys do nothing: there is no bar to refer them to.
 During the **outro**, backwards returns to the content and forwards is ignored,
 because the outro cannot be skipped.
 
+## Mouse and touch
+
+| On the video | Mouse | Touch |
+|---|---|---|
+| Once | Play or pause | Show or hide the controls |
+| Twice | Fullscreen | Left half −10 s, right half +10 s; each further quick tap adds 10 s |
+
+Each has a keyboard and button equivalent, so none is the only way to do
+something. A touch does not pause: revealing the controls by pausing would
+interrupt the video every time. A click that only closes the settings menu
+does nothing else.
+
 ## Intro and outro
 
 Both are drawn **on top of** the content, not in its place, so the stage does
