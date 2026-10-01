@@ -6,7 +6,7 @@
 import type { ChainPhase } from './chain.js';
 import { ChainController, type ChainHost } from './chain-controller.js';
 import type { CoreEvents } from './core-events.js';
-import type { EngineFactory, MediaEngine } from './engine.js';
+import type { AudioTrackInfo, EngineFactory, MediaEngine } from './engine.js';
 import { playerError, type PlayerError } from './errors.js';
 import { strings, type Catalogues, type Translate } from './i18n.js';
 import { EventBus, type Unsubscribe } from './events.js';
@@ -530,6 +530,19 @@ export class Player {
     this.bus.emit('volumechange', { volume: this.#volume, muted });
   }
 
+  /** The content's audio tracks; empty where the engine cannot switch them. */
+  get audioTracks(): AudioTrackInfo[] {
+    return this.master?.getAudioTracks?.() ?? [];
+  }
+
+  get audioTrack(): string | null {
+    return this.master?.getAudioTrack?.() ?? null;
+  }
+
+  setAudioTrack(id: string): void {
+    this.master?.setAudioTrack?.(id);
+  }
+
   setPlaybackRate(rate: number): void {
     // Master only: the sync loop sets the slaves' rate relative to it.
     this.master?.setPlaybackRate(rate);
@@ -621,6 +634,10 @@ export class Player {
         if (!counts() && !this.#stalls.isStalled(stream.id)) return;
         this.bus.emit('stall:end', { stream: stream.id, durationMs });
         this.#stalls.stallEnded(stream.id);
+      },
+      onAudioTracks: () => {
+        if (!isMaster) return;
+        this.bus.emit('audio:tracks', { tracks: this.audioTracks, active: this.audioTrack });
       },
       onError: (error: PlayerError) => {
         this.bus.emit('error', { error });

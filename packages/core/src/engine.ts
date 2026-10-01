@@ -9,6 +9,21 @@ import type { Source, Stream } from './manifest.js';
 /** Confidence in playing something, on the same scale as `canPlayType`. */
 export type Confidence = 'probably' | 'maybe' | 'no';
 
+/**
+ * One audio rendition of the content: another language, or the same one with
+ * audio description. They come from the media, not the manifest.
+ */
+export interface AudioTrackInfo {
+  /** Stable while the engine stays attached. */
+  id: string;
+  /** May be empty: the media does not always name its tracks. */
+  label: string;
+  /** BCP 47, or empty. */
+  lang: string;
+  /** Narrates what is on screen (WCAG 1.2.5). */
+  describes: boolean;
+}
+
 export interface EngineCallbacks {
   onTime?(current: number, duration: number): void;
   /** Playback was **requested**; it may not have started yet. */
@@ -26,6 +41,8 @@ export interface EngineCallbacks {
   onStallEnd?(durationMs: number): void;
   onSeeked?(at: number): void;
   onError?(error: PlayerError): void;
+  /** The audio tracks or the one playing changed. */
+  onAudioTracks?(): void;
 }
 
 export interface AttachOptions {
@@ -80,6 +97,15 @@ export interface MediaEngine {
    * see docs/browser-quirks.md#live-segment-latency
    */
   liveSyncPosition?(): number | null;
+
+  /**
+   * Alternative audio, where the engine can switch it: natively on WebKit,
+   * through hls.js elsewhere (S2: Blink has no `audioTracks`).
+   */
+  getAudioTracks?(): AudioTrackInfo[];
+  /** The id of the track playing, or `null`. */
+  getAudioTrack?(): string | null;
+  setAudioTrack?(id: string): void;
 
   getPlaybackRate(): number;
   /** Changing the audio stream's rate is audible: slaves only. */

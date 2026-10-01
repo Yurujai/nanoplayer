@@ -17,6 +17,8 @@ export default defineConfig({
         new URL('../packages/plugin-chapters/src/index.ts', import.meta.url)),
       '@nanoplayer/plugin-pip': fileURLToPath(
         new URL('../packages/plugin-pip/src/index.ts', import.meta.url)),
+      '@nanoplayer/plugin-audio-tracks': fileURLToPath(
+        new URL('../packages/plugin-audio-tracks/src/index.ts', import.meta.url)),
     },
   },
   build: {

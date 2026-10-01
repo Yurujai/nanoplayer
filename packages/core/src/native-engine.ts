@@ -4,16 +4,30 @@
  */
 import {
   hasMse, isHlsType,
-  type AttachOptions, type Confidence, type EngineFactory, type MediaEngine,
+  type AttachOptions, type AudioTrackInfo, type Confidence, type EngineFactory, type MediaEngine,
 } from './engine.js';
 import type { Source, Stream } from './manifest.js';
 import { MediaElementEngine, mediaElementError } from './media-element-engine.js';
+
+/** WebKit only (S2): TypeScript's DOM types leave it out. */
+interface NativeAudioTrack {
+  id: string;
+  kind: string;
+  label: string;
+  language: string;
+  enabled: boolean;
+}
+type NativeAudioTrackList = EventTarget & { readonly length: number; [index: number]: NativeAudioTrack };
+
+/** An empty id is allowed by the spec; the position stands in for it. */
+const trackId = (t: NativeAudioTrack, i: number) => t.id || String(i);
 
 export class NativeEngine extends MediaElementEngine {
   readonly name = 'native';
 
   protected prepare(el: HTMLVideoElement, stream: Stream, _options: AttachOptions): Promise<void> {
     el.preload = 'auto';
+    this.#watchAudioTracks(el);
     for (const source of stream.sources) {
       const s = document.createElement('source');
       s.src = source.src;
@@ -46,6 +60,49 @@ export class NativeEngine extends MediaElementEngine {
       el.addEventListener('error', fail);
       if (el.networkState === 0 /* NETWORK_EMPTY */) el.load();
     });
+  }
+
+  /**
+   * The element's own `audioTracks`, only here: under hls.js the element
+   * holds MSE buffers, not the renditions, and hls.js does the switching.
+   */
+  #nativeAudioTracks(): NativeAudioTrack[] {
+    const list = (this.element as { audioTracks?: NativeAudioTrackList } | null)?.audioTracks;
+    return list ? Array.from({ length: list.length }, (_, i) => list[i]!) : [];
+  }
+
+  #watchAudioTracks(el: HTMLVideoElement): void {
+    const list = (el as { audioTracks?: NativeAudioTrackList }).audioTracks;
+    if (!list) return;
+    const notify = () => this.callbacks.onAudioTracks?.();
+    for (const type of ['addtrack', 'removetrack', 'change']) {
+      list.addEventListener(type, notify);
+      this.onDetach(() => list.removeEventListener(type, notify));
+    }
+  }
+
+  getAudioTracks(): AudioTrackInfo[] {
+    return this.#nativeAudioTracks().map((t, i) => ({
+      id: trackId(t, i),
+      label: t.label,
+      lang: t.language,
+      describes: t.kind === 'description' || t.kind === 'main-desc',
+    }));
+  }
+
+  getAudioTrack(): string | null {
+    const tracks = this.#nativeAudioTracks();
+    const i = tracks.findIndex((t) => t.enabled);
+    return i < 0 ? null : trackId(tracks[i]!, i);
+  }
+
+  /** Disables the rest first: several enabled tracks are mixed, and two languages would play at once. */
+  setAudioTrack(id: string): void {
+    const tracks = this.#nativeAudioTracks();
+    const target = tracks.findIndex((t, i) => trackId(t, i) === id);
+    if (target < 0) return;
+    tracks.forEach((t, i) => { if (i !== target) t.enabled = false; });
+    tracks[target]!.enabled = true;
   }
 
   /**

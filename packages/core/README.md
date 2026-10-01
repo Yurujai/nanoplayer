@@ -124,6 +124,29 @@ With `@nanoplayer/plugin-captions` loaded, this **turns captions on with no
 configuration**: the plugin declares that it applies when the manifest has
 tracks.
 
+A track with `"kind": "descriptions"` is not offered as subtitles: it gets its
+own entry in the settings menu, and its cues are **read out to screen readers**
+through a live region, never drawn. `"kind": "chapters"` tracks are left alone;
+chapters come from `annotations`.
+
+### Audio description and other languages
+
+Alternative audio comes from the media, not the manifest: the `EXT-X-MEDIA`
+renditions of an HLS playlist, or the tracks of the file where the browser
+exposes them (Safari; Chrome does not). With
+`@nanoplayer/plugin-audio-tracks` loaded, an **Audio** entry appears in the
+settings menu once the media reports more than one track. A rendition with
+`CHARACTERISTICS="public.accessibility.describes-video"` is marked as audio
+description.
+
+```text
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="Español",LANGUAGE="es",DEFAULT=YES,URI="es.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="Español",LANGUAGE="es",URI="es-ad.m3u8",CHARACTERISTICS="public.accessibility.describes-video"
+```
+
+From code: `player.audioTracks`, `player.audioTrack`, `player.setAudioTrack(id)`
+and the `audio:tracks` event.
+
 ### Audio only
 
 Nothing needs declaring: the MIME type is enough.

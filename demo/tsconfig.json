@@ -9,6 +9,7 @@
       "@nanoplayer/plugin-captions": ["../packages/plugin-captions/src/index.ts"],
       "@nanoplayer/plugin-chapters": ["../packages/plugin-chapters/src/index.ts"],
       "@nanoplayer/plugin-pip": ["../packages/plugin-pip/src/index.ts"],
+      "@nanoplayer/plugin-audio-tracks": ["../packages/plugin-audio-tracks/src/index.ts"],
       "@nanoplayer/engine-hls": ["../packages/engine-hls/src/index.ts"]
     }
   },

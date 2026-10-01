@@ -7,7 +7,8 @@
       "@nanoplayer/ui": ["../ui/src/index.ts"],
       "@nanoplayer/plugin-captions": ["../plugin-captions/src/index.ts"],
       "@nanoplayer/plugin-chapters": ["../plugin-chapters/src/index.ts"],
-      "@nanoplayer/plugin-pip": ["../plugin-pip/src/index.ts"]
+      "@nanoplayer/plugin-pip": ["../plugin-pip/src/index.ts"],
+      "@nanoplayer/plugin-audio-tracks": ["../plugin-audio-tracks/src/index.ts"]
     }
   },
   "include": ["src"]

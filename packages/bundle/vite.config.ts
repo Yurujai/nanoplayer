@@ -12,6 +12,7 @@ export default defineConfig({
       '@nanoplayer/plugin-captions': src('../plugin-captions/src/index.ts'),
       '@nanoplayer/plugin-chapters': src('../plugin-chapters/src/index.ts'),
       '@nanoplayer/plugin-pip': src('../plugin-pip/src/index.ts'),
+      '@nanoplayer/plugin-audio-tracks': src('../plugin-audio-tracks/src/index.ts'),
     },
   },
   build: {

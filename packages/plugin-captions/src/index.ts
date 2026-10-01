@@ -8,13 +8,16 @@
  * text is drawn in a player-wide overlay. The OS caption preferences lost on
  * the way are made up for with a caption style panel and the `--np-cue-*` CSS
  * variables.
+ *
+ * Description tracks travel the same way but are read out, not drawn.
  */
 import {
   plugins, strings,
   type PluginContext, type PluginImpl, type SettingsChoiceDecl, type TextTrackDef,
-  type Translate,
+  type Translate, type UiSlots,
 } from '@nanoplayer/core';
 import { CHOICES, captionStyle, cssVariables, type CaptionStyleKey } from './style.js';
+import { OFF, TrackChoice, trackName } from './track-choice.js';
 
 /*
  * The top half of the box is empty on purpose: it stands for the picture, with
@@ -40,6 +43,7 @@ strings.register('es', {
   'captions.label': 'Subtítulos',
   'captions.off': 'Desactivados',
   'captions.on': 'Activar subtítulos',
+  'captions.descriptions': 'Descripciones (lector de pantalla)',
   'captions.style': 'Estilo de subtítulos',
   'captions.style.size': 'Tamaño',
   'captions.style.color': 'Color del texto',
@@ -70,6 +74,7 @@ strings.register('en', {
   'captions.label': 'Subtitles',
   'captions.off': 'Off',
   'captions.on': 'Turn on subtitles',
+  'captions.descriptions': 'Descriptions (screen reader)',
   'captions.style': 'Caption style',
   'captions.style.size': 'Size',
   'captions.style.color': 'Text color',
@@ -97,7 +102,6 @@ strings.register('en', {
   'captions.edge.depressed': 'Depressed',
 });
 
-const OFF = '__off__';
 
 /** Sizes and opacities read as percentages; the rest have a name in the catalogue. */
 const STYLE_LABELS: Record<CaptionStyleKey, string | null> = {
@@ -123,93 +127,123 @@ function stylePanel(key: CaptionStyleKey, t: Translate): SettingsChoiceDecl {
   };
 }
 
-/** A track's readable name: its label, or else its language name. */
-function trackName(t: TextTrackDef): string {
-  if (t.label) return t.label;
-  try {
-    return new Intl.DisplayNames([t.lang], { type: 'language' }).of(t.lang) ?? t.lang;
-  } catch {
-    return t.lang;
-  }
-}
+/** Subtitles and captions; tracks without a kind are subtitles, as in HTML. */
+const isCaption = (t: TextTrackDef) => !t.kind || t.kind === 'subtitles' || t.kind === 'captions';
+const isDescription = (t: TextTrackDef) => t.kind === 'descriptions';
 
 class Captions implements PluginImpl {
-  #tracks: TextTrackDef[] = [];
-  #elements: HTMLTrackElement[] = [];
+  #captions: TrackChoice | null = null;
+  #descriptions: TrackChoice | null = null;
   #layer: HTMLElement | null = null;
-  #removeLayer: (() => void) | null = null;
-  #stopCueListener: (() => void) | null = null;
-  #active: string = OFF;
+  #announcer: HTMLElement | null = null;
+  #removeLayers: Array<() => void> = [];
   #last: string | null = null;
   #unsubscribe: Array<() => void> = [];
 
   activate(ctx: PluginContext): void {
-    this.#tracks = [...(ctx.player.manifest?.textTracks ?? [])];
-    if (this.#tracks.length === 0) return;
+    const defs = ctx.player.manifest?.textTracks ?? [];
+    const captions = new TrackChoice(defs.filter(isCaption), (cues) => this.#renderCues(cues));
+    const descriptions = new TrackChoice(defs.filter(isDescription), (cues) => this.#announce(cues));
+    if (captions.defs.length === 0 && descriptions.defs.length === 0) return;
+    this.#captions = captions;
+    this.#descriptions = descriptions;
+    if (captions.active !== OFF) this.#last = captions.active;
     const t = ctx.t;
 
     // Engines attach lazily, and a detach replaces the `<video>`: mount on every attach.
-    const mount = () => this.#mountTracks(ctx.player.master?.element ?? null);
+    const mount = () => {
+      const video = ctx.player.master?.element ?? null;
+      captions.mount(video);
+      descriptions.mount(video);
+    };
     mount();
     this.#unsubscribe.push(ctx.bus.on('engine:attach:ok', mount));
 
-    const byDefault = this.#tracks.find((x) => x.default);
-    if (byDefault) {
-      this.#active = byDefault.lang;
-      this.#last = byDefault.lang;
-    }
-
     ctx.whenUi((ui) => {
-      const overlay = ui.addOverlay({ id: 'captions', position: 'captions' });
-      this.#layer = overlay.element;
-      this.#removeLayer = overlay.remove;
-      this.#applyStyle();
-      this.#unsubscribe.push(captionStyle.subscribe(() => this.#applyStyle()));
-      this.#renderCues();
-
-      this.#unsubscribe.push(ui.addBarControl({
-        id: 'captions',
-        priority: 30,
-        icon: () => (this.#active === OFF ? ICON_OFF : ICON_ON),
-        label: () => t(this.#active === OFF ? 'captions.on' : 'captions.label'),
-        pressed: () => this.#active !== OFF,
-        onActivate: () => {
-          this.#select(this.#active === OFF ? (this.#last ?? this.#tracks[0]!.lang) : OFF);
-          ui.refresh();
-        },
-      }));
-
-      this.#unsubscribe.push(ui.addSettingsPanel({
-        id: 'captions',
-        label: t('captions.label'),
-        priority: 5,
-        options: [
-          { value: OFF, label: t('captions.off') },
-          ...this.#tracks.map((x) => ({ value: x.lang, label: trackName(x) })),
-        ],
-        getValue: () => this.#active,
-        onSelect: (v) => { this.#select(v); ui.refresh(); },
-      }));
-
-      this.#unsubscribe.push(ui.addSettingsPanel({
-        id: 'caption-style',
-        label: t('captions.style'),
-        priority: 50,
-        panels: (Object.keys(CHOICES) as CaptionStyleKey[]).map((key) => stylePanel(key, t)),
-        onReset: () => captionStyle.reset(),
-      }));
+      if (captions.defs.length > 0) this.#addCaptions(ui, captions, t);
+      if (descriptions.defs.length > 0) this.#addDescriptions(ui, descriptions, t);
     });
   }
 
   deactivate(): void {
     for (const off of this.#unsubscribe) off();
     this.#unsubscribe = [];
-    this.#detachCueListener();
-    for (const el of this.#elements) el.remove();
-    this.#elements = [];
-    this.#removeLayer?.();
-    this.#removeLayer = null;
+    this.#captions?.unmount();
+    this.#descriptions?.unmount();
+    for (const remove of this.#removeLayers) remove();
+    this.#removeLayers = [];
     this.#layer = null;
+    this.#announcer = null;
+  }
+
+  #addCaptions(ui: UiSlots, captions: TrackChoice, t: Translate): void {
+    const overlay = ui.addOverlay({ id: 'captions', position: 'captions' });
+    this.#layer = overlay.element;
+    this.#removeLayers.push(overlay.remove);
+    this.#applyStyle();
+    this.#unsubscribe.push(captionStyle.subscribe(() => this.#applyStyle()));
+    this.#renderCues(captions.cues());
+
+    const select = (lang: string) => {
+      captions.select(lang);
+      if (lang !== OFF) this.#last = lang;
+      ui.refresh();
+    };
+
+    this.#unsubscribe.push(ui.addBarControl({
+      id: 'captions',
+      priority: 30,
+      icon: () => (captions.active === OFF ? ICON_OFF : ICON_ON),
+      label: () => t(captions.active === OFF ? 'captions.on' : 'captions.label'),
+      pressed: () => captions.active !== OFF,
+      onActivate: () => select(captions.active === OFF ? (this.#last ?? captions.defs[0]!.lang) : OFF),
+    }));
+
+    this.#unsubscribe.push(ui.addSettingsPanel({
+      id: 'captions',
+      label: t('captions.label'),
+      priority: 5,
+      options: [
+        { value: OFF, label: t('captions.off') },
+        ...captions.defs.map((x) => ({ value: x.lang, label: trackName(x) })),
+      ],
+      getValue: () => captions.active,
+      onSelect: select,
+    }));
+
+    this.#unsubscribe.push(ui.addSettingsPanel({
+      id: 'caption-style',
+      label: t('captions.style'),
+      priority: 50,
+      panels: (Object.keys(CHOICES) as CaptionStyleKey[]).map((key) => stylePanel(key, t)),
+      onReset: () => captionStyle.reset(),
+    }));
+  }
+
+  /**
+   * Text descriptions are for screen readers: read out through a live region,
+   * not drawn. Sighted viewers have the picture they describe.
+   */
+  #addDescriptions(ui: UiSlots, descriptions: TrackChoice, t: Translate): void {
+    const overlay = ui.addOverlay({ id: 'descriptions', position: 'fill' });
+    this.#removeLayers.push(overlay.remove);
+    const region = document.createElement('div');
+    region.className = 'np__sr';
+    region.setAttribute('aria-live', 'polite');
+    overlay.element.appendChild(region);
+    this.#announcer = region;
+
+    this.#unsubscribe.push(ui.addSettingsPanel({
+      id: 'descriptions',
+      label: t('captions.descriptions'),
+      priority: 6,
+      options: [
+        { value: OFF, label: t('captions.off') },
+        ...descriptions.defs.map((x) => ({ value: x.lang, label: trackName(x) })),
+      ],
+      getValue: () => descriptions.active,
+      onSelect: (lang) => descriptions.select(lang),
+    }));
   }
 
   /** Inline custom properties, not a generated stylesheet, so a strict CSP allows it. */
@@ -223,73 +257,14 @@ class Captions implements PluginImpl {
   }
 
   /**
-   * The video comes from this player, never from a page-wide lookup: with two
-   * players sharing a stream id, that put the tracks on the other player.
-   */
-  #mountTracks(video: HTMLVideoElement | null): void {
-    if (!video || this.#elements[0]?.parentElement === video) return;
-    for (const el of this.#elements) el.remove();
-    this.#elements = [];
-
-    for (const t of this.#tracks) {
-      const el = document.createElement('track');
-      el.kind = t.kind ?? 'subtitles';
-      el.srclang = t.lang;
-      el.label = trackName(t);
-      el.src = t.src;
-      video.appendChild(el);
-      this.#elements.push(el);
-    }
-    this.#apply();
-  }
-
-  #select(value: string): void {
-    this.#active = value;
-    if (value !== OFF) this.#last = value;
-    this.#apply();
-  }
-
-  /**
-   * The active track is `hidden`, not `showing`: the browser fires `cuechange`
-   * without drawing. The rest are `disabled`, not `hidden`, so they are not
-   * processed for nothing (battery on mobile).
-   */
-  #apply(): void {
-    this.#detachCueListener();
-    let active: TextTrack | null = null;
-    for (const el of this.#elements) {
-      const track = el.track;
-      if (!track) continue;
-      if (el.srclang === this.#active) { track.mode = 'hidden'; active = track; }
-      else track.mode = 'disabled';
-    }
-    if (active) {
-      const onChange = () => this.#renderCues();
-      active.addEventListener('cuechange', onChange);
-      this.#stopCueListener = () => active.removeEventListener('cuechange', onChange);
-    }
-    this.#renderCues();
-  }
-
-  #detachCueListener(): void {
-    this.#stopCueListener?.();
-    this.#stopCueListener = null;
-  }
-
-  /**
    * `getCueAsHTML()` keeps the WebVTT markup (bold, italics, voices), inserted
    * as nodes, never as an HTML string: captions are third-party content.
    */
-  #renderCues(): void {
+  #renderCues(cues: TextTrackCue[]): void {
     const layer = this.#layer;
     if (!layer) return;
     layer.textContent = '';
-    if (this.#active === OFF) return;
-
-    const cues = this.#elements.find((e) => e.srclang === this.#active)?.track?.activeCues;
-    if (!cues) return;
-
-    for (const cue of Array.from(cues)) {
+    for (const cue of cues) {
       const line = document.createElement('div');
       line.className = 'np__cue';
       const vtt = cue as VTTCue & { getCueAsHTML?: () => DocumentFragment };
@@ -298,12 +273,23 @@ class Captions implements PluginImpl {
       layer.appendChild(line);
     }
   }
+
+  /** An emptied region is not read, so a cue ending says nothing. */
+  #announce(cues: TextTrackCue[]): void {
+    if (!this.#announcer) return;
+    this.#announcer.textContent = cues
+      .map((cue) => {
+        const vtt = cue as VTTCue & { getCueAsHTML?: () => DocumentFragment };
+        return vtt.getCueAsHTML?.().textContent ?? vtt.text ?? '';
+      })
+      .join(' ');
+  }
 }
 
-/** Self-registration: it switches on by itself when the manifest has text tracks. */
+/** Self-registration: it switches on by itself when the manifest has captions or descriptions. */
 plugins.register({
   id: 'captions',
-  activateWhen: (m) => (m?.textTracks?.length ?? 0) > 0,
+  activateWhen: (m) => (m?.textTracks ?? []).some((x) => isCaption(x) || isDescription(x)),
   load: () => new Captions(),
 });
 

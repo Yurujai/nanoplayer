@@ -53,6 +53,10 @@
         stay together.</li>
     <li><strong>Captions.</strong> They switch on by themselves because the video has
         caption tracks. Change the language in Settings.</li>
+    <li><strong>Descriptions.</strong> With a screen reader, turn on
+        <strong>⚙ Settings → Descriptions (screen reader)</strong> to hear what is on
+        screen. Alternative audio, such as an audio-described track, shows up under
+        <strong>Audio</strong> when the media carries it.</li>
     <li><strong>Chapters.</strong> Three of them, marked on the progress bar. Hover
         the bar to see where each one falls, or jump to one from
         <strong>⚙ Settings → Chapters</strong>.</li>
@@ -86,6 +90,7 @@ import { attachControls } from '@nanoplayer/ui';
 import '@nanoplayer/plugin-captions';   // they register themselves
 import '@nanoplayer/plugin-chapters';
 import '@nanoplayer/plugin-pip';
+import '@nanoplayer/plugin-audio-tracks';
 
 const player = create('#player', { manifest: '/api/video/123' });
 attachControls(player);</code></pre>

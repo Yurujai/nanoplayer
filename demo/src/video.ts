@@ -3,6 +3,7 @@ import { attachControls, type ControlBar } from '@nanoplayer/ui';
 import '@nanoplayer/plugin-captions';
 import '@nanoplayer/plugin-chapters';
 import '@nanoplayer/plugin-pip';
+import '@nanoplayer/plugin-audio-tracks';
 
 // The page lives under /video/ and the media at the site root.
 const MEDIA = '../media/';
@@ -29,6 +30,7 @@ function manifestFor(dual: boolean, withBumpers: boolean): Manifest {
     textTracks: [
       { src: `${MEDIA}en.vtt`, lang: 'en', label: 'English', kind: 'subtitles' },
       { src: `${MEDIA}es.vtt`, lang: 'es', label: 'Español', kind: 'subtitles' },
+      { src: `${MEDIA}en-descriptions.vtt`, lang: 'en', label: 'English', kind: 'descriptions' },
     ],
     annotations: [
       { kind: 'chapter', start: 0, end: 12, title: 'Welcome' },

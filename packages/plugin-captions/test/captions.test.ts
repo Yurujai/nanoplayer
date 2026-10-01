@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  create, type EngineFactory, type Manifest, type Player, type SettingsGroupDecl,
-  type SettingsPanelDecl, type UiSlots,
+  create, type EngineFactory, type Manifest, type Player, type SettingsChoiceDecl,
+  type SettingsGroupDecl, type SettingsPanelDecl, type UiSlots,
 } from '@nanoplayer/core';
 import '../src/index.js';
 import { captionStyle, cssVariables, DEFAULT_STYLE } from '../src/style.js';
@@ -165,5 +165,103 @@ describe('caption style', () => {
     const ui = await mountWithUi();
     ui.choice('color').onSelect('cyan');
     expect(ui.layer.style.getPropertyValue('--np-cue-color')).toBe('rgb(0,255,255)');
+  });
+});
+
+describe('text descriptions', () => {
+  // happy-dom builds a new TextTrack on every read of `track`; a browser keeps one.
+  const original = Object.getOwnPropertyDescriptor(HTMLTrackElement.prototype, 'track')!;
+  beforeEach(() => {
+    const tracks = new WeakMap<HTMLTrackElement, TextTrack>();
+    Object.defineProperty(HTMLTrackElement.prototype, 'track', {
+      configurable: true,
+      get(this: HTMLTrackElement) {
+        if (!tracks.has(this)) tracks.set(this, original.get!.call(this));
+        return tracks.get(this);
+      },
+    });
+  });
+  afterEach(() => { Object.defineProperty(HTMLTrackElement.prototype, 'track', original); });
+
+  const withDescriptions: Manifest = {
+    ...lecture,
+    textTracks: [
+      { src: 'en.vtt', lang: 'en' },
+      { src: 'en-desc.vtt', lang: 'en', kind: 'descriptions', label: 'English descriptions' },
+      { src: 'chapters.vtt', lang: 'en', kind: 'chapters' },
+    ],
+  };
+
+  async function mountWith(manifest: Manifest) {
+    const host = document.createElement('div');
+    page.appendChild(host);
+    const player = create(host, { manifest, engines, registry: false });
+    await player.resolve();
+    await new Promise((r) => setTimeout(r, 0));
+    await player.attach();
+    const panels: SettingsPanelDecl[] = [];
+    const overlays = new Map<string, HTMLElement>();
+    const bar: string[] = [];
+    player.setUi({
+      addBarControl: (c) => { bar.push(c.id); return () => {}; },
+      addSettingsPanel: (p) => { panels.push(p); return () => {}; },
+      addTimelineMarkers: () => () => {},
+      addOverlay: (d) => {
+        const el = document.createElement('div');
+        overlays.set(d.id, el);
+        return { element: el, remove: () => el.remove() };
+      },
+      refresh: () => {},
+    });
+    const panel = (id: string) => panels.find((p) => p.id === id) as SettingsChoiceDecl | undefined;
+    return { player, panel, overlays, bar };
+  }
+
+  /** Makes a mounted track report these cues as showing, as the browser would. */
+  function showCues(player: Player, kind: string, texts: string[]) {
+    const el = player.master!.element!.querySelector<HTMLTrackElement>(`track[kind="${kind}"]`)!;
+    const cues = texts.map((text) => ({ text }));
+    Object.defineProperty(el.track, 'activeCues', { configurable: true, get: () => cues });
+    el.track.dispatchEvent(new Event('cuechange'));
+  }
+
+  it('are not offered as subtitles, and neither are chapter tracks', async () => {
+    const { panel } = await mountWith(withDescriptions);
+    expect(panel('captions')!.options.map((o) => o.value)).toEqual(['__off__', 'en']);
+  });
+
+  it('have a panel of their own that says who they are for', async () => {
+    const { panel } = await mountWith(withDescriptions);
+    const descriptions = panel('descriptions')!;
+    expect(descriptions.label).toBe('Descripciones (lector de pantalla)');
+    expect(descriptions.options.map((o) => o.label)).toEqual(['Desactivados', 'English descriptions']);
+    expect(descriptions.getValue()).toBe('__off__');
+  });
+
+  it('once chosen, each description is read out through a live region and never drawn', async () => {
+    const { player, panel, overlays } = await mountWith(withDescriptions);
+    panel('descriptions')!.onSelect('en');
+    showCues(player, 'descriptions', ['A graph of pressure against volume.']);
+    const region = overlays.get('descriptions')!.querySelector('[aria-live]')!;
+    expect(region.getAttribute('aria-live')).toBe('polite');
+    expect(region.textContent).toBe('A graph of pressure against volume.');
+    expect(region.className, 'visually hidden').toBe('np__sr');
+    expect(overlays.get('captions')!.textContent, 'not mixed into the captions').toBe('');
+  });
+
+  it('read nothing while off', async () => {
+    const { player, overlays } = await mountWith(withDescriptions);
+    showCues(player, 'descriptions', ['A graph of pressure against volume.']);
+    expect(overlays.get('descriptions')!.textContent).toBe('');
+  });
+
+  it('a video with only descriptions gets no captions button', async () => {
+    const { panel, bar } = await mountWith({
+      ...lecture,
+      textTracks: [{ src: 'en-desc.vtt', lang: 'en', kind: 'descriptions' }],
+    });
+    expect(bar).not.toContain('captions');
+    expect(panel('captions')).toBeUndefined();
+    expect(panel('descriptions')).toBeDefined();
   });
 });

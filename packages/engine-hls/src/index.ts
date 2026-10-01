@@ -4,7 +4,7 @@
  */
 import {
   hasMse, isHlsType, MediaElementEngine, playerError,
-  type AttachOptions, type Confidence, type EngineFactory, type MediaEngine,
+  type AttachOptions, type AudioTrackInfo, type Confidence, type EngineFactory, type MediaEngine,
   type PlayerError, type Source, type Stream,
 } from '@nanoplayer/core';
 import type HlsType from 'hls.js';
@@ -38,6 +38,7 @@ export class HlsEngine extends MediaElementEngine {
 
     this.#hls = new Hls({ enableWorker: true, startLevel: -1, backBufferLength: 90 });
     this.#recoverFromErrors(this.#hls, Hls);
+    this.#watchAudioTracks(this.#hls, Hls);
     this.#hls.attachMedia(el);
     this.#hls.loadSource(source.src);
 
@@ -95,6 +96,36 @@ export class HlsEngine extends MediaElementEngine {
     };
     hls.on(Hls.Events.ERROR, onError as never);
     this.onDetach(() => hls.off(Hls.Events.ERROR, onError as never));
+  }
+
+  #watchAudioTracks(hls: Hls, Hls: typeof HlsType): void {
+    const notify = () => this.callbacks.onAudioTracks?.();
+    for (const event of [Hls.Events.AUDIO_TRACKS_UPDATED, Hls.Events.AUDIO_TRACK_SWITCHED]) {
+      hls.on(event, notify);
+      this.onDetach(() => hls.off(event, notify));
+    }
+  }
+
+  /** Renditions from the playlist's `EXT-X-MEDIA:TYPE=AUDIO`; the id is the index hls.js switches by. */
+  getAudioTracks(): AudioTrackInfo[] {
+    return (this.#hls?.audioTracks ?? []).map((t, i) => ({
+      id: String(i),
+      label: t.name ?? '',
+      lang: t.lang ?? '',
+      describes: (t.characteristics ?? '').includes('public.accessibility.describes-video'),
+    }));
+  }
+
+  getAudioTrack(): string | null {
+    const i = this.#hls?.audioTrack ?? -1;
+    return i < 0 ? null : String(i);
+  }
+
+  setAudioTrack(id: string): void {
+    const i = Number(id);
+    if (this.#hls && Number.isInteger(i) && i >= 0 && i < this.#hls.audioTracks.length) {
+      this.#hls.audioTrack = i;
+    }
   }
 
   #toPlayerError(data: { type?: string; details?: string }): PlayerError {

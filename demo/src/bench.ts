@@ -6,6 +6,7 @@ import { attachControls, type ControlBar } from '@nanoplayer/ui';
 import '@nanoplayer/plugin-captions';
 import '@nanoplayer/plugin-chapters';
 import '@nanoplayer/plugin-pip';
+import '@nanoplayer/plugin-audio-tracks';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 

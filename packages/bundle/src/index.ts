@@ -21,6 +21,7 @@ import { attachControls, type ControlBarOptions } from '@nanoplayer/ui';
 import '@nanoplayer/plugin-captions';
 import '@nanoplayer/plugin-chapters';
 import '@nanoplayer/plugin-pip';
+import '@nanoplayer/plugin-audio-tracks';
 
 export interface Config extends CreateConfig {
   /** Control bar, on by default. `false` leaves it out; an object configures it. */
@@ -82,7 +83,7 @@ export type {
   Catalogue, Catalogues, Translate, ErrorCode, PlayerError,
   AnyListener, Empty, EventBusOptions, EventMap, Listener, ListenerErrorInfo,
   Unsubscribe, CoreEvents, PlayerState,
-  AttachOptions, Confidence, EngineCallbacks, EngineFactory, MediaEngine,
+  AttachOptions, AudioTrackInfo, Confidence, EngineCallbacks, EngineFactory, MediaEngine,
   MediaElementEngineOptions,
   Scheduler, SyncAction, SyncProfile, SyncProfileName, SyncSample, SynchronizerOptions,
   ManifestResolver, PlayerOptions, BatchResolverOptions, RegistryOptions,

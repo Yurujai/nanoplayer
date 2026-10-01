@@ -1,0 +1,10 @@
+WEBVTT
+
+00:00:01.000 --> 00:00:05.000
+A test pattern: coloured vertical bars, a white circle and a moving diagonal line.
+
+00:00:13.000 --> 00:00:17.000
+The slides show the same test pattern, with a counter keeping time.
+
+00:00:29.000 --> 00:00:33.000
+The pattern keeps moving; the two counters still read the same time.

@@ -431,3 +431,58 @@ describe('engine selection', () => {
     expect(selectEngine([], s)).toBeNull();
   });
 });
+
+describe('NativeEngine · audio tracks (WebKit)', () => {
+  /** WebKit's `AudioTrackList`, which happy-dom (like Blink) lacks. */
+  function giveAudioTracks(kinds: string[]) {
+    type Track = { id: string; kind: string; label: string; language: string; enabled: boolean };
+    const list = Object.assign(new EventTarget(), {
+      length: kinds.length,
+    }) as unknown as EventTarget & Record<number, Track>;
+    kinds.forEach((kind, i) => {
+      list[i] = { id: i === 1 ? '' : `a${i}`, kind, label: '', language: 'es', enabled: i === 0 };
+    });
+    Object.defineProperty(video, 'audioTracks', { value: list, configurable: true });
+    return list;
+  }
+
+  async function attached(onAudioTracks = vi.fn()) {
+    const e = engine();
+    const done = e.attach(container, stream(), { callbacks: { onAudioTracks } });
+    video.simulateLoad();
+    await done;
+    return e;
+  }
+
+  it('lists the media tracks, marking the described ones', async () => {
+    giveAudioTracks(['main', 'description', 'main-desc']);
+    const e = await attached();
+    expect(e.getAudioTracks().map((t) => [t.id, t.describes])).toEqual([
+      ['a0', false], ['1', true], ['a2', true],
+    ]);
+    expect(e.getAudioTrack()).toBe('a0');
+  });
+
+  it('switching leaves exactly one enabled: several enabled are mixed together', async () => {
+    const list = giveAudioTracks(['main', 'description']);
+    const e = await attached();
+    e.setAudioTrack('1');
+    expect([list[0]!.enabled, list[1]!.enabled]).toEqual([false, true]);
+    expect(e.getAudioTrack()).toBe('1');
+  });
+
+  it('reports changes to the list', async () => {
+    const list = giveAudioTracks(['main']);
+    const onAudioTracks = vi.fn();
+    await attached(onAudioTracks);
+    list.dispatchEvent(new Event('addtrack'));
+    list.dispatchEvent(new Event('change'));
+    expect(onAudioTracks).toHaveBeenCalledTimes(2);
+  });
+
+  it('has none where the browser offers no audioTracks', async () => {
+    const e = await attached();
+    expect(e.getAudioTracks()).toEqual([]);
+    expect(e.getAudioTrack()).toBeNull();
+  });
+});
