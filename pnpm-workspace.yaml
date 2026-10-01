@@ -5,13 +5,9 @@ packages:
   - 'spikes/s5-live-dual'
   - 'spikes/s6-chaining'
 
-# pnpm 10 avisaba de los scripts de instalación ignorados; pnpm 12 se planta y
-# exige decidir. Se declara aquí para que el arranque en limpio no dependa de
-# contestar a un aviso interactivo.
-#
-# esbuild a `false`: su script de instalación solo verifica el binario, que
-# llega por `optionalDependencies` según la plataforma. Comprobado que sin
-# ejecutarlo los tests, el typecheck y los builds de los cuatro paquetes pasan
-# igual, así que no hay nada que ganar dándole permiso.
+# pnpm 12 refuses to install until ignored build scripts are decided, so a
+# clean install must not depend on answering an interactive prompt.
+# esbuild's script only verifies the binary it gets through
+# optionalDependencies; tests, typecheck and builds pass without running it.
 allowBuilds:
   esbuild: false

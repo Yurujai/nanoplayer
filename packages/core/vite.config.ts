@@ -1,22 +1,17 @@
 import { defineConfig } from 'vite';
 import { fileURLToPath } from 'node:url';
 
-// Dos formatos con propósitos distintos:
-//   - ESM  para quien tenga build propio, con tree-shaking.
-//   - IIFE con la global `NanoPlayer`, para el caso `<script>` del objetivo O5:
-//     cero configuración, cero herramientas.
+// ESM for bundlers, and an IIFE with the `NanoPlayer` global for a plain
+// `<script>` tag.
 export default defineConfig({
   build: {
     lib: {
-      // El barril, no `nanoplayer.ts`. Este era el entry y publicaba ocho
-      // exports: `create` y poco más. Todo lo que el README documenta
-      // —`validateManifest`, `EventBus`, `Synchronizer`— quedaba fuera del
-      // paquete construido aunque estuviera en el código.
+      // The barrel, not `nanoplayer.ts`: with that entry the build shipped
+      // little more than `create`, leaving out what the README documents.
       entry: fileURLToPath(new URL('src/index.ts', import.meta.url)),
       name: 'NanoPlayer',
       formats: ['es', 'iife'],
-      // `index.js` para que case con `main`/`exports` del package.json, que
-      // apuntaban a un fichero que no se llegaba a emitir.
+      // Must match `main`/`exports` in package.json.
       fileName: (format) => (format === 'iife' ? 'nanoplayer.min.js' : 'index.js'),
     },
     sourcemap: true,
