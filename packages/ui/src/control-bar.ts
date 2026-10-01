@@ -12,11 +12,13 @@ import type {
 } from '@nanoplayer/core';
 import { AutoHide } from './auto-hide.js';
 import { createButton, Listeners } from './dom.js';
+import { ErrorDisplay } from './error-display.js';
 import { FullscreenButton } from './fullscreen-button.js';
 import { ICONS } from './icons.js';
 import { KeyboardShortcuts } from './keyboard-shortcuts.js';
 import { applyLayout, layoutsFor, type LayoutDef, type LayoutId } from './layouts.js';
 import { LiveNotices } from './live-notices.js';
+import { LoadingIndicator } from './loading-indicator.js';
 import { PluginControls } from './plugin-controls.js';
 import { Poster } from './poster.js';
 import { ProgressBar } from './progress-bar.js';
@@ -57,6 +59,8 @@ export class ControlBar implements UiSlots {
   #volume!: VolumeControl;
   #pluginControls!: PluginControls;
   #progress!: ProgressBar;
+  #loading!: LoadingIndicator;
+  #error!: ErrorDisplay;
   #autoHide: AutoHide;
   #poster: Poster | null = null;
   #resizeObserver: ResizeObserver | null = null;
@@ -111,6 +115,10 @@ export class ControlBar implements UiSlots {
     this.#liveRegion.setAttribute('aria-live', 'polite');
     this.#liveRegion.setAttribute('aria-label', this.#t('ui.status.region'));
     this.#root.appendChild(this.#liveRegion);
+
+    this.#loading = new LoadingIndicator(doc, this.#player);
+    this.#error = new ErrorDisplay(doc, this.#player, this.#t, (e) => this.#errorText(e));
+    this.#root.append(this.#loading.element, this.#error.element);
 
     this.#bar = doc.createElement('div');
     this.#bar.className = 'np__bar';
@@ -342,6 +350,8 @@ export class ControlBar implements UiSlots {
     this.#volume.destroy();
     this.#fullscreen.destroy();
     this.#progress.destroy();
+    this.#loading.destroy();
+    this.#error.destroy();
     this.#bar.remove();
     this.#skipButton.remove();
     this.#liveRegion.remove();

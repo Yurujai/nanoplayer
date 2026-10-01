@@ -26,6 +26,7 @@ Not an intention: it is checked in CI and **blocks the merge**.
 | `aria-valuetext` with spoken time | A screen reader would say "735"; with this it says "12 minutes and 15 seconds" |
 | The bar does not hide while focus is inside | Keyboard users would lose sight of the control in use |
 | A `role="status"` region | For what is only perceived by looking: buffering, errors |
+| Buffering and errors are also on screen | A spinner while a stream has no data (after a short delay, so seeks do not flash it), and the error text with **Try again** when retrying can help. Neither is a live region: the status region already said it |
 | No Shadow DOM | ARIA relationships do not cross that boundary well, and it would force a `::part` per element to allow styling |
 
 **What the automated check does NOT cover:** axe-core finds about a third of

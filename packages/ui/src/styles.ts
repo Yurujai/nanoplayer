@@ -32,6 +32,7 @@ export const CSS = `
   --np-z-overlay:2;
   --np-z-bar:3;
   --np-z-poster:4;
+  --np-z-alert:5;
 
   position:relative;
   container-type:inline-size;
@@ -205,6 +206,38 @@ button.np__btn[disabled]{opacity:.4;cursor:default}
 .np__cue b,.np__cue strong{font-weight:700}
 .np__cue i,.np__cue em{font-style:italic}
 
+/* --- loading and error --- */
+.np__loading{
+  position:absolute;inset:0;z-index:var(--np-z-overlay);
+  display:flex;align-items:center;justify-content:center;pointer-events:none;
+  /* A short wait shows nothing: a spinner flashing on every seek is noise. */
+  animation:np-appear .2s .4s both;
+}
+.np__spinner{
+  width:3.5rem;height:3.5rem;border-radius:50%;
+  border:.3rem solid rgba(255,255,255,.25);border-top-color:var(--np-color-control);
+  animation:np-spin .9s linear infinite;
+}
+@keyframes np-appear{from{opacity:0}to{opacity:1}}
+@keyframes np-spin{to{transform:rotate(360deg)}}
+.np__error{
+  position:absolute;inset:0;z-index:var(--np-z-alert);
+  display:flex;align-items:center;justify-content:center;
+  padding:1rem;pointer-events:none;
+}
+.np__error-box{
+  display:flex;flex-direction:column;align-items:center;gap:.8rem;
+  max-width:min(26rem,90%);padding:1rem 1.25rem;border-radius:var(--np-radius);
+  background:rgba(0,0,0,.82);text-align:center;pointer-events:auto;
+}
+.np__error-text{margin:0;font-size:clamp(.9rem,2.4cqw,1.1rem);line-height:1.4}
+button.np__error-retry{
+  padding:.55rem 1.1rem;min-height:2.5rem;border:0;border-radius:var(--np-radius);
+  background:var(--np-color-control);color:#000;
+  font:inherit;font-size:.9375rem;font-weight:600;cursor:pointer;
+}
+button.np__error-retry:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:2px}
+
 /* --- live waiting notice --- */
 .np__waiting{
   position:absolute;inset:0;z-index:var(--np-z-overlay);
@@ -329,10 +362,12 @@ button.np__skip svg{width:1.25rem;height:1.25rem;fill:currentColor;pointer-event
 
 @media (prefers-reduced-motion:reduce){
   .np *,.np *::before,.np *::after{transition-duration:.01ms!important}
+  .np__spinner{animation:np-pulse 1.6s ease-in-out infinite}
 }
 /* Forced colours drop translucent backgrounds: borders keep controls visible. */
 @media (forced-colors:active){
-  button.np__btn,button.np__skip{border:1px solid ButtonText}
+  button.np__btn,button.np__skip,button.np__error-retry{border:1px solid ButtonText}
+  .np__error-box{border:1px solid CanvasText}
   .np__bar{background:Canvas}
 }
 `;

@@ -36,6 +36,7 @@ strings.register('es', {
 
   // One per `PlayerError` code: the error message itself is diagnostics for integrators.
   'ui.error.generic': 'No se ha podido reproducir el vídeo',
+  'ui.error.retry': 'Reintentar',
   'ui.error.manifest/fetch': 'No se ha podido cargar el vídeo',
   'ui.error.manifest/invalid': 'Este vídeo está mal configurado',
   'ui.error.engine/unsupported': 'Este navegador no puede reproducir este vídeo',
@@ -96,6 +97,7 @@ strings.register('en', {
   'ui.live.goToBehindBy': 'Go to live. Behind live: {time}',
 
   'ui.error.generic': 'The video could not be played',
+  'ui.error.retry': 'Try again',
   'ui.error.manifest/fetch': 'The video could not be loaded',
   'ui.error.manifest/invalid': 'This video is misconfigured',
   'ui.error.engine/unsupported': 'This browser cannot play this video',
