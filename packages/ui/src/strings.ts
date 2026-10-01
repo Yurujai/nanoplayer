@@ -55,6 +55,7 @@ strings.register('es', {
 
   'ui.settings.label': 'Ajustes',
   'ui.settings.back': 'Volver',
+  'ui.settings.reset': 'Restablecer',
   'ui.settings.close': 'Cerrar ajustes',
 
   'ui.layout.label': 'Disposición',
@@ -114,6 +115,7 @@ strings.register('en', {
 
   'ui.settings.label': 'Settings',
   'ui.settings.back': 'Back',
+  'ui.settings.reset': 'Reset',
   'ui.settings.close': 'Close settings',
 
   'ui.layout.label': 'Layout',

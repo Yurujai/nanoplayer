@@ -13,7 +13,8 @@ export interface SettingsOption {
   label: string;
 }
 
-export interface SettingsPanel {
+/** A list of options with one ticked. */
+export interface SettingsChoicePanel {
   id: string;
   /** What the main menu reads. */
   label: string;
@@ -25,6 +26,20 @@ export interface SettingsPanel {
   priority?: number;
 }
 
+/** Related choices under one entry, one level deeper. */
+export interface SettingsGroupPanel {
+  id: string;
+  label: string;
+  panels: readonly SettingsChoicePanel[];
+  /** When set, the group ends with a reset item. */
+  onReset?: () => void;
+  priority?: number;
+}
+
+export type SettingsPanel = SettingsChoicePanel | SettingsGroupPanel;
+
+const isGroup = (p: SettingsPanel): p is SettingsGroupPanel => 'panels' in p;
+
 export class SettingsMenu {
   readonly #button: HTMLButtonElement;
   readonly #popup: HTMLElement;
@@ -32,8 +47,8 @@ export class SettingsMenu {
   readonly #panels = new Map<string, SettingsPanel>();
 
   #open = false;
-  /** `null` is the main panel. */
-  #activePanel: string | null = null;
+  /** Ids from the main panel down to the open one; empty is the main panel. */
+  #path: string[] = [];
   #unsubscribe: Array<() => void> = [];
 
   constructor(host: HTMLElement, t: Translate) {
@@ -102,7 +117,7 @@ export class SettingsMenu {
   open(): void {
     if (this.#open || this.#panels.size === 0) return;
     this.#open = true;
-    this.#activePanel = null;
+    this.#path = [];
     this.#popup.hidden = false;
     this.#button.setAttribute('aria-expanded', 'true');
     this.#fitHeight();
@@ -113,7 +128,7 @@ export class SettingsMenu {
   close(): void {
     if (!this.#open) return;
     this.#open = false;
-    this.#activePanel = null;
+    this.#path = [];
     this.#popup.hidden = true;
     this.#button.setAttribute('aria-expanded', 'false');
     this.#button.focus();
@@ -147,40 +162,34 @@ export class SettingsMenu {
     menu.setAttribute('role', 'menu');
     menu.setAttribute('aria-label', this.#t('ui.settings.label'));
 
-    if (this.#activePanel === null) {
+    const panel = this.#current();
+    if (this.#path.length > 0 && !panel) { this.#path = []; return this.#render(); }
+
+    if (!panel) {
       const sorted = [...this.#panels.values()]
         .sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100));
       for (const p of sorted) menu.appendChild(this.#panelRow(p));
     } else {
-      const panel = this.#panels.get(this.#activePanel);
-      if (!panel) { this.#activePanel = null; return this.#render(); }
-
-      const back = doc.createElement('button');
-      back.type = 'button';
-      back.className = 'np__menu-back';
-      back.setAttribute('role', 'menuitem');
-      back.innerHTML = `<span class="np__menu-chevron" aria-hidden="true">‹</span>` +
-        `<span>${panel.label}</span>`;
-      back.setAttribute('aria-label', `${this.#t('ui.settings.back')}: ${panel.label}`);
-      back.addEventListener('click', () => { this.#activePanel = null; this.#render(); this.#focusFirst(); });
-      menu.appendChild(back);
-
-      const current = panel.getValue();
-      for (const option of panel.options) {
-        const item = doc.createElement('button');
-        item.type = 'button';
-        item.className = 'np__menu-item';
-        item.setAttribute('role', 'menuitemradio');
-        item.setAttribute('aria-checked', String(option.value === current));
-        item.innerHTML = `<span class="np__menu-tick" aria-hidden="true">` +
-          `${option.value === current ? '✓' : ''}</span><span>${option.label}</span>`;
-        item.addEventListener('click', () => {
-          panel.onSelect(option.value);
-          this.#activePanel = null;
-          this.#render();
-          this.#focusFirst();
-        });
-        menu.appendChild(item);
+      menu.appendChild(this.#backItem(panel.label));
+      if (isGroup(panel)) {
+        for (const p of panel.panels) menu.appendChild(this.#panelRow(p));
+        if (panel.onReset) menu.appendChild(this.#resetItem(panel.onReset));
+      } else {
+        const current = panel.getValue();
+        for (const option of panel.options) {
+          const item = doc.createElement('button');
+          item.type = 'button';
+          item.className = 'np__menu-item';
+          item.setAttribute('role', 'menuitemradio');
+          item.setAttribute('aria-checked', String(option.value === current));
+          item.innerHTML = `<span class="np__menu-tick" aria-hidden="true">` +
+            `${option.value === current ? '✓' : ''}</span><span>${option.label}</span>`;
+          item.addEventListener('click', () => {
+            panel.onSelect(option.value);
+            this.#back();
+          });
+          menu.appendChild(item);
+        }
       }
     }
 
@@ -188,24 +197,76 @@ export class SettingsMenu {
     this.#setRovingIndex(menu, 0);
   }
 
+  /** The open panel, or `null` for the main one. */
+  #current(): SettingsPanel | null {
+    const [top, child] = this.#path;
+    if (top === undefined) return null;
+    const panel = this.#panels.get(top);
+    if (!panel || child === undefined) return panel ?? null;
+    return isGroup(panel) ? (panel.panels.find((p) => p.id === child) ?? null) : null;
+  }
+
+  #enter(id: string): void {
+    this.#path.push(id);
+    this.#render();
+    this.#focusFirst();
+  }
+
+  /** Focus lands on the entry just left, so keyboard users keep their place. */
+  #back(): void {
+    const left = this.#path.pop();
+    this.#render();
+    const items = this.#items();
+    const index = Math.max(0, items.findIndex((el) => el.dataset['panel'] === left));
+    this.#setRovingIndex(this.#popup, index);
+    items[index]?.focus();
+  }
+
+  #backItem(label: string): HTMLElement {
+    const back = this.#popup.ownerDocument.createElement('button');
+    back.type = 'button';
+    back.className = 'np__menu-back';
+    back.setAttribute('role', 'menuitem');
+    back.innerHTML = `<span class="np__menu-chevron" aria-hidden="true">‹</span>` +
+      `<span>${label}</span>`;
+    back.setAttribute('aria-label', `${this.#t('ui.settings.back')}: ${label}`);
+    back.addEventListener('click', () => this.#back());
+    return back;
+  }
+
+  #resetItem(onReset: () => void): HTMLElement {
+    const item = this.#popup.ownerDocument.createElement('button');
+    item.type = 'button';
+    item.className = 'np__menu-item';
+    item.setAttribute('role', 'menuitem');
+    item.textContent = this.#t('ui.settings.reset');
+    item.addEventListener('click', () => {
+      onReset();
+      this.#render();
+      const items = this.#items();
+      this.#setRovingIndex(this.#popup, items.length - 1);
+      items[items.length - 1]?.focus();
+    });
+    return item;
+  }
+
   #panelRow(panel: SettingsPanel): HTMLElement {
     const doc = this.#popup.ownerDocument;
-    const current = panel.options.find((o) => o.value === panel.getValue());
+    const current = isGroup(panel)
+      ? undefined
+      : panel.options.find((o) => o.value === panel.getValue());
     const item = doc.createElement('button');
     item.type = 'button';
     item.className = 'np__menu-item np__menu-item--parent';
+    item.dataset['panel'] = panel.id;
     item.setAttribute('role', 'menuitem');
     item.setAttribute('aria-haspopup', 'true');
     item.innerHTML = `<span>${panel.label}</span>` +
       `<span class="np__menu-value">${current?.label ?? ''}` +
       `<span class="np__menu-chevron" aria-hidden="true">›</span></span>`;
     // The current value is part of the accessible name, so it is known without opening the panel.
-    item.setAttribute('aria-label', `${panel.label}: ${current?.label ?? ''}`);
-    item.addEventListener('click', () => {
-      this.#activePanel = panel.id;
-      this.#render();
-      this.#focusFirst();
-    });
+    item.setAttribute('aria-label', current ? `${panel.label}: ${current.label}` : panel.label);
+    item.addEventListener('click', () => this.#enter(panel.id));
     return item;
   }
 
@@ -244,13 +305,8 @@ export class SettingsMenu {
         break;
       }
       case 'Escape':
-        if (this.#activePanel !== null) {
-          this.#activePanel = null;
-          this.#render();
-          this.#focusFirst();
-        } else {
-          this.close();
-        }
+        if (this.#path.length > 0) this.#back();
+        else this.close();
         break;
       case 'Tab':
         this.close();

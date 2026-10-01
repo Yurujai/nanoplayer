@@ -6,12 +6,15 @@
  * docs/browser-quirks.md#native-captions-in-video). So the `<track>` stays in
  * `hidden` mode —the browser still parses WebVTT and handles timing— and the
  * text is drawn in a player-wide overlay. The OS caption preferences lost on
- * the way are made up for with the `--np-cue-*` CSS variables.
+ * the way are made up for with a caption style panel and the `--np-cue-*` CSS
+ * variables.
  */
 import {
   plugins, strings,
-  type PluginContext, type PluginImpl, type TextTrackDef,
+  type PluginContext, type PluginImpl, type SettingsChoiceDecl, type TextTrackDef,
+  type Translate,
 } from '@nanoplayer/core';
+import { CHOICES, captionStyle, cssVariables, type CaptionStyleKey } from './style.js';
 
 /*
  * The top half of the box is empty on purpose: it stands for the picture, with
@@ -37,14 +40,88 @@ strings.register('es', {
   'captions.label': 'Subtítulos',
   'captions.off': 'Desactivados',
   'captions.on': 'Activar subtítulos',
+  'captions.style': 'Estilo de subtítulos',
+  'captions.style.size': 'Tamaño',
+  'captions.style.color': 'Color del texto',
+  'captions.style.background': 'Color del fondo',
+  'captions.style.opacity': 'Opacidad del fondo',
+  'captions.style.font': 'Fuente',
+  'captions.style.edge': 'Borde del texto',
+  'captions.color.white': 'Blanco',
+  'captions.color.yellow': 'Amarillo',
+  'captions.color.green': 'Verde',
+  'captions.color.cyan': 'Cian',
+  'captions.color.blue': 'Azul',
+  'captions.color.magenta': 'Magenta',
+  'captions.color.red': 'Rojo',
+  'captions.color.black': 'Negro',
+  'captions.font.sans': 'Sin serifa',
+  'captions.font.serif': 'Con serifa',
+  'captions.font.mono': 'Monoespaciada',
+  'captions.font.casual': 'Informal',
+  'captions.font.small-caps': 'Versalitas',
+  'captions.edge.none': 'Ninguno',
+  'captions.edge.outline': 'Contorno',
+  'captions.edge.shadow': 'Sombra',
+  'captions.edge.raised': 'En relieve',
+  'captions.edge.depressed': 'Hundido',
 });
 strings.register('en', {
   'captions.label': 'Subtitles',
   'captions.off': 'Off',
   'captions.on': 'Turn on subtitles',
+  'captions.style': 'Caption style',
+  'captions.style.size': 'Size',
+  'captions.style.color': 'Text color',
+  'captions.style.background': 'Background color',
+  'captions.style.opacity': 'Background opacity',
+  'captions.style.font': 'Font',
+  'captions.style.edge': 'Text edge',
+  'captions.color.white': 'White',
+  'captions.color.yellow': 'Yellow',
+  'captions.color.green': 'Green',
+  'captions.color.cyan': 'Cyan',
+  'captions.color.blue': 'Blue',
+  'captions.color.magenta': 'Magenta',
+  'captions.color.red': 'Red',
+  'captions.color.black': 'Black',
+  'captions.font.sans': 'Sans serif',
+  'captions.font.serif': 'Serif',
+  'captions.font.mono': 'Monospace',
+  'captions.font.casual': 'Casual',
+  'captions.font.small-caps': 'Small caps',
+  'captions.edge.none': 'None',
+  'captions.edge.outline': 'Outline',
+  'captions.edge.shadow': 'Drop shadow',
+  'captions.edge.raised': 'Raised',
+  'captions.edge.depressed': 'Depressed',
 });
 
 const OFF = '__off__';
+
+/** Sizes and opacities read as percentages; the rest have a name in the catalogue. */
+const STYLE_LABELS: Record<CaptionStyleKey, string | null> = {
+  size: null,
+  color: 'captions.color',
+  background: 'captions.color',
+  opacity: null,
+  font: 'captions.font',
+  edge: 'captions.edge',
+};
+
+function stylePanel(key: CaptionStyleKey, t: Translate): SettingsChoiceDecl {
+  const prefix = STYLE_LABELS[key];
+  return {
+    id: key,
+    label: t(`captions.style.${key}`),
+    options: CHOICES[key].map((value) => ({
+      value,
+      label: prefix ? t(`${prefix}.${value}`) : `${value}%`,
+    })),
+    getValue: () => captionStyle.get()[key],
+    onSelect: (value) => captionStyle.set(key, value),
+  };
+}
 
 /** A track's readable name: its label, or else its language name. */
 function trackName(t: TextTrackDef): string {
@@ -86,6 +163,8 @@ class Captions implements PluginImpl {
       const overlay = ui.addOverlay({ id: 'captions', position: 'captions' });
       this.#layer = overlay.element;
       this.#removeLayer = overlay.remove;
+      this.#applyStyle();
+      this.#unsubscribe.push(captionStyle.subscribe(() => this.#applyStyle()));
       this.#renderCues();
 
       this.#unsubscribe.push(ui.addBarControl({
@@ -111,6 +190,14 @@ class Captions implements PluginImpl {
         getValue: () => this.#active,
         onSelect: (v) => { this.#select(v); ui.refresh(); },
       }));
+
+      this.#unsubscribe.push(ui.addSettingsPanel({
+        id: 'caption-style',
+        label: t('captions.style'),
+        priority: 50,
+        panels: (Object.keys(CHOICES) as CaptionStyleKey[]).map((key) => stylePanel(key, t)),
+        onReset: () => captionStyle.reset(),
+      }));
     });
   }
 
@@ -123,6 +210,16 @@ class Captions implements PluginImpl {
     this.#removeLayer?.();
     this.#removeLayer = null;
     this.#layer = null;
+  }
+
+  /** Inline custom properties, not a generated stylesheet, so a strict CSP allows it. */
+  #applyStyle(): void {
+    const layer = this.#layer;
+    if (!layer) return;
+    for (const [name, value] of Object.entries(cssVariables(captionStyle.get()))) {
+      if (value === null) layer.style.removeProperty(name);
+      else layer.style.setProperty(name, value);
+    }
   }
 
   /**

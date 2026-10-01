@@ -290,10 +290,11 @@ picture they can land inside the small video.
 
 **What we do.** The `<track>` stays in `hidden` mode, so the browser still
 parses WebVTT and times the cues, and the captions plugin paints the text in
-an overlay as wide as the player. Styling moves to CSS variables (`--np-cue-*`),
-since the operating system's caption preferences no longer apply.
+an overlay as wide as the player. The operating system's caption preferences
+no longer apply, so the plugin offers its own caption style panel, applied
+through CSS variables (`--np-cue-*`) and remembered between visits.
 
-**Code.** `packages/plugin-captions/src/index.ts`.
+**Code.** `packages/plugin-captions/src/index.ts`, `packages/plugin-captions/src/style.ts`.
 **Revisit.** If a way appears to honour system caption preferences outside the
 video box.
 

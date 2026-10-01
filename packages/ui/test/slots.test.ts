@@ -88,6 +88,65 @@ describe('SettingsMenu · contract with plugins', () => {
     expect(host.querySelector('.np__menu-back')).toBeNull();
   });
 
+  describe('groups', () => {
+    const group = (over: Record<string, unknown> = {}) => ({
+      id: 'style', label: 'Style', panels: [panel('size'), panel('color')], ...over,
+    });
+    const press = (key: string) => host.querySelector('.np__menu')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+
+    it('opens one level deeper and lists its panels with their values', () => {
+      const m = new SettingsMenu(host, t);
+      m.addPanel(group());
+      m.open();
+      expect(host.querySelector('[role="menuitem"]')?.getAttribute('aria-label')).toBe('Style');
+      host.querySelector<HTMLElement>('[data-panel="style"]')?.click();
+      const rows = [...host.querySelectorAll('.np__menu-item--parent')]
+        .map((el) => el.getAttribute('aria-label'));
+      expect(rows).toEqual(['size: A', 'color: A']);
+    });
+
+    it('choosing an option goes back to the group, focused on that setting', () => {
+      const onSelect = vi.fn();
+      const m = new SettingsMenu(host, t);
+      m.addPanel(group({ panels: [panel('size'), panel('color', { onSelect })] }));
+      m.open();
+      host.querySelector<HTMLElement>('[data-panel="style"]')?.click();
+      host.querySelector<HTMLElement>('[data-panel="color"]')?.click();
+      host.querySelectorAll<HTMLElement>('[role="menuitemradio"]')[1]?.click();
+      expect(onSelect).toHaveBeenCalledWith('b');
+      expect(document.activeElement?.getAttribute('data-panel')).toBe('color');
+    });
+
+    it('Escape climbs one level at a time', () => {
+      const m = new SettingsMenu(host, t);
+      m.addPanel(group());
+      m.open();
+      host.querySelector<HTMLElement>('[data-panel="style"]')?.click();
+      host.querySelector<HTMLElement>('[data-panel="size"]')?.click();
+      press('Escape');
+      expect(document.activeElement?.getAttribute('data-panel')).toBe('size');
+      press('Escape');
+      expect(document.activeElement?.getAttribute('data-panel')).toBe('style');
+      press('Escape');
+      expect(m.isOpen).toBe(false);
+    });
+
+    it('ends with a reset item when the group has one', () => {
+      const onReset = vi.fn();
+      const m = new SettingsMenu(host, t);
+      m.addPanel(group({ onReset }));
+      m.open();
+      host.querySelector<HTMLElement>('[data-panel="style"]')?.click();
+      const items = host.querySelectorAll<HTMLElement>('[role="menuitem"]');
+      const reset = items[items.length - 1]!;
+      expect(reset.textContent).toBe('Restablecer');
+      reset.click();
+      expect(onReset).toHaveBeenCalled();
+      expect(document.activeElement?.textContent).toBe('Restablecer');
+    });
+  });
+
   it('does not open with nothing to offer', () => {
     const m = new SettingsMenu(host, t);
     m.open();

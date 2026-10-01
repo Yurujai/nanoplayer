@@ -195,7 +195,10 @@ button.np__btn[disabled]{opacity:.4;cursor:default}
   display:inline-block;max-width:100%;
   background:var(--np-cue-bg,rgba(0,0,0,.78));
   color:var(--np-cue-color,#fff);
-  font-size:var(--np-cue-size);
+  font-size:calc(var(--np-cue-size) * var(--np-cue-scale,1));
+  font-family:var(--np-cue-font,inherit);
+  font-variant:var(--np-cue-variant,normal);
+  text-shadow:var(--np-cue-edge,none);
   line-height:1.35;padding:.15em .5em;border-radius:3px;
   text-wrap:balance;
 }

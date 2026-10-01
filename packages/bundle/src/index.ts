@@ -86,7 +86,8 @@ export type {
   Scheduler, SyncAction, SyncProfile, SyncProfileName, SyncSample, SynchronizerOptions,
   ManifestResolver, PlayerOptions, BatchResolverOptions, RegistryOptions,
   LiveStatus, RetryPolicy,
-  BarControlDecl, OverlayDecl, OverlayHandle, SettingsOptionDecl, SettingsPanelDecl,
+  BarControlDecl, OverlayDecl, OverlayHandle,
+  SettingsChoiceDecl, SettingsGroupDecl, SettingsOptionDecl, SettingsPanelDecl,
   TimelineMarkerDecl, TimelineMarkersDecl, UiSlots, ActivationResult, PluginConfig, PluginContext, PluginImpl, PluginManifest,
   CreateConfig,
 } from '@nanoplayer/core';
@@ -97,7 +98,8 @@ export {
 } from '@nanoplayer/ui';
 
 export type {
-  ControlBarOptions, SettingsOption, SettingsPanel, LayoutDef, LayoutId,
+  ControlBarOptions, SettingsChoicePanel, SettingsGroupPanel, SettingsOption, SettingsPanel,
+  LayoutDef, LayoutId,
 } from '@nanoplayer/ui';
 
 export {

@@ -32,7 +32,8 @@ export interface SettingsOptionDecl {
   label: string;
 }
 
-export interface SettingsPanelDecl {
+/** A list of options with one ticked. */
+export interface SettingsChoiceDecl {
   id: string;
   label: string;
   options: readonly SettingsOptionDecl[];
@@ -40,6 +41,18 @@ export interface SettingsPanelDecl {
   onSelect: (value: string) => void;
   priority?: number;
 }
+
+/** Related choices under one entry, so they do not crowd the main menu. */
+export interface SettingsGroupDecl {
+  id: string;
+  label: string;
+  panels: readonly SettingsChoiceDecl[];
+  /** When set, the group ends with a reset item. */
+  onReset?: () => void;
+  priority?: number;
+}
+
+export type SettingsPanelDecl = SettingsChoiceDecl | SettingsGroupDecl;
 
 /**
  * A named segment on the progress bar: a chapter, an activity. Times are in

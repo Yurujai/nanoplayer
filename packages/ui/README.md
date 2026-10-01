@@ -93,13 +93,20 @@ them into half the width.
 
 The `<track>` is still there in `hidden` mode: the browser parses WebVTT and
 handles timing (the hard part), and only where they are drawn is taken over.
-**What is lost are the operating system's caption preferences**, so they are
-exposed as variables:
+**What is lost are the operating system's caption preferences**, so the
+captions plugin adds its own: **Settings → Caption style** lets each viewer
+choose size, text colour, background colour and opacity, font and text edge,
+with a reset. The choice is remembered between visits (in `localStorage`) and
+shared by every player on the page.
+
+A site sets its defaults with variables; whatever the viewer changes wins over
+them, and what they leave alone keeps the site's:
 
 ```css
 .np {
   --np-cue-color: #fff;
   --np-cue-bg: rgba(0, 0, 0, .78);
+  --np-cue-font: inherit;
 }
 .np .np__cue { --np-cue-size: 1.4rem; }   /* scales with width by default */
 ```

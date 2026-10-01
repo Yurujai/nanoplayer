@@ -5,7 +5,9 @@ export { attachControls, ControlBar } from './control-bar.js';
 export type { ControlBarOptions } from './control-bar.js';
 export { Poster } from './poster.js';
 export { SettingsMenu } from './settings-menu.js';
-export type { SettingsOption, SettingsPanel } from './settings-menu.js';
+export type {
+  SettingsChoicePanel, SettingsGroupPanel, SettingsOption, SettingsPanel,
+} from './settings-menu.js';
 export { applyLayout, layoutsFor } from './layouts.js';
 export type { LayoutDef, LayoutId } from './layouts.js';
 export { formatPercent, formatTime, spokenTime } from './format.js';
