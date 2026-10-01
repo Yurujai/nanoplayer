@@ -10,7 +10,7 @@
  */
 import {
   plugins, strings,
-  type Manifest, type PluginContext, type PluginImpl, type TextTrackDef,
+  type PluginContext, type PluginImpl, type TextTrackDef,
 } from '@nanoplayer/core';
 
 /*
@@ -67,14 +67,13 @@ class Captions implements PluginImpl {
   #unsubscribe: Array<() => void> = [];
 
   activate(ctx: PluginContext): void {
-    const m = ctx.player.manifest;
-    this.#tracks = [...(m?.textTracks ?? [])];
+    this.#tracks = [...(ctx.player.manifest?.textTracks ?? [])];
     if (this.#tracks.length === 0) return;
     const t = ctx.t;
 
-    // The master's `<video>` may not exist yet: engines attach lazily.
-    const mount = () => this.#mountTracks(m);
-    if (ctx.player.master?.element) mount();
+    // Engines attach lazily, and a detach replaces the `<video>`: mount on every attach.
+    const mount = () => this.#mountTracks(ctx.player.master?.element ?? null);
+    mount();
     this.#unsubscribe.push(ctx.bus.on('engine:attach:ok', mount));
 
     const byDefault = this.#tracks.find((x) => x.default);
@@ -126,9 +125,14 @@ class Captions implements PluginImpl {
     this.#layer = null;
   }
 
-  #mountTracks(m: Manifest | null): void {
-    const video = m ? this.#masterVideo(m) : null;
-    if (!video || this.#elements.length > 0) return;
+  /**
+   * The video comes from this player, never from a page-wide lookup: with two
+   * players sharing a stream id, that put the tracks on the other player.
+   */
+  #mountTracks(video: HTMLVideoElement | null): void {
+    if (!video || this.#elements[0]?.parentElement === video) return;
+    for (const el of this.#elements) el.remove();
+    this.#elements = [];
 
     for (const t of this.#tracks) {
       const el = document.createElement('track');
@@ -140,12 +144,6 @@ class Captions implements PluginImpl {
       this.#elements.push(el);
     }
     this.#apply();
-  }
-
-  #masterVideo(m: Manifest): HTMLVideoElement | null {
-    const master = m.streams.find((s) => s.audio);
-    if (!master) return null;
-    return document.querySelector<HTMLVideoElement>(`[data-stream="${CSS.escape(master.id)}"] video`);
   }
 
   #select(value: string): void {
