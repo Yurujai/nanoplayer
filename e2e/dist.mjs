@@ -11,7 +11,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createContext, runInContext } from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
-const PACKAGES = ['core', 'ui', 'engine-hls', 'plugin-captions', 'plugin-chapters', 'bundle'];
+const PACKAGES = ['core', 'ui', 'engine-hls', 'plugin-captions', 'plugin-chapters', 'plugin-pip', 'bundle'];
 const root = new URL('../packages/', import.meta.url);
 
 let failures = 0;
@@ -47,6 +47,10 @@ check(core.plugins.has('captions'),
 await import('@nanoplayer/plugin-chapters');
 check(core.plugins.has('chapters'),
   'the chapters plugin too',
+  `registered: [${core.plugins.registered.join(', ')}]`);
+await import('@nanoplayer/plugin-pip');
+check(core.plugins.has('pip'),
+  'and the picture-in-picture plugin',
   `registered: [${core.plugins.registered.join(', ')}]`);
 
 const hls = await import('@nanoplayer/engine-hls');

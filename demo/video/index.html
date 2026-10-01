@@ -56,6 +56,9 @@
     <li><strong>Chapters.</strong> Three of them, marked on the progress bar. Hover
         the bar to see where each one falls, or jump to one from
         <strong>⚙ Settings → Chapters</strong>.</li>
+    <li><strong>Floating window.</strong> The button next to the gear moves the video
+        to the browser's floating window. With <em>Presentation only</em> it is the
+        slides that float.</li>
     <li><strong>Intro and outro.</strong> Tick the box above. The intro has a
         <em>Skip intro</em> button; the outro can't be skipped or fast-forwarded.</li>
     <li><strong>Nothing loads early.</strong> Until you press play there is no
@@ -82,6 +85,7 @@
 import { attachControls } from '@nanoplayer/ui';
 import '@nanoplayer/plugin-captions';   // they register themselves
 import '@nanoplayer/plugin-chapters';
+import '@nanoplayer/plugin-pip';
 
 const player = create('#player', { manifest: '/api/video/123' });
 attachControls(player);</code></pre>

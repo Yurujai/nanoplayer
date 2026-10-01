@@ -15,6 +15,8 @@ export default defineConfig({
         new URL('../packages/plugin-captions/src/index.ts', import.meta.url)),
       '@nanoplayer/plugin-chapters': fileURLToPath(
         new URL('../packages/plugin-chapters/src/index.ts', import.meta.url)),
+      '@nanoplayer/plugin-pip': fileURLToPath(
+        new URL('../packages/plugin-pip/src/index.ts', import.meta.url)),
     },
   },
   build: {

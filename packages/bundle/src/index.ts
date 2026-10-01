@@ -20,6 +20,7 @@ import {
 import { attachControls, type ControlBarOptions } from '@nanoplayer/ui';
 import '@nanoplayer/plugin-captions';
 import '@nanoplayer/plugin-chapters';
+import '@nanoplayer/plugin-pip';
 
 export interface Config extends CreateConfig {
   /** Control bar, on by default. `false` leaves it out; an object configures it. */

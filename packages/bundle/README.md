@@ -1,7 +1,7 @@
 # @nanoplayer/bundle
 
-The whole player in one file, with the interface, captions and chapters already
-included. **85 KB, 27 KB gzip.**
+The whole player in one file, with the interface, captions, chapters and
+picture in picture already included. **98 KB, 30 KB gzip.**
 
 It is the package for installing with one `<script>` tag and three lines: no
 build, no tooling and no npm.

@@ -12,6 +12,7 @@ export default defineConfig({
       '@nanoplayer/ui': source('packages/ui/src/index.ts'),
       '@nanoplayer/plugin-captions': source('packages/plugin-captions/src/index.ts'),
       '@nanoplayer/plugin-chapters': source('packages/plugin-chapters/src/index.ts'),
+      '@nanoplayer/plugin-pip': source('packages/plugin-pip/src/index.ts'),
       '@nanoplayer/engine-hls': source('packages/engine-hls/src/index.ts'),
     },
   },

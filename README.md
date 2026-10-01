@@ -66,6 +66,7 @@ first time HLS has to play: whoever plays MP4 does not pay for it.
 | [`@nanoplayer/engine-hls`](packages/engine-hls/) | HLS engine on hls.js |
 | [`@nanoplayer/plugin-captions`](packages/plugin-captions/) | Captions |
 | [`@nanoplayer/plugin-chapters`](packages/plugin-chapters/) | Chapters: marks on the progress bar and a list in settings |
+| [`@nanoplayer/plugin-pip`](packages/plugin-pip/) | Picture in picture: the video in the browser's floating window |
 | [`@nanoplayer/bundle`](packages/bundle/) | All of the above except HLS in one file, for the `<script>` tag. 27 KB gzip |
 
 ## What is missing

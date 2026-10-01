@@ -2,6 +2,7 @@ import { create, type Manifest, type Player } from '@nanoplayer/core';
 import { attachControls, type ControlBar } from '@nanoplayer/ui';
 import '@nanoplayer/plugin-captions';
 import '@nanoplayer/plugin-chapters';
+import '@nanoplayer/plugin-pip';
 
 // The page lives under /video/ and the media at the site root.
 const MEDIA = '../media/';

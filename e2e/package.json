@@ -10,7 +10,8 @@
     "@nanoplayer/ui": "workspace:*",
     "@nanoplayer/engine-hls": "workspace:*",
     "@nanoplayer/plugin-captions": "workspace:*",
-    "@nanoplayer/plugin-chapters": "workspace:*"
+    "@nanoplayer/plugin-chapters": "workspace:*",
+    "@nanoplayer/plugin-pip": "workspace:*"
   },
   "devDependencies": { "axe-core": "^4.10.0", "playwright": "^1.49.0" }
 }

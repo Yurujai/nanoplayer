@@ -5,6 +5,7 @@ import { enginesWithHls } from '@nanoplayer/engine-hls';
 import { attachControls, type ControlBar } from '@nanoplayer/ui';
 import '@nanoplayer/plugin-captions';
 import '@nanoplayer/plugin-chapters';
+import '@nanoplayer/plugin-pip';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 
