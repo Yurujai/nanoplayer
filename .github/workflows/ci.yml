@@ -7,6 +7,7 @@ on:
 
 jobs:
   test:
+    name: Unit tests and types
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +29,10 @@ jobs:
         working-directory: e2e
 
   # Blocks the merge if accessibility regresses.
-  accesibilidad:
+  e2e:
+    # Required check: the project promises verifiable accessibility, so a change
+    # that breaks it must not merge.
+    name: Accessibility and end-to-end
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
