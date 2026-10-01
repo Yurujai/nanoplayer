@@ -16,6 +16,7 @@
     "@nanoplayer/plugin-chapters": "workspace:*",
     "@nanoplayer/plugin-pip": "workspace:*",
     "@nanoplayer/plugin-audio-tracks": "workspace:*",
+    "@nanoplayer/plugin-media-session": "workspace:*",
     "@nanoplayer/engine-hls": "workspace:*"
   },
   "devDependencies": {

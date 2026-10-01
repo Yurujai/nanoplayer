@@ -35,6 +35,9 @@ importers:
       '@nanoplayer/plugin-chapters':
         specifier: workspace:*
         version: link:../packages/plugin-chapters
+      '@nanoplayer/plugin-media-session':
+        specifier: workspace:*
+        version: link:../packages/plugin-media-session
       '@nanoplayer/plugin-pip':
         specifier: workspace:*
         version: link:../packages/plugin-pip
@@ -69,6 +72,9 @@ importers:
       '@nanoplayer/plugin-chapters':
         specifier: workspace:*
         version: link:../packages/plugin-chapters
+      '@nanoplayer/plugin-media-session':
+        specifier: workspace:*
+        version: link:../packages/plugin-media-session
       '@nanoplayer/plugin-pip':
         specifier: workspace:*
         version: link:../packages/plugin-pip
@@ -97,6 +103,9 @@ importers:
       '@nanoplayer/plugin-chapters':
         specifier: workspace:*
         version: link:../plugin-chapters
+      '@nanoplayer/plugin-media-session':
+        specifier: workspace:*
+        version: link:../plugin-media-session
       '@nanoplayer/plugin-pip':
         specifier: workspace:*
         version: link:../plugin-pip
@@ -148,6 +157,16 @@ importers:
         version: 6.4.3(@types/node@26.1.2)
 
   packages/plugin-chapters:
+    dependencies:
+      '@nanoplayer/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.3(@types/node@26.1.2)
+
+  packages/plugin-media-session:
     dependencies:
       '@nanoplayer/core':
         specifier: workspace:*

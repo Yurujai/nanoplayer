@@ -12,7 +12,8 @@
     "@nanoplayer/plugin-captions": "workspace:*",
     "@nanoplayer/plugin-chapters": "workspace:*",
     "@nanoplayer/plugin-pip": "workspace:*",
-    "@nanoplayer/plugin-audio-tracks": "workspace:*"
+    "@nanoplayer/plugin-audio-tracks": "workspace:*",
+    "@nanoplayer/plugin-media-session": "workspace:*"
   },
   "devDependencies": { "axe-core": "^4.10.0", "playwright": "^1.49.0" }
 }

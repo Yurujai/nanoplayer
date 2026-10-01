@@ -22,6 +22,7 @@ import '@nanoplayer/plugin-captions';
 import '@nanoplayer/plugin-chapters';
 import '@nanoplayer/plugin-pip';
 import '@nanoplayer/plugin-audio-tracks';
+import '@nanoplayer/plugin-media-session';
 
 export interface Config extends CreateConfig {
   /** Control bar, on by default. `false` leaves it out; an object configures it. */

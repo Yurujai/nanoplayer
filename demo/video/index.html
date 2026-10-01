@@ -60,6 +60,9 @@
     <li><strong>Chapters.</strong> Three of them, marked on the progress bar. Hover
         the bar to see where each one falls, or jump to one from
         <strong>⚙ Settings → Chapters</strong>.</li>
+    <li><strong>Media keys and lock screen.</strong> Play/pause keys and headphone
+        buttons work, and on a phone the lock screen shows the title, the chapter
+        and the poster. Next and previous jump between chapters.</li>
     <li><strong>Floating window.</strong> The button next to the gear moves the video
         to the browser's floating window. With <em>Presentation only</em> it is the
         slides that float.</li>
@@ -91,6 +94,7 @@ import '@nanoplayer/plugin-captions';   // they register themselves
 import '@nanoplayer/plugin-chapters';
 import '@nanoplayer/plugin-pip';
 import '@nanoplayer/plugin-audio-tracks';
+import '@nanoplayer/plugin-media-session';
 
 const player = create('#player', { manifest: '/api/video/123' });
 attachControls(player);</code></pre>

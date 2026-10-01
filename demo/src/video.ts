@@ -4,6 +4,7 @@ import '@nanoplayer/plugin-captions';
 import '@nanoplayer/plugin-chapters';
 import '@nanoplayer/plugin-pip';
 import '@nanoplayer/plugin-audio-tracks';
+import '@nanoplayer/plugin-media-session';
 
 // The page lives under /video/ and the media at the site root.
 const MEDIA = '../media/';

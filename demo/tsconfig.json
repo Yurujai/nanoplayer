@@ -10,6 +10,7 @@
       "@nanoplayer/plugin-chapters": ["../packages/plugin-chapters/src/index.ts"],
       "@nanoplayer/plugin-pip": ["../packages/plugin-pip/src/index.ts"],
       "@nanoplayer/plugin-audio-tracks": ["../packages/plugin-audio-tracks/src/index.ts"],
+      "@nanoplayer/plugin-media-session": ["../packages/plugin-media-session/src/index.ts"],
       "@nanoplayer/engine-hls": ["../packages/engine-hls/src/index.ts"]
     }
   },
