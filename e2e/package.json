@@ -14,7 +14,8 @@
     "@nanoplayer/plugin-pip": "workspace:*",
     "@nanoplayer/plugin-audio-tracks": "workspace:*",
     "@nanoplayer/plugin-media-session": "workspace:*",
-    "@nanoplayer/plugin-quality": "workspace:*"
+    "@nanoplayer/plugin-quality": "workspace:*",
+    "@nanoplayer/plugin-resume": "workspace:*"
   },
   "devDependencies": { "axe-core": "^4.10.0", "hls.js": "^1.5.0", "playwright": "^1.49.0" }
 }

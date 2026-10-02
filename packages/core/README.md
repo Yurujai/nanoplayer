@@ -170,6 +170,34 @@ From code: `player.qualities`, `player.quality`, `player.playingQuality`,
 `player.setQuality(id)` (`AUTO_QUALITY` for automatic) and the
 `quality:change` event.
 
+### Resuming
+
+With `@nanoplayer/plugin-resume` loaded, a recorded lecture continues where
+the viewer left it, keyed by the manifest's `id`, and says so: "Resuming from
+12:30". Not after only a few seconds, and not near the end, which counts as
+finished. Live is left alone.
+
+Positions live in `localStorage` by default. An LMS passes its own store so
+the position follows the student to another device; any method may be async,
+and a failing store never stops playback:
+
+```js
+create('#player', {
+  manifest,
+  plugins: {
+    resume: {
+      store: {
+        load: (id) => lms.get(`position/${id}`),      // { time, duration } or null
+        save: (id, position) => lms.put(`position/${id}`, position),
+        clear: (id) => lms.delete(`position/${id}`),
+      },
+    },
+  },
+});
+```
+
+`resume: false` turns it off.
+
 ### Audio only
 
 Nothing needs declaring: the MIME type is enough.

@@ -16,6 +16,7 @@ export default defineConfig({
       '@nanoplayer/plugin-audio-tracks': source('packages/plugin-audio-tracks/src/index.ts'),
       '@nanoplayer/plugin-media-session': source('packages/plugin-media-session/src/index.ts'),
       '@nanoplayer/plugin-quality': source('packages/plugin-quality/src/index.ts'),
+      '@nanoplayer/plugin-resume': source('packages/plugin-resume/src/index.ts'),
       '@nanoplayer/engine-hls': source('packages/engine-hls/src/index.ts'),
     },
   },

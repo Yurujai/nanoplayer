@@ -23,6 +23,8 @@ export default defineConfig({
         new URL('../packages/plugin-media-session/src/index.ts', import.meta.url)),
       '@nanoplayer/plugin-quality': fileURLToPath(
         new URL('../packages/plugin-quality/src/index.ts', import.meta.url)),
+      '@nanoplayer/plugin-resume': fileURLToPath(
+        new URL('../packages/plugin-resume/src/index.ts', import.meta.url)),
     },
   },
   build: {

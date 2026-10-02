@@ -60,6 +60,8 @@
     <li><strong>Chapters.</strong> Three of them, marked on the progress bar. Hover
         the bar to see where each one falls, or jump to one from
         <strong>⚙ Settings → Chapters</strong>.</li>
+    <li><strong>Resume.</strong> Leave halfway and reload: playback continues where
+        you were, and says so.</li>
     <li><strong>Media keys and lock screen.</strong> Play/pause keys and headphone
         buttons work, and on a phone the lock screen shows the title, the chapter
         and the poster. Next and previous jump between chapters.</li>
@@ -96,6 +98,7 @@ import '@nanoplayer/plugin-pip';
 import '@nanoplayer/plugin-audio-tracks';
 import '@nanoplayer/plugin-media-session';
 import '@nanoplayer/plugin-quality';
+import '@nanoplayer/plugin-resume';
 
 const player = create('#player', { manifest: '/api/video/123' });
 attachControls(player);</code></pre>

@@ -238,6 +238,15 @@ button.np__error-retry{
 }
 button.np__error-retry:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:2px}
 
+/* --- short notices from plugins --- */
+.np__notice{
+  position:absolute;top:.75rem;left:.75rem;margin:0;
+  padding:.45rem .8rem;border-radius:var(--np-radius);
+  background:rgba(0,0,0,.72);font-size:.875rem;line-height:1.3;
+  animation:np-notice 5s ease-out both;
+}
+@keyframes np-notice{0%{opacity:0}6%,85%{opacity:1}100%{opacity:0}}
+
 /* --- double-tap seek --- */
 .np__seek-hint{
   position:absolute;top:50%;z-index:var(--np-z-overlay);

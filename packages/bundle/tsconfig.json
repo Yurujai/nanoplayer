@@ -11,7 +11,8 @@
       "@nanoplayer/plugin-pip": ["../plugin-pip/src/index.ts"],
       "@nanoplayer/plugin-audio-tracks": ["../plugin-audio-tracks/src/index.ts"],
       "@nanoplayer/plugin-media-session": ["../plugin-media-session/src/index.ts"],
-      "@nanoplayer/plugin-quality": ["../plugin-quality/src/index.ts"]
+      "@nanoplayer/plugin-quality": ["../plugin-quality/src/index.ts"],
+      "@nanoplayer/plugin-resume": ["../plugin-resume/src/index.ts"]
     }
   },
   "include": ["src"]
