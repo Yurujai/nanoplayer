@@ -486,3 +486,72 @@ describe('NativeEngine · audio tracks (WebKit)', () => {
     expect(e.getAudioTrack()).toBeNull();
   });
 });
+
+describe('NativeEngine · quality between MP4 sources', () => {
+  const ladder = stream({
+    sources: [
+      { src: 'cam-720.mp4', type: 'video/mp4', height: 720 },
+      { src: 'cam-1080.mp4', type: 'video/mp4', height: 1080 },
+      { src: 'cam.webm', type: 'video/webm', height: 1080 },
+    ],
+  });
+
+  async function attached(onQualities = vi.fn()) {
+    video.canPlayType = (type: string) => (type === 'video/mp4' ? 'probably' : '') as CanPlayTypeResult;
+    Object.defineProperty(video, 'currentSrc', {
+      configurable: true, get: () => new URL(video.getAttribute('src') ?? 'cam-720.mp4', document.baseURI).href,
+    });
+    const e = engine();
+    const done = e.attach(container, ladder, { callbacks: { onQualities } });
+    video.simulateLoad();
+    await done;
+    return e;
+  }
+
+  it('offers the sources the browser can play that declare a height', async () => {
+    const e = await attached();
+    expect(e.getQualities().map((q) => [q.id, q.height])).toEqual([['0', 720], ['1', 1080]]);
+    expect(e.getQuality(), 'the browser plays the first one it can').toBe('0');
+    expect(e.autoQuality).toBe(false);
+  });
+
+  it('switching keeps the position, the rate and playback, and the captions', async () => {
+    const onQualities = vi.fn();
+    const e = await attached(onQualities);
+    const track = document.createElement('track');
+    video.appendChild(track);
+    await video.play();
+    video.currentTime = 42;
+    video.playbackRate = 1.5;
+    vi.mocked(video.play).mockClear();
+
+    e.setQuality('1');
+    expect(video.getAttribute('src')).toBe('cam-1080.mp4');
+    // Loading resets them, as the browser does.
+    video.currentTime = 0;
+    video.playbackRate = 1;
+    video.simulateMetadata();
+
+    expect(video.currentTime).toBe(42);
+    expect(video.playbackRate).toBe(1.5);
+    expect(video.play).toHaveBeenCalled();
+    expect(track.parentElement).toBe(video);
+    expect(onQualities).toHaveBeenCalled();
+    expect(e.getQuality()).toBe('1');
+  });
+
+  it('ignores a source the browser cannot play', async () => {
+    const e = await attached();
+    e.setQuality('2');
+    expect(video.getAttribute('src')).toBeNull();
+  });
+
+  it('one source declaring a height is nothing to choose', async () => {
+    video.canPlayType = () => 'probably';
+    const e = engine();
+    const done = e.attach(container, stream({ sources: [{ src: 'a.mp4', type: 'video/mp4', height: 720 }] }));
+    video.simulateLoad();
+    await done;
+    expect(e.getQualities()).toEqual([]);
+  });
+});

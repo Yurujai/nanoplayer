@@ -38,9 +38,10 @@ export {
 export type { PlayerState } from './state.js';
 
 // --- engines ----------------------------------------------------------------
-export { confidenceFor, hasMse, isHlsType, selectEngine } from './engine.js';
+export { AUTO_QUALITY, confidenceFor, hasMse, isHlsType, selectEngine } from './engine.js';
 export type {
   AttachOptions, AudioTrackInfo, Confidence, EngineCallbacks, EngineFactory, MediaEngine,
+  QualityInfo,
 } from './engine.js';
 export { MediaElementEngine, mediaElementError } from './media-element-engine.js';
 export type { MediaElementEngineOptions } from './media-element-engine.js';

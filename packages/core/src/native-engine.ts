@@ -5,6 +5,7 @@
 import {
   hasMse, isHlsType,
   type AttachOptions, type AudioTrackInfo, type Confidence, type EngineFactory, type MediaEngine,
+  type QualityInfo,
 } from './engine.js';
 import type { Source, Stream } from './manifest.js';
 import { MediaElementEngine, mediaElementError } from './media-element-engine.js';
@@ -24,9 +25,13 @@ const trackId = (t: NativeAudioTrack, i: number) => t.id || String(i);
 
 export class NativeEngine extends MediaElementEngine {
   readonly name = 'native';
+  readonly autoQuality = false;
+
+  #sources: readonly Source[] = [];
 
   protected prepare(el: HTMLVideoElement, stream: Stream, _options: AttachOptions): Promise<void> {
     el.preload = 'auto';
+    this.#sources = stream.sources;
     this.#watchAudioTracks(el);
     for (const source of stream.sources) {
       const s = document.createElement('source');
@@ -103,6 +108,63 @@ export class NativeEngine extends MediaElementEngine {
     if (target < 0) return;
     tracks.forEach((t, i) => { if (i !== target) t.enabled = false; });
     tracks[target]!.enabled = true;
+  }
+
+  /**
+   * Sources the browser can play that declare a `height`, by their index in
+   * the manifest. Fewer than two is nothing to choose. With `<source>`
+   * children the browser plays the first it can, so manifest order is the default.
+   */
+  #qualitySources(): Array<{ source: Source; index: number }> {
+    const el = this.element;
+    if (!el) return [];
+    const candidates = this.#sources
+      .map((source, index) => ({ source, index }))
+      .filter(({ source }) => source.height && el.canPlayType(source.type) !== '');
+    return candidates.length >= 2 ? candidates : [];
+  }
+
+  getQualities(): QualityInfo[] {
+    return this.#qualitySources().map(({ source, index }) => ({
+      id: String(index),
+      height: source.height ?? null,
+      bitrate: null,
+      label: source.label ?? '',
+    }));
+  }
+
+  getQuality(): string | null {
+    const el = this.element;
+    if (!el?.currentSrc) return null;
+    const playing = this.#qualitySources()
+      .find(({ source }) => new URL(source.src, el.baseURI).href === el.currentSrc);
+    return playing ? String(playing.index) : null;
+  }
+
+  getPlayingQuality(): string | null {
+    return this.getQuality();
+  }
+
+  /**
+   * Another file means loading again, which resets position and rate: both are
+   * restored once metadata arrives, and playback resumes if it was running.
+   * Setting `src` leaves the `<track>` children, the captions, in place.
+   */
+  setQuality(id: string): void {
+    const el = this.element;
+    const target = this.#qualitySources().find(({ index }) => String(index) === id);
+    if (!el || !target || this.getQuality() === id) return;
+
+    const at = el.currentTime;
+    const rate = el.playbackRate;
+    const wasPlaying = !el.paused;
+    el.addEventListener('loadedmetadata', () => {
+      try { el.currentTime = at; } catch { /* out of range: starts over */ }
+      el.playbackRate = rate;
+      if (wasPlaying) void el.play().catch(() => {});
+      this.callbacks.onQualities?.();
+    }, { once: true });
+    el.src = target.source.src;
   }
 
   /**

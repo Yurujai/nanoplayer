@@ -24,6 +24,19 @@ export interface AudioTrackInfo {
   describes: boolean;
 }
 
+/** One rendition of the picture: a level of an HLS ladder, or one MP4 source. */
+export interface QualityInfo {
+  id: string;
+  height: number | null;
+  /** Bits per second, if known. */
+  bitrate: number | null;
+  /** The media's or the manifest's own name for it, or empty. */
+  label: string;
+}
+
+/** The quality id that hands the choice back to the engine's adaptive logic. */
+export const AUTO_QUALITY = 'auto';
+
 export interface EngineCallbacks {
   onTime?(current: number, duration: number): void;
   /** Playback was **requested**; it may not have started yet. */
@@ -43,6 +56,8 @@ export interface EngineCallbacks {
   onError?(error: PlayerError): void;
   /** The audio tracks or the one playing changed. */
   onAudioTracks?(): void;
+  /** The qualities, the one chosen or the one playing changed. */
+  onQualities?(): void;
 }
 
 export interface AttachOptions {
@@ -106,6 +121,19 @@ export interface MediaEngine {
   /** The id of the track playing, or `null`. */
   getAudioTrack?(): string | null;
   setAudioTrack?(id: string): void;
+
+  /**
+   * Qualities the viewer can choose from: hls.js levels, or MP4 sources that
+   * declare a `height`. Native HLS (Safari, iOS) exposes none: the browser decides.
+   */
+  getQualities?(): QualityInfo[];
+  /** `AUTO_QUALITY` or a quality id; `null` with nothing to choose. */
+  getQuality?(): string | null;
+  /** The one actually showing, which under `AUTO_QUALITY` the engine picks. */
+  getPlayingQuality?(): string | null;
+  setQuality?(id: string): void;
+  /** Whether `AUTO_QUALITY` means something: adaptive streaming does, a set of files does not. */
+  readonly autoQuality?: boolean;
 
   getPlaybackRate(): number;
   /** Changing the audio stream's rate is audible: slaves only. */

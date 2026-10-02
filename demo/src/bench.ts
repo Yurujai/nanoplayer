@@ -8,6 +8,7 @@ import '@nanoplayer/plugin-chapters';
 import '@nanoplayer/plugin-pip';
 import '@nanoplayer/plugin-audio-tracks';
 import '@nanoplayer/plugin-media-session';
+import '@nanoplayer/plugin-quality';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 

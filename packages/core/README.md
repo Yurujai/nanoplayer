@@ -147,6 +147,29 @@ description.
 From code: `player.audioTracks`, `player.audioTrack`, `player.setAudioTrack(id)`
 and the `audio:tracks` event.
 
+### Quality
+
+With hls.js the choices are the playlist's levels plus automatic. With MP4,
+list one source per height and they become the choices; switching keeps the
+position and whether it was playing. The browser starts on the first one it
+can play.
+
+```json
+"sources": [
+  { "src": "cam-720.mp4", "type": "video/mp4", "height": 720 },
+  { "src": "cam-360.mp4", "type": "video/mp4", "height": 360 }
+]
+```
+
+With `@nanoplayer/plugin-quality` loaded, a **Quality** entry appears in the
+settings menu when there are two or more. With two streams, the other one
+follows: it takes its tallest quality not above the master's. Native HLS
+(Safari, iOS) offers no choice; the browser decides.
+
+From code: `player.qualities`, `player.quality`, `player.playingQuality`,
+`player.setQuality(id)` (`AUTO_QUALITY` for automatic) and the
+`quality:change` event.
+
 ### Audio only
 
 Nothing needs declaring: the MIME type is enough.

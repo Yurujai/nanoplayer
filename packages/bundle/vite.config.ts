@@ -15,6 +15,7 @@ export default defineConfig({
       '@nanoplayer/plugin-pip': src('../plugin-pip/src/index.ts'),
       '@nanoplayer/plugin-audio-tracks': src('../plugin-audio-tracks/src/index.ts'),
       '@nanoplayer/plugin-media-session': src('../plugin-media-session/src/index.ts'),
+      '@nanoplayer/plugin-quality': src('../plugin-quality/src/index.ts'),
     },
   },
   build: {

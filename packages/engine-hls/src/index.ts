@@ -6,9 +6,9 @@
  * or a `window.Hls` loaded from a CDN, which is how the `<script>` bundle gets it.
  */
 import {
-  hasMse, isHlsType, MediaElementEngine, playerError,
+  AUTO_QUALITY, hasMse, isHlsType, MediaElementEngine, playerError,
   type AttachOptions, type AudioTrackInfo, type Confidence, type EngineFactory, type MediaEngine,
-  type PlayerError, type Source, type Stream,
+  type PlayerError, type QualityInfo, type Source, type Stream,
 } from '@nanoplayer/core';
 import type HlsType from 'hls.js';
 
@@ -28,6 +28,7 @@ function loadFromPackage(): Promise<HlsConstructor> {
 
 export class HlsEngine extends MediaElementEngine {
   readonly name = 'hls.js';
+  readonly autoQuality = true;
 
   #hls: Hls | null = null;
 
@@ -54,6 +55,7 @@ export class HlsEngine extends MediaElementEngine {
     this.#hls = new Hls({ enableWorker: true, startLevel: -1, backBufferLength: 90 });
     this.#recoverFromErrors(this.#hls, Hls);
     this.#watchAudioTracks(this.#hls, Hls);
+    this.#watchQualities(this.#hls, Hls);
     this.#hls.attachMedia(el);
     this.#hls.loadSource(source.src);
 
@@ -141,6 +143,48 @@ export class HlsEngine extends MediaElementEngine {
     if (this.#hls && Number.isInteger(i) && i >= 0 && i < this.#hls.audioTracks.length) {
       this.#hls.audioTrack = i;
     }
+  }
+
+  #watchQualities(hls: Hls, Hls: HlsConstructor): void {
+    const notify = () => this.callbacks.onQualities?.();
+    for (const event of [Hls.Events.MANIFEST_PARSED, Hls.Events.LEVELS_UPDATED, Hls.Events.LEVEL_SWITCHED]) {
+      hls.on(event, notify);
+      this.onDetach(() => hls.off(event, notify));
+    }
+  }
+
+  /** The playlist's ladder; the id is the level index hls.js switches by. */
+  getQualities(): QualityInfo[] {
+    return (this.#hls?.levels ?? []).map((level, i) => ({
+      id: String(i),
+      height: level.height || null,
+      bitrate: level.bitrate || null,
+      label: level.name ?? '',
+    }));
+  }
+
+  getQuality(): string | null {
+    const hls = this.#hls;
+    if (!hls || !hls.levels?.length) return null;
+    return hls.autoLevelEnabled ? AUTO_QUALITY : String(hls.currentLevel);
+  }
+
+  getPlayingQuality(): string | null {
+    const i = this.#hls?.currentLevel ?? -1;
+    return i < 0 ? null : String(i);
+  }
+
+  /** `currentLevel`, not `nextLevel`: whoever picks a quality expects to see it now. */
+  setQuality(id: string): void {
+    const hls = this.#hls;
+    if (!hls) return;
+    if (id === AUTO_QUALITY) {
+      hls.currentLevel = -1;
+    } else {
+      const i = Number(id);
+      if (Number.isInteger(i) && i >= 0 && i < (hls.levels?.length ?? 0)) hls.currentLevel = i;
+    }
+    this.callbacks.onQualities?.();
   }
 
   #toPlayerError(data: { type?: string; details?: string }): PlayerError {

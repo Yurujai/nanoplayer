@@ -8,6 +8,7 @@ class PageHls {
   static Events = {
     MANIFEST_PARSED: 'manifestParsed', ERROR: 'error',
     AUDIO_TRACKS_UPDATED: 'audioTracksUpdated', AUDIO_TRACK_SWITCHED: 'audioTrackSwitched',
+    LEVELS_UPDATED: 'levelsUpdated', LEVEL_SWITCHED: 'levelSwitched',
   };
   static ErrorTypes = { NETWORK_ERROR: 'networkError', MEDIA_ERROR: 'mediaError' };
   static isSupported = () => true;
@@ -15,6 +16,9 @@ class PageHls {
   #listeners = new Map<string, Array<() => void>>();
   audioTracks = [];
   audioTrack = -1;
+  levels = [];
+  currentLevel = -1;
+  autoLevelEnabled = true;
   on(ev: string, fn: () => void) { this.#listeners.set(ev, [...(this.#listeners.get(ev) ?? []), fn]); }
   off() {}
   attachMedia() {}

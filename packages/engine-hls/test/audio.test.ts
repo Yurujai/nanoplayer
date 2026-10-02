@@ -6,6 +6,7 @@ import type { Stream } from '@nanoplayer/core';
 const instances: FakeHls[] = [];
 interface FakeHls {
   audioTrack: number;
+  currentLevel: number;
   emit(event: string): void;
 }
 vi.mock('hls.js', () => {
@@ -13,6 +14,7 @@ vi.mock('hls.js', () => {
     static Events = {
       MANIFEST_PARSED: 'manifestParsed', ERROR: 'error',
       AUDIO_TRACKS_UPDATED: 'audioTracksUpdated', AUDIO_TRACK_SWITCHED: 'audioTrackSwitched',
+      LEVELS_UPDATED: 'levelsUpdated', LEVEL_SWITCHED: 'levelSwitched',
     };
     static ErrorTypes = { NETWORK_ERROR: 'networkError', MEDIA_ERROR: 'mediaError' };
     static isSupported = () => true;
@@ -20,6 +22,12 @@ vi.mock('hls.js', () => {
       { name: 'Español', lang: 'es' },
       { name: 'Español AD', lang: 'es', characteristics: 'public.accessibility.describes-video' },
     ];
+    levels = [
+      { height: 360, bitrate: 800000, name: '' },
+      { height: 720, bitrate: 2500000, name: '' },
+    ];
+    currentLevel = -1;
+    get autoLevelEnabled() { return this.currentLevel === -1; }
     #track = 0;
     #listeners = new Map<string, Array<() => void>>();
     constructor() { instances.push(this as unknown as FakeHls); }
@@ -78,5 +86,27 @@ describe('HlsEngine · audio tracks', () => {
     engine.detach();
     hls.emit('audioTracksUpdated');
     expect(onAudioTracks).not.toHaveBeenCalled();
+  });
+});
+
+describe('HlsEngine · quality levels', () => {
+  it('lists the ladder and starts on Auto', async () => {
+    const { engine } = await attached();
+    expect(engine.getQualities()).toEqual([
+      { id: '0', height: 360, bitrate: 800000, label: '' },
+      { id: '1', height: 720, bitrate: 2500000, label: '' },
+    ]);
+    expect(engine.autoQuality).toBe(true);
+    expect(engine.getQuality()).toBe('auto');
+  });
+
+  it('a chosen level switches now, and Auto hands it back', async () => {
+    const { engine, hls } = await attached();
+    engine.setQuality('1');
+    expect(hls.currentLevel).toBe(1);
+    expect(engine.getQuality()).toBe('1');
+    engine.setQuality('auto');
+    expect(hls.currentLevel).toBe(-1);
+    expect(engine.getQuality()).toBe('auto');
   });
 });

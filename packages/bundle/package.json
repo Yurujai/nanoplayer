@@ -19,7 +19,8 @@
     "@nanoplayer/plugin-chapters": "workspace:*",
     "@nanoplayer/plugin-pip": "workspace:*",
     "@nanoplayer/plugin-audio-tracks": "workspace:*",
-    "@nanoplayer/plugin-media-session": "workspace:*"
+    "@nanoplayer/plugin-media-session": "workspace:*",
+    "@nanoplayer/plugin-quality": "workspace:*"
   },
   "devDependencies": { "vite": "^6.0.0" }
 }

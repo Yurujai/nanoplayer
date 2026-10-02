@@ -6,7 +6,9 @@
 import type { ChainPhase } from './chain.js';
 import { ChainController, type ChainHost } from './chain-controller.js';
 import type { CoreEvents } from './core-events.js';
-import type { AudioTrackInfo, EngineFactory, MediaEngine } from './engine.js';
+import {
+  AUTO_QUALITY, type AudioTrackInfo, type EngineFactory, type MediaEngine, type QualityInfo,
+} from './engine.js';
 import { playerError, type PlayerError } from './errors.js';
 import { strings, type Catalogues, type Translate } from './i18n.js';
 import { EventBus, type Unsubscribe } from './events.js';
@@ -543,6 +545,45 @@ export class Player {
     this.master?.setAudioTrack?.(id);
   }
 
+  /** The master's qualities; empty where the engine cannot choose them. */
+  get qualities(): QualityInfo[] {
+    return this.master?.getQualities?.() ?? [];
+  }
+
+  /** `AUTO_QUALITY`, a quality id, or `null` with nothing to choose. */
+  get quality(): string | null {
+    return this.master?.getQuality?.() ?? null;
+  }
+
+  get playingQuality(): string | null {
+    return this.master?.getPlayingQuality?.() ?? null;
+  }
+
+  get autoQuality(): boolean {
+    return this.master?.autoQuality === true;
+  }
+
+  /**
+   * Applies to every content stream. The others have their own ladders, so
+   * each takes its tallest quality not above the master's: slides in 1080p
+   * next to a 360p presenter would spend the bandwidth the viewer just saved.
+   */
+  setQuality(id: string): void {
+    const master = this.master;
+    if (!master?.setQuality) return;
+    master.setQuality(id);
+    const height = master.getQualities?.().find((q) => q.id === id)?.height ?? null;
+    for (const engine of this.#content.engines()) {
+      if (engine === master || !engine.setQuality) continue;
+      if (id === AUTO_QUALITY) {
+        if (engine.autoQuality) engine.setQuality(AUTO_QUALITY);
+        continue;
+      }
+      const match = closestQuality(engine.getQualities?.() ?? [], height);
+      if (match) engine.setQuality(match.id);
+    }
+  }
+
   setPlaybackRate(rate: number): void {
     // Master only: the sync loop sets the slaves' rate relative to it.
     this.master?.setPlaybackRate(rate);
@@ -635,6 +676,12 @@ export class Player {
         this.bus.emit('stall:end', { stream: stream.id, durationMs });
         this.#stalls.stallEnded(stream.id);
       },
+      onQualities: () => {
+        if (!isMaster) return;
+        this.bus.emit('quality:change', {
+          qualities: this.qualities, selected: this.quality, playing: this.playingQuality,
+        });
+      },
       onAudioTracks: () => {
         if (!isMaster) return;
         this.bus.emit('audio:tracks', { tracks: this.audioTracks, active: this.audioTrack });
@@ -655,6 +702,14 @@ export class Player {
     }
     return playerError(fallback, error instanceof Error ? error.message : String(error), error);
   }
+}
+
+/** The tallest quality not above `height`, or else the shortest one. */
+function closestQuality(qualities: QualityInfo[], height: number | null): QualityInfo | null {
+  const known = qualities.filter((q) => q.height !== null)
+    .sort((a, b) => (b.height ?? 0) - (a.height ?? 0));
+  if (known.length === 0 || height === null) return null;
+  return known.find((q) => (q.height ?? 0) <= height) ?? known[known.length - 1]!;
 }
 
 /** Public API entry point. */

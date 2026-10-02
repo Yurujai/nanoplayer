@@ -24,6 +24,7 @@ import '@nanoplayer/plugin-chapters';
 import '@nanoplayer/plugin-pip';
 import '@nanoplayer/plugin-audio-tracks';
 import '@nanoplayer/plugin-media-session';
+import '@nanoplayer/plugin-quality';
 
 export interface Config extends CreateConfig {
   /** Control bar, on by default. `false` leaves it out; an object configures it. */
@@ -83,7 +84,7 @@ export {
   // lifecycle
   Lifecycle, assertTransition, canTransition, hasEngine, TRANSITIONS, WITH_ENGINE, WITH_MANIFEST,
   // engines
-  confidenceFor, hasMse, isHlsType, selectEngine,
+  AUTO_QUALITY, confidenceFor, hasMse, isHlsType, selectEngine,
   MediaElementEngine, mediaElementError, NativeEngine, nativeEngineFactory,
   // sync
   defaultScheduler, detectProfile, SYNC_PROFILES, Synchronizer,
@@ -105,6 +106,7 @@ export type {
   AnyListener, Empty, EventBusOptions, EventMap, Listener, ListenerErrorInfo,
   Unsubscribe, CoreEvents, PlayerState,
   AttachOptions, AudioTrackInfo, Confidence, EngineCallbacks, EngineFactory, MediaEngine,
+  QualityInfo,
   MediaElementEngineOptions,
   Scheduler, SyncAction, SyncProfile, SyncProfileName, SyncSample, SynchronizerOptions,
   ManifestResolver, PlayerOptions, BatchResolverOptions, RegistryOptions,

@@ -4,7 +4,7 @@
  * `subject:verb`, and fallible operations split into `:start` / `:ok` / `:fail`.
  */
 import type { BumperPhase, ChainPhase } from './chain.js';
-import type { AudioTrackInfo } from './engine.js';
+import type { AudioTrackInfo, QualityInfo } from './engine.js';
 import type { Empty } from './events.js';
 import type { PlayerError } from './errors.js';
 import type { Manifest } from './manifest.js';
@@ -41,6 +41,8 @@ export interface CoreEvents {
   'ratechange': { rate: number };
   /** The content's audio tracks or the one playing changed. */
   'audio:tracks': { tracks: AudioTrackInfo[]; active: string | null };
+  /** The content's qualities, the one chosen or the one playing changed. */
+  'quality:change': { qualities: QualityInfo[]; selected: string | null; playing: string | null };
   'volumechange': { volume: number; muted: boolean };
 
   // --- intro and outro ------------------------------------------------------

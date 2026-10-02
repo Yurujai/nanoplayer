@@ -21,6 +21,8 @@ export default defineConfig({
         new URL('../packages/plugin-audio-tracks/src/index.ts', import.meta.url)),
       '@nanoplayer/plugin-media-session': fileURLToPath(
         new URL('../packages/plugin-media-session/src/index.ts', import.meta.url)),
+      '@nanoplayer/plugin-quality': fileURLToPath(
+        new URL('../packages/plugin-quality/src/index.ts', import.meta.url)),
     },
   },
   build: {

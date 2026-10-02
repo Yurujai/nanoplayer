@@ -69,7 +69,8 @@ first time HLS has to play: whoever plays MP4 does not pay for it.
 | [`@nanoplayer/plugin-pip`](packages/plugin-pip/) | Picture in picture: the video in the browser's floating window |
 | [`@nanoplayer/plugin-audio-tracks`](packages/plugin-audio-tracks/) | Audio tracks: audio description and other languages, from the media |
 | [`@nanoplayer/plugin-media-session`](packages/plugin-media-session/) | Lock screen, headphones and media keys, with title, chapter and poster |
-| [`@nanoplayer/bundle`](packages/bundle/) | All of the above in one file, for the `<script>` tag; hls.js comes from its own tag. 33 KB gzip |
+| [`@nanoplayer/plugin-quality`](packages/plugin-quality/) | Quality: HLS levels or MP4 sources, or automatic |
+| [`@nanoplayer/bundle`](packages/bundle/) | All of the above in one file, for the `<script>` tag; hls.js comes from its own tag. 34 KB gzip |
 
 ## What is missing
 

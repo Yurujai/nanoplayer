@@ -41,6 +41,9 @@ importers:
       '@nanoplayer/plugin-pip':
         specifier: workspace:*
         version: link:../packages/plugin-pip
+      '@nanoplayer/plugin-quality':
+        specifier: workspace:*
+        version: link:../packages/plugin-quality
       '@nanoplayer/ui':
         specifier: workspace:*
         version: link:../packages/ui
@@ -78,6 +81,9 @@ importers:
       '@nanoplayer/plugin-pip':
         specifier: workspace:*
         version: link:../packages/plugin-pip
+      '@nanoplayer/plugin-quality':
+        specifier: workspace:*
+        version: link:../packages/plugin-quality
       '@nanoplayer/ui':
         specifier: workspace:*
         version: link:../packages/ui
@@ -115,6 +121,9 @@ importers:
       '@nanoplayer/plugin-pip':
         specifier: workspace:*
         version: link:../plugin-pip
+      '@nanoplayer/plugin-quality':
+        specifier: workspace:*
+        version: link:../plugin-quality
       '@nanoplayer/ui':
         specifier: workspace:*
         version: link:../ui
@@ -183,6 +192,16 @@ importers:
         version: 6.4.3(@types/node@26.1.2)
 
   packages/plugin-pip:
+    dependencies:
+      '@nanoplayer/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.3(@types/node@26.1.2)
+
+  packages/plugin-quality:
     dependencies:
       '@nanoplayer/core':
         specifier: workspace:*
