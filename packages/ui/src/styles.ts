@@ -375,6 +375,35 @@ button.np__skip:focus-visible{outline:3px solid var(--np-color-focus);outline-of
 button.np__skip svg{width:1.25rem;height:1.25rem;fill:currentColor;pointer-events:none}
 .np--inactive button.np__skip{bottom:1.5rem}
 
+/* --- panels below the player ---
+   Outside .np, on the host page: colours inherit from it, light or dark. */
+.np-panel{
+  margin-top:.5rem;border:1px solid rgba(127,127,127,.4);border-radius:6px;
+  font-family:system-ui,-apple-system,sans-serif;color:inherit;
+}
+.np-panel[hidden]{display:none}
+.np-transcript__header{
+  display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;
+  padding:.5rem .75rem;border-bottom:1px solid rgba(127,127,127,.3);
+}
+.np-transcript__title{margin:0;flex:1;font-size:1rem;font-weight:600}
+.np-transcript__header select{font:inherit;padding:.2rem .4rem}
+.np-transcript__list{
+  position:relative;list-style:none;margin:0;padding:.25rem;
+  max-height:18rem;overflow-y:auto;
+}
+.np-transcript__cue{
+  display:flex;gap:.75rem;width:100%;padding:.4rem .5rem;
+  border:0;border-radius:4px;background:transparent;color:inherit;
+  font:inherit;line-height:1.4;text-align:left;cursor:pointer;
+}
+.np-transcript__cue:hover{background:rgba(127,127,127,.15)}
+.np-transcript__cue:focus-visible{outline:3px solid #ffb648;outline-offset:-3px}
+/* Not colour alone: the current phrase is also bold. */
+.np-transcript__cue[aria-current="true"]{background:rgba(106,169,255,.25);font-weight:600}
+.np-transcript__time{flex:0 0 auto;font-variant-numeric:tabular-nums;opacity:.8}
+.np-transcript__status{margin:0;padding:.75rem}
+
 /* --- accessibility --- */
 .np__sr{
   position:absolute;width:1px;height:1px;padding:0;margin:-1px;

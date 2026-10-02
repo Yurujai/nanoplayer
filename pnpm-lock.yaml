@@ -47,6 +47,9 @@ importers:
       '@nanoplayer/plugin-resume':
         specifier: workspace:*
         version: link:../packages/plugin-resume
+      '@nanoplayer/plugin-transcript':
+        specifier: workspace:*
+        version: link:../packages/plugin-transcript
       '@nanoplayer/ui':
         specifier: workspace:*
         version: link:../packages/ui
@@ -90,6 +93,9 @@ importers:
       '@nanoplayer/plugin-resume':
         specifier: workspace:*
         version: link:../packages/plugin-resume
+      '@nanoplayer/plugin-transcript':
+        specifier: workspace:*
+        version: link:../packages/plugin-transcript
       '@nanoplayer/ui':
         specifier: workspace:*
         version: link:../packages/ui
@@ -133,6 +139,9 @@ importers:
       '@nanoplayer/plugin-resume':
         specifier: workspace:*
         version: link:../plugin-resume
+      '@nanoplayer/plugin-transcript':
+        specifier: workspace:*
+        version: link:../plugin-transcript
       '@nanoplayer/ui':
         specifier: workspace:*
         version: link:../ui
@@ -221,6 +230,16 @@ importers:
         version: 6.4.3(@types/node@26.1.2)
 
   packages/plugin-resume:
+    dependencies:
+      '@nanoplayer/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.3(@types/node@26.1.2)
+
+  packages/plugin-transcript:
     dependencies:
       '@nanoplayer/core':
         specifier: workspace:*

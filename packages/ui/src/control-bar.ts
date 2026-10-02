@@ -7,7 +7,8 @@
  */
 import { hasEngine, strings } from '@nanoplayer/core';
 import type {
-  BarControlDecl, Catalogues, OverlayDecl, OverlayHandle, Player, PlayerError,
+  BarControlDecl, Catalogues, OverlayDecl, OverlayHandle, PanelDecl, PanelHandle,
+  Player, PlayerError,
   SettingsPanelDecl, TimelineMarkersDecl, Translate, UiSlots,
 } from '@nanoplayer/core';
 import { AutoHide } from './auto-hide.js';
@@ -66,6 +67,7 @@ export class ControlBar implements UiSlots {
   #autoHide: AutoHide;
   #poster: Poster | null = null;
   #resizeObserver: ResizeObserver | null = null;
+  #panels: HTMLElement[] = [];
   #speed = 1;
   #layout: LayoutId = 'side-by-side';
   #destroyed = false;
@@ -180,6 +182,45 @@ export class ControlBar implements UiSlots {
     el.dataset['overlay'] = decl.id;
     this.#root.insertBefore(el, this.#bar);
     return { element: el, remove: () => el.remove() };
+  }
+
+  /**
+   * After the player in the DOM, and after earlier panels, so reading order
+   * puts it below the video. Shown by a toggle button in the bar; focus stays
+   * on the button, as with any toggle.
+   */
+  addPanel(decl: PanelDecl): PanelHandle {
+    const section = this.#root.ownerDocument.createElement('section');
+    section.className = 'np-panel';
+    section.dataset['panel'] = decl.id;
+    section.setAttribute('aria-label', decl.label);
+    section.hidden = !decl.open;
+    (this.#panels[this.#panels.length - 1] ?? this.#root).after(section);
+    this.#panels.push(section);
+
+    const removeButton = this.#pluginControls.add({
+      id: `panel-${decl.id}`,
+      icon: decl.icon,
+      label: decl.label,
+      priority: 35,
+      pressed: () => !section.hidden,
+      onActivate: () => {
+        section.hidden = !section.hidden;
+        if (!section.hidden) decl.onOpen?.();
+      },
+    });
+    // Next turn: the plugin does not hold the handle yet.
+    if (decl.open && decl.onOpen) queueMicrotask(decl.onOpen);
+
+    return {
+      element: section,
+      get isOpen() { return !section.hidden; },
+      remove: () => {
+        removeButton();
+        section.remove();
+        this.#panels = this.#panels.filter((p) => p !== section);
+      },
+    };
   }
 
   refresh(): void {
@@ -375,6 +416,8 @@ export class ControlBar implements UiSlots {
     this.#loading.destroy();
     this.#error.destroy();
     this.#gestures.destroy();
+    for (const panel of this.#panels) panel.remove();
+    this.#panels = [];
     this.#bar.remove();
     this.#skipButton.remove();
     this.#liveRegion.remove();

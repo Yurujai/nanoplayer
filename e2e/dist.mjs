@@ -11,7 +11,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createContext, runInContext } from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
-const PACKAGES = ['core', 'ui', 'engine-hls', 'plugin-captions', 'plugin-chapters', 'plugin-pip', 'plugin-audio-tracks', 'plugin-media-session', 'plugin-quality', 'plugin-resume', 'bundle'];
+const PACKAGES = ['core', 'ui', 'engine-hls', 'plugin-captions', 'plugin-chapters', 'plugin-pip', 'plugin-audio-tracks', 'plugin-media-session', 'plugin-quality', 'plugin-resume', 'plugin-transcript', 'bundle'];
 const root = new URL('../packages/', import.meta.url);
 
 let failures = 0;
@@ -67,6 +67,10 @@ check(core.plugins.has('quality'),
 await import('@nanoplayer/plugin-resume');
 check(core.plugins.has('resume'),
   'and the resume plugin',
+  `registered: [${core.plugins.registered.join(', ')}]`);
+await import('@nanoplayer/plugin-transcript');
+check(core.plugins.has('transcript'),
+  'and the transcript plugin',
   `registered: [${core.plugins.registered.join(', ')}]`);
 
 const hls = await import('@nanoplayer/engine-hls');

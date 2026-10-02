@@ -60,6 +60,8 @@
     <li><strong>Chapters.</strong> Three of them, marked on the progress bar. Hover
         the bar to see where each one falls, or jump to one from
         <strong>⚙ Settings → Chapters</strong>.</li>
+    <li><strong>Transcript.</strong> The page icon in the bar opens it below the
+        player: the current phrase follows along, and any phrase jumps there.</li>
     <li><strong>Resume.</strong> Leave halfway and reload: playback continues where
         you were, and says so.</li>
     <li><strong>Media keys and lock screen.</strong> Play/pause keys and headphone
@@ -99,6 +101,7 @@ import '@nanoplayer/plugin-audio-tracks';
 import '@nanoplayer/plugin-media-session';
 import '@nanoplayer/plugin-quality';
 import '@nanoplayer/plugin-resume';
+import '@nanoplayer/plugin-transcript';
 
 const player = create('#player', { manifest: '/api/video/123' });
 attachControls(player);</code></pre>

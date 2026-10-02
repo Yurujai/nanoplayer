@@ -13,6 +13,7 @@
       "@nanoplayer/plugin-media-session": ["../packages/plugin-media-session/src/index.ts"],
       "@nanoplayer/plugin-quality": ["../packages/plugin-quality/src/index.ts"],
       "@nanoplayer/plugin-resume": ["../packages/plugin-resume/src/index.ts"],
+      "@nanoplayer/plugin-transcript": ["../packages/plugin-transcript/src/index.ts"],
       "@nanoplayer/engine-hls": ["../packages/engine-hls/src/index.ts"]
     }
   },

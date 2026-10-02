@@ -198,6 +198,18 @@ create('#player', {
 
 `resume: false` turns it off.
 
+### Transcript
+
+With `@nanoplayer/plugin-transcript` loaded and caption tracks in the
+manifest, a **Transcript** button in the bar opens a panel below the player:
+every phrase with its time, the current one marked, and any of them a way to
+jump there. It is one tab stop, moved through with the arrow keys. The file is
+fetched only when the panel opens; with several languages the panel has its
+own picker.
+
+The panel sits right after the player's element, on the page, so it inherits
+the page's colours and fonts. It is not shown in full screen.
+
 ### Audio only
 
 Nothing needs declaring: the MIME type is enough.

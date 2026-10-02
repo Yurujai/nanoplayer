@@ -7,6 +7,7 @@ import '@nanoplayer/plugin-audio-tracks';
 import '@nanoplayer/plugin-media-session';
 import '@nanoplayer/plugin-quality';
 import '@nanoplayer/plugin-resume';
+import '@nanoplayer/plugin-transcript';
 
 // The page lives under /video/ and the media at the site root.
 const MEDIA = '../media/';

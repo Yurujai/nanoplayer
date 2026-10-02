@@ -10,6 +10,7 @@
  * | `bar`      | Binary, frequent, with visible state          |
  * | `settings` | A choice among options, occasional            |
  * | `timeline` | Named segments on the progress bar            |
+ * | `panel`    | A region beside the video: a transcript       |
  */
 
 export interface BarControlDecl {
@@ -87,6 +88,25 @@ export interface OverlayHandle {
   remove(): void;
 }
 
+export interface PanelDecl {
+  id: string;
+  /** Names both the region and the bar button that shows it. */
+  label: string;
+  /** Inline SVG for that button. */
+  icon: string;
+  /** Called on every opening: content can be loaded only when wanted. */
+  onOpen?: () => void;
+  /** Starts open. Closed by default: it takes room on the page. */
+  open?: boolean;
+}
+
+export interface PanelHandle {
+  /** A node the plugin fills and is responsible for, interactive content included. */
+  element: HTMLElement;
+  readonly isOpen: boolean;
+  remove(): void;
+}
+
 /** What the UI offers plugins. Every method returns how to undo what it added. */
 export interface UiSlots {
   addBarControl(control: BarControlDecl): () => void;
@@ -99,6 +119,12 @@ export interface UiSlots {
    * controls, which must stay under the UI's control.
    */
   addOverlay(decl: OverlayDecl): OverlayHandle;
+  /**
+   * A region below the player, shown and hidden by a bar button the UI adds.
+   * It is outside the video box, so it can hold what an overlay cannot: text
+   * to read at length, and controls of its own.
+   */
+  addPanel(decl: PanelDecl): PanelHandle;
   /** Repaints after a control's state changes. */
   refresh(): void;
 }

@@ -195,7 +195,9 @@ const focused = async () => page.evaluate(() => {
 
 await page.evaluate(() => document.querySelector('.np')?.focus());
 const reached = [];
-for (let i = 0; i < 8; i++) {
+// A ceiling, not the expected count: the walk stops on leaving the player, and
+// each plugin button adds a stop.
+for (let i = 0; i < 20; i++) {
   await page.keyboard.press('Tab');
   const f = await focused();
   if (!f?.inside) break;

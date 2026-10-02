@@ -1,0 +1,11 @@
+{
+  // Declarations only; Vite builds the bundle. Extends the base, not the
+  // package tsconfig: its source path for core breaks `rootDir` (TS6059).
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}

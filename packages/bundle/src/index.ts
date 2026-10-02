@@ -26,6 +26,7 @@ import '@nanoplayer/plugin-audio-tracks';
 import '@nanoplayer/plugin-media-session';
 import '@nanoplayer/plugin-quality';
 import '@nanoplayer/plugin-resume';
+import '@nanoplayer/plugin-transcript';
 
 export interface Config extends CreateConfig {
   /** Control bar, on by default. `false` leaves it out; an object configures it. */
@@ -112,7 +113,7 @@ export type {
   Scheduler, SyncAction, SyncProfile, SyncProfileName, SyncSample, SynchronizerOptions,
   ManifestResolver, PlayerOptions, BatchResolverOptions, RegistryOptions,
   LiveStatus, RetryPolicy,
-  BarControlDecl, OverlayDecl, OverlayHandle,
+  BarControlDecl, OverlayDecl, OverlayHandle, PanelDecl, PanelHandle,
   SettingsChoiceDecl, SettingsGroupDecl, SettingsOptionDecl, SettingsPanelDecl,
   TimelineMarkerDecl, TimelineMarkersDecl, UiSlots, ActivationResult, PluginConfig, PluginContext, PluginImpl, PluginManifest,
   CreateConfig,

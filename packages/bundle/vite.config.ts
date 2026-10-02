@@ -17,6 +17,7 @@ export default defineConfig({
       '@nanoplayer/plugin-media-session': src('../plugin-media-session/src/index.ts'),
       '@nanoplayer/plugin-quality': src('../plugin-quality/src/index.ts'),
       '@nanoplayer/plugin-resume': src('../plugin-resume/src/index.ts'),
+      '@nanoplayer/plugin-transcript': src('../plugin-transcript/src/index.ts'),
     },
   },
   build: {

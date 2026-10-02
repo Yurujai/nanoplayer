@@ -25,6 +25,8 @@ export default defineConfig({
         new URL('../packages/plugin-quality/src/index.ts', import.meta.url)),
       '@nanoplayer/plugin-resume': fileURLToPath(
         new URL('../packages/plugin-resume/src/index.ts', import.meta.url)),
+      '@nanoplayer/plugin-transcript': fileURLToPath(
+        new URL('../packages/plugin-transcript/src/index.ts', import.meta.url)),
     },
   },
   build: {

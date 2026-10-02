@@ -181,3 +181,48 @@ describe('fullscreen', () => {
     if (original) Object.defineProperty(Document.prototype, 'fullscreenEnabled', original);
   });
 });
+
+describe('panel slot', () => {
+  const MANIFEST = {
+    id: 'x',
+    streams: [{ id: 'a', role: 'presenter', audio: true, sources: [{ src: 'a.mp4', type: 'video/mp4' }] }],
+  };
+
+  async function withBar() {
+    const { Player } = await import('@nanoplayer/core');
+    const { attachControls } = await import('../src/control-bar.js');
+    const player = new Player({ container: host, manifest: MANIFEST });
+    const bar = attachControls(player, { poster: false });
+    // happy-dom lays out nothing: without width every bar button overflows to the menu.
+    const row = host.querySelector<HTMLElement>('.np__row:not(.np__row--progress)')!;
+    row.getBoundingClientRect = () => ({ width: 800, height: 40 }) as DOMRect;
+    return { player, bar };
+  }
+
+  it('is a named region below the player, closed, with a toggle in the bar', async () => {
+    const { bar } = await withBar();
+    const onOpen = vi.fn();
+    const panel = bar.addPanel({ id: 'transcript', label: 'Transcript', icon: '<svg></svg>', onOpen });
+    bar.refresh();
+    expect(panel.element.previousElementSibling, 'right after the player').toBe(host);
+    expect(panel.element.tagName).toBe('SECTION');
+    expect(panel.element.getAttribute('aria-label')).toBe('Transcript');
+    expect(panel.isOpen).toBe(false);
+
+    const toggle = host.querySelector<HTMLButtonElement>('[data-control="panel-transcript"]')!;
+    expect(toggle.getAttribute('aria-label')).toBe('Transcript');
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    toggle.click();
+    expect(panel.isOpen).toBe(true);
+    expect(onOpen).toHaveBeenCalledOnce();
+    expect(host.querySelector('[data-control="panel-transcript"]')!.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('goes away with its button', async () => {
+    const { bar } = await withBar();
+    const panel = bar.addPanel({ id: 'notes', label: 'Notes', icon: '<svg></svg>' });
+    panel.remove();
+    expect(document.querySelector('[data-panel="notes"]')).toBeNull();
+    expect(host.querySelector('[data-control="panel-notes"]')).toBeNull();
+  });
+});

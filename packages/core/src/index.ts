@@ -67,7 +67,7 @@ export type { LiveStatus, RetryPolicy } from './live.js';
 
 // --- UI slots ---------------------------------------------------------------
 export type {
-  BarControlDecl, OverlayDecl, OverlayHandle,
+  BarControlDecl, OverlayDecl, OverlayHandle, PanelDecl, PanelHandle,
   SettingsChoiceDecl, SettingsGroupDecl, SettingsOptionDecl, SettingsPanelDecl,
   TimelineMarkerDecl, TimelineMarkersDecl, UiSlots,
 } from './slots.js';

@@ -1,8 +1,8 @@
 # @nanoplayer/bundle
 
 The whole player in one file, with the interface, captions, chapters, picture
-in picture, audio tracks, quality, media session, resume and the HLS engine
-already included. **114 KB, 35 KB gzip.**
+in picture, audio tracks, quality, media session, resume, transcript and the
+HLS engine already included. **121 KB, 37 KB gzip.**
 
 It is the package for installing with one `<script>` tag and three lines: no
 build, no tooling and no npm.
