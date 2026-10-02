@@ -69,7 +69,7 @@ first time HLS has to play: whoever plays MP4 does not pay for it.
 | [`@nanoplayer/plugin-pip`](packages/plugin-pip/) | Picture in picture: the video in the browser's floating window |
 | [`@nanoplayer/plugin-audio-tracks`](packages/plugin-audio-tracks/) | Audio tracks: audio description and other languages, from the media |
 | [`@nanoplayer/plugin-media-session`](packages/plugin-media-session/) | Lock screen, headphones and media keys, with title, chapter and poster |
-| [`@nanoplayer/bundle`](packages/bundle/) | All of the above except HLS in one file, for the `<script>` tag. 32 KB gzip |
+| [`@nanoplayer/bundle`](packages/bundle/) | All of the above in one file, for the `<script>` tag; hls.js comes from its own tag. 33 KB gzip |
 
 ## What is missing
 
@@ -77,9 +77,6 @@ In order of what blocks the most people:
 
 - **Publishing.** Nothing is on npm and there is no release workflow. The
   packages are still at `0.0.0`.
-- **HLS with a `<script>` tag.** The bundle carries the native engine, which
-  covers MP4 everywhere and HLS on Safari and iOS. HLS on Chrome needs hls.js,
-  which today can only be loaded through npm.
 - **Planned plugins:** Chromecast, playlists and H5P. The
   manifest's annotations are already the mechanism they will come in through.
 - **Demo.** The multi-instance case has nowhere to be seen, and spike S5 is not

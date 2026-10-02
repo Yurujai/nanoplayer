@@ -14,9 +14,10 @@
  * would create a second plugin registry and a second exclusive-playback policy.
  */
 import {
-  create as createHeadless, plugins, registry, Player, PlayerRegistry, PluginRegistry,
-  VERSION, type CreateConfig,
+  create as createHeadless, nativeEngineFactory, plugins, registry, Player, PlayerRegistry,
+  PluginRegistry, VERSION, type CreateConfig, type EngineFactory,
 } from '@nanoplayer/core';
+import { createHlsEngineFactory, type HlsConstructor } from '@nanoplayer/engine-hls';
 import { attachControls, type ControlBarOptions } from '@nanoplayer/ui';
 import '@nanoplayer/plugin-captions';
 import '@nanoplayer/plugin-chapters';
@@ -29,9 +30,28 @@ export interface Config extends CreateConfig {
   controls?: boolean | ControlBarOptions;
 }
 
+const pageHls = () => (globalThis as { Hls?: HlsConstructor }).Hls;
+
+/**
+ * HLS on Chrome, Firefox and Edge through a `window.Hls` the page loaded from a
+ * CDN. The bundle never carries hls.js: a `<script>` cannot resolve the npm
+ * package, and MP4-only pages would pay for it. Without it, Safari and iOS
+ * still play HLS natively.
+ */
+const hlsFromPage = createHlsEngineFactory(
+  async () => {
+    const Hls = pageHls();
+    if (!Hls) throw new Error('window.Hls is gone');
+    return Hls;
+  },
+  { isAvailable: () => typeof pageHls() === 'function' },
+);
+
+const ENGINES: readonly EngineFactory[] = [hlsFromPage, nativeEngineFactory];
+
 /** Creates a player with controls. Still downloads nothing until play. */
 export function create(target: string | HTMLElement, config: Config): Player {
-  const player = createHeadless(target, config);
+  const player = createHeadless(target, { engines: ENGINES, ...config });
   if (config.controls !== false) {
     attachControls(player, typeof config.controls === 'object' ? config.controls : {});
   }

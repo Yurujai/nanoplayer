@@ -1,6 +1,9 @@
 /**
  * HLS engine on top of hls.js, loaded lazily so MP4-only pages never download it.
  * It wins wherever MSE exists; without MSE (iOS) the native engine plays HLS.
+ *
+ * Where hls.js comes from is the factory's choice: the npm package by default,
+ * or a `window.Hls` loaded from a CDN, which is how the `<script>` bundle gets it.
  */
 import {
   hasMse, isHlsType, MediaElementEngine, playerError,
@@ -11,10 +14,14 @@ import type HlsType from 'hls.js';
 
 type Hls = HlsType;
 
+/** The hls.js class: the package's default export, or the CDN build's `window.Hls`. */
+export type HlsConstructor = typeof HlsType;
+export type HlsLoader = () => Promise<HlsConstructor>;
+
 const PLAYLIST_TIMEOUT_MS = 20000;
 
-let loading: Promise<typeof HlsType> | null = null;
-function loadHls(): Promise<typeof HlsType> {
+let loading: Promise<HlsConstructor> | null = null;
+function loadFromPackage(): Promise<HlsConstructor> {
   loading ??= import('hls.js').then((m) => m.default);
   return loading;
 }
@@ -24,13 +31,21 @@ export class HlsEngine extends MediaElementEngine {
 
   #hls: Hls | null = null;
 
+  /**
+   * The loader is required, not defaulted to the package: a default would keep
+   * the `import('hls.js')` alive in the `<script>` bundle, which cannot resolve it.
+   */
+  constructor(private readonly loadHls: HlsLoader) {
+    super();
+  }
+
   protected async prepare(el: HTMLVideoElement, stream: Stream, _options: AttachOptions): Promise<void> {
     const source = stream.sources.find((s) => isHlsType(s.type));
     if (!source) {
       throw playerError('engine/unsupported', `Stream "${stream.id}" has no HLS source`);
     }
 
-    const Hls = await loadHls();
+    const Hls = await this.loadHls();
     if (!Hls.isSupported()) {
       throw playerError('engine/unsupported',
         'hls.js cannot run in this browser: no Media Source Extensions');
@@ -168,19 +183,36 @@ export class HlsEngine extends MediaElementEngine {
   }
 }
 
-export const hlsEngineFactory: EngineFactory = {
-  name: 'hls.js',
+export interface HlsEngineFactoryOptions {
+  /**
+   * Whether hls.js can be had right now. Asked at each engine choice, not once:
+   * a CDN tag with `defer` or `async` may finish after the player is created.
+   */
+  isAvailable?: () => boolean;
+}
 
-  /** Never trusts canPlayType for HLS. See docs/browser-quirks.md#canplaytype-hls */
-  canPlay(source: Source): Confidence {
-    if (!source.type || !isHlsType(source.type)) return 'no';
-    return hasMse() ? 'probably' : 'no';
-  },
+/** An hls.js engine factory taking hls.js from `load`. */
+export function createHlsEngineFactory(
+  load: HlsLoader, options: HlsEngineFactoryOptions = {},
+): EngineFactory {
+  return {
+    name: 'hls.js',
 
-  create(): MediaEngine {
-    return new HlsEngine();
-  },
-};
+    /** Never trusts canPlayType for HLS. See docs/browser-quirks.md#canplaytype-hls */
+    canPlay(source: Source): Confidence {
+      if (!source.type || !isHlsType(source.type)) return 'no';
+      if (options.isAvailable && !options.isAvailable()) return 'no';
+      return hasMse() ? 'probably' : 'no';
+    },
+
+    create(): MediaEngine {
+      return new HlsEngine(load);
+    },
+  };
+}
+
+/** hls.js from the npm package, imported on first use. */
+export const hlsEngineFactory: EngineFactory = /* @__PURE__ */ createHlsEngineFactory(loadFromPackage);
 
 /** Engines in order of preference, hls.js first: `canPlay` decides the rest. */
 export function enginesWithHls(

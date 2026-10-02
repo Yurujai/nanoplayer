@@ -9,6 +9,7 @@ export default defineConfig({
     alias: {
       '@nanoplayer/core': src('../core/src/index.ts'),
       '@nanoplayer/ui': src('../ui/src/index.ts'),
+      '@nanoplayer/engine-hls': src('../engine-hls/src/index.ts'),
       '@nanoplayer/plugin-captions': src('../plugin-captions/src/index.ts'),
       '@nanoplayer/plugin-chapters': src('../plugin-chapters/src/index.ts'),
       '@nanoplayer/plugin-pip': src('../plugin-pip/src/index.ts'),

@@ -85,6 +85,9 @@ importers:
       axe-core:
         specifier: ^4.10.0
         version: 4.13.0
+      hls.js:
+        specifier: ^1.5.0
+        version: 1.6.17
       playwright:
         specifier: ^1.49.0
         version: 1.62.1
@@ -94,6 +97,9 @@ importers:
       '@nanoplayer/core':
         specifier: workspace:*
         version: link:../core
+      '@nanoplayer/engine-hls':
+        specifier: workspace:*
+        version: link:../engine-hls
       '@nanoplayer/plugin-audio-tracks':
         specifier: workspace:*
         version: link:../plugin-audio-tracks

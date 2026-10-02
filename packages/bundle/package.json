@@ -14,6 +14,7 @@
   "dependencies": {
     "@nanoplayer/core": "workspace:*",
     "@nanoplayer/ui": "workspace:*",
+    "@nanoplayer/engine-hls": "workspace:*",
     "@nanoplayer/plugin-captions": "workspace:*",
     "@nanoplayer/plugin-chapters": "workspace:*",
     "@nanoplayer/plugin-pip": "workspace:*",

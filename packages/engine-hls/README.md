@@ -24,6 +24,23 @@ never request the library; it appears when the engine attaches.
 Whoever plays MP4 pays nothing, which is what lets a `<script>` tag coexist
 with not dragging the library along just in case.
 
+## hls.js from somewhere else
+
+`hlsEngineFactory` imports the npm package. To take hls.js from elsewhere, a
+CDN's `window.Hls` for instance, build the factory with a loader:
+
+```ts
+import { createHlsEngineFactory } from '@nanoplayer/engine-hls';
+
+const fromPage = createHlsEngineFactory(async () => window.Hls, {
+  // Asked at each engine choice: false keeps it out, and the native engine plays.
+  isAvailable: () => typeof window.Hls === 'function',
+});
+```
+
+That is what the `<script>` bundle does. It never mentions the package, so no
+`import('hls.js')` ends up in a build that could not resolve it.
+
 ## How it splits with the native engine
 
 | | `canPlay` for HLS | Winner |

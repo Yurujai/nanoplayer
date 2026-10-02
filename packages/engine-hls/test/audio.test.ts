@@ -45,7 +45,7 @@ const stream: Stream = {
 };
 
 async function attached(onAudioTracks = vi.fn()) {
-  const engine = new HlsEngine();
+  const engine = new HlsEngine(async () => (await import('hls.js')).default);
   await engine.attach(document.createElement('div'), stream, { callbacks: { onAudioTracks } });
   return { engine, hls: instances[instances.length - 1]!, onAudioTracks };
 }

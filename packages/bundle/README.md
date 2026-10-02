@@ -1,8 +1,8 @@
 # @nanoplayer/bundle
 
 The whole player in one file, with the interface, captions, chapters, picture
-in picture, audio tracks and media session already included. **104 KB, 32 KB
-gzip.**
+in picture, audio tracks, media session and the HLS engine already included.
+**107 KB, 33 KB gzip.**
 
 It is the package for installing with one `<script>` tag and three lines: no
 build, no tooling and no npm.
@@ -96,22 +96,36 @@ import '@nanoplayer/bundle/nanoplayer.css';
 Checked in CI with the CSP really set by header, not simulated: zero violations
 and the styles applied.
 
-## What it does NOT include
+## HLS
 
-**The HLS engine.** `@nanoplayer/engine-hls` loads hls.js with a dynamic
-`import()`, and a classic `<script>` tag has nothing to resolve that specifier.
+The bundle carries the HLS engine but **not hls.js**: loading it is one more
+tag, from any CDN or your own server, before the bundle.
 
-In practice:
+```html
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.17/dist/hls.min.js"
+        integrity="sha384-A+DTEBcAPU1Pk7Lby1xo6mi1AwflNlm+ojz8+BPFLErHgB1ZIgxfykSGIG+sPtC5"
+        crossorigin="anonymous"></script>
+<script src="nanoplayer.min.js"></script>
+```
 
 | | HLS |
 |---|---|
-| Safari and iOS | **Yes**, through the native engine |
-| Chrome, Firefox, Edge | No |
-| MP4 everywhere | Yes |
+| Chrome, Firefox, Edge | **With hls.js** on the page (`window.Hls`) |
+| Safari and iOS | **Yes**, natively, with or without hls.js |
+| MP4 everywhere | Yes, nothing extra |
 
-HLS on desktop needs npm and registering the engine. It is on the to-do list:
-the sensible way out is for the bundle to pick up a `window.Hls` already
-loaded, so adding hls.js from a CDN in another tag is enough.
+- **Why not inside.** It would add some 150 KB that MP4-only pages would pay
+  for, and each site can pick the version and where it comes from: its own
+  server, if its CSP allows no third parties.
+- **Any 1.x.** Tested with 1.6. The example pins a version so the `integrity`
+  hash holds.
+- **`defer` and `async` work.** The engine is chosen when playback starts, not
+  when the player is created, so hls.js only has to be there by then.
+- **Without it,** nothing breaks: Safari and iOS play HLS natively, and so do
+  browsers that learn to.
+
+Checked in CI on the built file in Chrome (`e2e/script-tag.mjs`): the page's
+hls.js plays the stream, and the bundle contains none of it.
 
 ## Languages
 

@@ -48,7 +48,7 @@ beforeEach(() => {
 });
 
 async function attached() {
-  const e = new HlsEngine();
+  const e = new HlsEngine(async () => (await import('hls.js')).default);
   await e.attach(container, stream);
   withBuffered(e.element!, 36, 72);
   return { e, hls: instances[0]! };
