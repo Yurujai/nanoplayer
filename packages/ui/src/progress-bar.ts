@@ -222,17 +222,36 @@ export class ProgressBar {
   }
 
   #hover(ev: PointerEvent): void {
-    const d = this.player.duration || 0;
-    if (this.#markers.size === 0 || !(d > 0) || this.player.manifest?.live) return;
     const box = this.#range.getBoundingClientRect();
     if (box.width <= 0) return;
     const frac = Math.min(1, Math.max(0, (ev.clientX - box.left) / box.width));
-    const t = frac * d;
-    const label = this.#segmentAt(t);
-    this.#tip.textContent = label ? `${formatTime(t)} · ${label}` : formatTime(t);
+    const text = this.#tipText(frac);
+    if (text === null) {
+      this.#tip.hidden = true;
+      return;
+    }
+    this.#tip.textContent = text;
     // Clamped so it does not overflow the player's sides.
     this.#tip.style.left = `${Math.min(92, Math.max(8, frac * 100))}%`;
     this.#tip.hidden = false;
+  }
+
+  /**
+   * The time under the pointer, before committing to a seek. Live, the bar is
+   * the DVR window and the time is how far behind the edge that point is.
+   */
+  #tipText(frac: number): string | null {
+    const p = this.player;
+    if (p.manifest?.live) {
+      if (p.dvrWindow < MIN_DVR_WINDOW) return null;
+      const behind = (1 - frac) * p.dvrWindow;
+      return behind < 1 ? this.t('ui.live.badge') : `−${formatTime(behind)}`;
+    }
+    const d = p.duration || 0;
+    if (!(d > 0)) return null;
+    const t = frac * d;
+    const label = this.#segmentAt(t);
+    return label ? `${formatTime(t)} · ${label}` : formatTime(t);
   }
 
   #segmentAt(t: number): string | null {
