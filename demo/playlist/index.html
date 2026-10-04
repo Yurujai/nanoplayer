@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>NanoPlayer · Playlist demo</title>
+<meta name="description" content="Three lectures in a row: previous, next, a list to pick from, and the next one starting when one ends.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/src/site.css">
+<style>
+  .layout{display:grid;grid-template-columns:minmax(0,1fr) 17rem;gap:1rem;align-items:start}
+  @media (max-width:820px){.layout{grid-template-columns:1fr}}
+  .queue{list-style:none;margin:0;padding:.35rem;background:var(--card);border:1px solid var(--line);border-radius:10px}
+  .queue h2{margin:.4rem .5rem .5rem}
+  .queue ol{list-style:none;margin:0;padding:0}
+  .queue button{display:flex;gap:.7rem;align-items:baseline;width:100%;padding:.6rem .6rem;border:0;border-radius:8px;
+                background:transparent;color:var(--fg);font:inherit;text-align:left;cursor:pointer}
+  .queue button:hover{background:color-mix(in srgb,var(--fg) 7%,transparent)}
+  .queue button[aria-current="true"]{background:color-mix(in srgb,var(--accent) 16%,transparent)}
+  .queue .n{flex:0 0 auto;font-variant-numeric:tabular-nums;color:var(--dim);font-size:.9rem}
+  .queue .what{display:flex;flex-direction:column;gap:.1rem}
+  .queue .what b{font-weight:600;font-size:.95rem}
+  .queue .what span{color:var(--dim);font-size:.84rem}
+  .queue .now{font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+  .try-list{margin:0;padding-left:1.2rem}
+  .try-list li{margin:.3rem 0;max-width:66ch}
+</style>
+</head>
+<body>
+<main class="wide">
+  <p class="breadcrumb"><a href="../">← NanoPlayer</a></p>
+  <h1>Playlist demo</h1>
+  <p class="lead">
+    Three lectures in a row. Previous and next sit in the bar, the whole list in
+    the settings menu, and when one lecture ends the next one starts.
+  </p>
+
+  <div class="layout">
+    <div id="player" class="player"></div>
+    <nav class="queue" aria-labelledby="queue-title">
+      <h2 id="queue-title">In this course</h2>
+      <ol id="queue"></ol>
+    </nav>
+  </div>
+
+  <h2>What to try</h2>
+  <ul class="try-list">
+    <li><strong>Next and previous.</strong> In the bar, on the right with the other
+        buttons. Previous is not shown on the first lecture, nor next on the last.</li>
+    <li><strong>The list.</strong> <strong>⚙ Settings → Playlist</strong> jumps to any
+        lecture; so does the list beside the player.</li>
+    <li><strong>On to the next.</strong> Jump near the end of a lecture
+        (<kbd>9</kbd> goes to 90 %): when it finishes, the next one starts on its own.</li>
+    <li><strong>Each lecture is its own.</strong> The first has one video, the second
+        speaker and slides with chapters and captions, the third an intro and an
+        outro. The bar adapts to each.</li>
+    <li><strong>Keyboard.</strong> Press next with <kbd>Enter</kbd>: focus stays on
+        the button in the new lecture's bar, so you can keep going.</li>
+  </ul>
+
+  <h2>What it takes</h2>
+  <pre><code>&lt;script src="nanoplayer.min.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  const list = NanoPlayer.createPlaylist('#player', {
+    items: ['/api/video/1', '/api/video/2', { manifest: '/api/video/3', title: 'Entropy' }],
+    // start: 0, autoAdvance: true, loop: false, and any create() option
+  });
+  list.next(); list.previous(); list.go(2);
+&lt;/script&gt;</code></pre>
+  <p>
+    Each lecture gets a fresh player in the same container: a player belongs to
+    one manifest. With npm, <code>@nanoplayer/playlist</code> does the same given
+    a <code>create</code> function, as this page does.
+  </p>
+
+  <footer>
+    <p>
+      Source code and documentation on
+      <a href="https://github.com/Yurujai/nanoplayer">GitHub</a> · Apache-2.0
+    </p>
+  </footer>
+</main>
+<script type="module" src="/src/playlist.ts"></script>
+</body>
+</html>

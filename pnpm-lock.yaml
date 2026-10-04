@@ -26,6 +26,9 @@ importers:
       '@nanoplayer/engine-hls':
         specifier: workspace:*
         version: link:../packages/engine-hls
+      '@nanoplayer/playlist':
+        specifier: workspace:*
+        version: link:../packages/playlist
       '@nanoplayer/plugin-analytics':
         specifier: workspace:*
         version: link:../packages/plugin-analytics

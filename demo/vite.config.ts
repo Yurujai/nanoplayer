@@ -31,6 +31,8 @@ export default defineConfig({
         new URL('../packages/plugin-thumbnails/src/index.ts', import.meta.url)),
       '@nanoplayer/plugin-cast': fileURLToPath(
         new URL('../packages/plugin-cast/src/index.ts', import.meta.url)),
+      '@nanoplayer/playlist': fileURLToPath(
+        new URL('../packages/playlist/src/index.ts', import.meta.url)),
       '@nanoplayer/plugin-xapi': fileURLToPath(
         new URL('../packages/plugin-xapi/src/index.ts', import.meta.url)),
       '@nanoplayer/plugin-analytics': fileURLToPath(
@@ -46,6 +48,7 @@ export default defineConfig({
         video: fileURLToPath(new URL('video/index.html', import.meta.url)),
         live: fileURLToPath(new URL('live/index.html', import.meta.url)),
         bench: fileURLToPath(new URL('bench/index.html', import.meta.url)),
+        playlist: fileURLToPath(new URL('playlist/index.html', import.meta.url)),
         manifest: fileURLToPath(new URL('manifest/index.html', import.meta.url)),
         analytics: fileURLToPath(new URL('analytics/index.html', import.meta.url)),
       },

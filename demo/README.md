@@ -1,6 +1,6 @@
 # Demo
 
-The project's public website. Six pages served by the same Vite, published at
+The project's public website. Seven pages served by the same Vite, published at
 the root of GitHub Pages:
 
 | | |
@@ -8,6 +8,7 @@ the root of GitHub Pages:
 | [`index.html`](index.html) | **Landing page.** What the player is, why it exists and what it solves, and links to the rest |
 | [`video/`](video/index.html) | **Video demo.** The full player with MP4, single or dual, with or without intro and outro |
 | [`live/`](live/index.html) | **Live demo.** Dual live on a public test channel |
+| [`playlist/`](playlist/index.html) | **Playlist demo.** Three lectures in a row: one video, two with chapters and captions, and one with intro and outro |
 | [`bench/`](bench/index.html) | **Test bench** for the core, with the raw lifecycle |
 | [`manifest/`](manifest/index.html) | **Manifest reference.** Every field, and a complete example that plays |
 | [`analytics/`](analytics/index.html) | **Analytics and xAPI.** How viewing data is sent and what, with a live log |

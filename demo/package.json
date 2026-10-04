@@ -22,6 +22,7 @@
     "@nanoplayer/plugin-transcript": "workspace:*",
     "@nanoplayer/plugin-thumbnails": "workspace:*",
     "@nanoplayer/plugin-cast": "workspace:*",
+    "@nanoplayer/playlist": "workspace:*",
     "@nanoplayer/plugin-xapi": "workspace:*",
     "@nanoplayer/plugin-analytics": "workspace:*",
     "@nanoplayer/plugin-h5p": "workspace:*",

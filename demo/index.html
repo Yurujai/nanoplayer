@@ -13,7 +13,7 @@
   .cases{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
   .case{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:.9rem 1rem}
   .case p{margin:0;color:var(--dim);font-size:.94rem}
-  .entries{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem}
+  .entries{display:grid;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));gap:.75rem}
   .entry{display:flex;flex-direction:column;gap:.2rem;padding:1rem 1.1rem;border-radius:10px;
           border:1px solid var(--line);background:var(--card);color:var(--fg);text-decoration:none;
           transition:border-color .15s,transform .15s}
@@ -96,6 +96,9 @@
     </a>
     <a class="entry" href="live/">
       <b>Live demo</b><span>Two synced live streams</span>
+    </a>
+    <a class="entry" href="playlist/">
+      <b>Playlist demo</b><span>Three lectures in a row</span>
     </a>
     <a class="entry" href="bench/">
       <b>Test bench</b><span>The core, instrumented</span>

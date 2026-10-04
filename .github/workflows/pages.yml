@@ -5,6 +5,7 @@ name: Publish the site and the spikes
 #   /                        landing page
 #   /video/                  video demo (MP4, single and dual)
 #   /live/                   live demo
+#   /playlist/               playlist demo (three lectures in a row)
 #   /bench/                  core test bench
 #   /manifest/               manifest reference, with a complete example
 #   /analytics/              how analytics and xAPI send data
