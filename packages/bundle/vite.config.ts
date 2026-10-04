@@ -20,6 +20,7 @@ export default defineConfig({
       '@nanoplayer/plugin-transcript': src('../plugin-transcript/src/index.ts'),
       '@nanoplayer/plugin-xapi': src('../plugin-xapi/src/index.ts'),
       '@nanoplayer/plugin-thumbnails': src('../plugin-thumbnails/src/index.ts'),
+      '@nanoplayer/plugin-cast': src('../plugin-cast/src/index.ts'),
     },
   },
   build: {

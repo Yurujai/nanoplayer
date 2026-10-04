@@ -11,7 +11,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createContext, runInContext } from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
-const PACKAGES = ['core', 'ui', 'engine-hls', 'plugin-captions', 'plugin-chapters', 'plugin-pip', 'plugin-audio-tracks', 'plugin-media-session', 'plugin-quality', 'plugin-resume', 'plugin-transcript', 'plugin-xapi', 'plugin-thumbnails', 'bundle'];
+const PACKAGES = ['core', 'ui', 'engine-hls', 'plugin-captions', 'plugin-chapters', 'plugin-pip', 'plugin-audio-tracks', 'plugin-media-session', 'plugin-quality', 'plugin-resume', 'plugin-transcript', 'plugin-xapi', 'plugin-thumbnails', 'plugin-cast', 'bundle'];
 const root = new URL('../packages/', import.meta.url);
 
 let failures = 0;
@@ -79,6 +79,10 @@ check(core.plugins.has('xapi'),
 await import('@nanoplayer/plugin-thumbnails');
 check(core.plugins.has('thumbnails'),
   'and the thumbnails plugin',
+  `registered: [${core.plugins.registered.join(', ')}]`);
+await import('@nanoplayer/plugin-cast');
+check(core.plugins.has('cast'),
+  'and the cast plugin',
   `registered: [${core.plugins.registered.join(', ')}]`);
 
 const hls = await import('@nanoplayer/engine-hls');

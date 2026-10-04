@@ -18,7 +18,8 @@
     "@nanoplayer/plugin-resume": "workspace:*",
     "@nanoplayer/plugin-transcript": "workspace:*",
     "@nanoplayer/plugin-xapi": "workspace:*",
-    "@nanoplayer/plugin-thumbnails": "workspace:*"
+    "@nanoplayer/plugin-thumbnails": "workspace:*",
+    "@nanoplayer/plugin-cast": "workspace:*"
   },
   "devDependencies": { "axe-core": "^4.10.0", "hls.js": "^1.5.0", "playwright": "^1.49.0" }
 }

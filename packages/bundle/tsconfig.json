@@ -15,7 +15,8 @@
       "@nanoplayer/plugin-resume": ["../plugin-resume/src/index.ts"],
       "@nanoplayer/plugin-transcript": ["../plugin-transcript/src/index.ts"],
       "@nanoplayer/plugin-xapi": ["../plugin-xapi/src/index.ts"],
-      "@nanoplayer/plugin-thumbnails": ["../plugin-thumbnails/src/index.ts"]
+      "@nanoplayer/plugin-thumbnails": ["../plugin-thumbnails/src/index.ts"],
+      "@nanoplayer/plugin-cast": ["../plugin-cast/src/index.ts"]
     }
   },
   "include": ["src"]

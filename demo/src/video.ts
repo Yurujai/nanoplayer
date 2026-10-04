@@ -9,6 +9,7 @@ import '@nanoplayer/plugin-quality';
 import '@nanoplayer/plugin-resume';
 import '@nanoplayer/plugin-transcript';
 import '@nanoplayer/plugin-thumbnails';
+import '@nanoplayer/plugin-cast';
 
 // The page lives under /video/ and the media at the site root.
 const MEDIA = '../media/';

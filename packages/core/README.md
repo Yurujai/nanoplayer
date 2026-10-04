@@ -234,6 +234,22 @@ the picture above the time. Image URLs are relative to the WebVTT file. Times
 are media time, like annotations, so a trim does not shift them. The file is
 fetched when playback starts or on the first hover, not with the page.
 
+### Chromecast and AirPlay
+
+With `@nanoplayer/plugin-cast` loaded, a button appears in the bar **when a
+device is available**, and opens the browser's own picker. It uses the
+standard Remote Playback API, which Chrome (desktop and Android) and Safari
+(macOS and iOS) implement: no Google SDK, no receiver app to register. The
+`<video>` stays in charge while it plays remotely, so the control bar keeps
+working, and the player says the picture is on another screen.
+
+- **Only the master is sent**, the stream with the sound: remote playback is
+  per element, and one screen shows one video.
+- **AirPlay needs a plain source.** Under hls.js the element plays Media Source
+  buffers, which AirPlay cannot take; where Safari plays the HLS natively, or
+  with MP4, it works.
+- Older Safari without the standard API falls back to its AirPlay picker.
+
 ### Progress to the LMS (xAPI)
 
 `@nanoplayer/plugin-xapi` reports what was watched as [xAPI Video

@@ -29,6 +29,8 @@ export default defineConfig({
         new URL('../packages/plugin-transcript/src/index.ts', import.meta.url)),
       '@nanoplayer/plugin-thumbnails': fileURLToPath(
         new URL('../packages/plugin-thumbnails/src/index.ts', import.meta.url)),
+      '@nanoplayer/plugin-cast': fileURLToPath(
+        new URL('../packages/plugin-cast/src/index.ts', import.meta.url)),
     },
   },
   build: {

@@ -32,6 +32,9 @@ importers:
       '@nanoplayer/plugin-captions':
         specifier: workspace:*
         version: link:../packages/plugin-captions
+      '@nanoplayer/plugin-cast':
+        specifier: workspace:*
+        version: link:../packages/plugin-cast
       '@nanoplayer/plugin-chapters':
         specifier: workspace:*
         version: link:../packages/plugin-chapters
@@ -81,6 +84,9 @@ importers:
       '@nanoplayer/plugin-captions':
         specifier: workspace:*
         version: link:../packages/plugin-captions
+      '@nanoplayer/plugin-cast':
+        specifier: workspace:*
+        version: link:../packages/plugin-cast
       '@nanoplayer/plugin-chapters':
         specifier: workspace:*
         version: link:../packages/plugin-chapters
@@ -133,6 +139,9 @@ importers:
       '@nanoplayer/plugin-captions':
         specifier: workspace:*
         version: link:../plugin-captions
+      '@nanoplayer/plugin-cast':
+        specifier: workspace:*
+        version: link:../plugin-cast
       '@nanoplayer/plugin-chapters':
         specifier: workspace:*
         version: link:../plugin-chapters
@@ -195,6 +204,16 @@ importers:
         version: 6.4.3(@types/node@26.1.2)
 
   packages/plugin-captions:
+    dependencies:
+      '@nanoplayer/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.3(@types/node@26.1.2)
+
+  packages/plugin-cast:
     dependencies:
       '@nanoplayer/core':
         specifier: workspace:*

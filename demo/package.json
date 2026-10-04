@@ -21,6 +21,7 @@
     "@nanoplayer/plugin-resume": "workspace:*",
     "@nanoplayer/plugin-transcript": "workspace:*",
     "@nanoplayer/plugin-thumbnails": "workspace:*",
+    "@nanoplayer/plugin-cast": "workspace:*",
     "@nanoplayer/engine-hls": "workspace:*"
   },
   "devDependencies": {
