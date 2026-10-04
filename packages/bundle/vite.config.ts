@@ -18,6 +18,7 @@ export default defineConfig({
       '@nanoplayer/plugin-quality': src('../plugin-quality/src/index.ts'),
       '@nanoplayer/plugin-resume': src('../plugin-resume/src/index.ts'),
       '@nanoplayer/plugin-transcript': src('../plugin-transcript/src/index.ts'),
+      '@nanoplayer/plugin-xapi': src('../plugin-xapi/src/index.ts'),
     },
   },
   build: {

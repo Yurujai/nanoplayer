@@ -27,6 +27,7 @@ import '@nanoplayer/plugin-media-session';
 import '@nanoplayer/plugin-quality';
 import '@nanoplayer/plugin-resume';
 import '@nanoplayer/plugin-transcript';
+import '@nanoplayer/plugin-xapi';
 
 export interface Config extends CreateConfig {
   /** Control bar, on by default. `false` leaves it out; an object configures it. */

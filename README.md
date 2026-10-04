@@ -72,7 +72,8 @@ first time HLS has to play: whoever plays MP4 does not pay for it.
 | [`@nanoplayer/plugin-quality`](packages/plugin-quality/) | Quality: HLS levels or MP4 sources, or automatic |
 | [`@nanoplayer/plugin-resume`](packages/plugin-resume/) | Resume where the viewer left off, locally or through an LMS store |
 | [`@nanoplayer/plugin-transcript`](packages/plugin-transcript/) | Interactive transcript below the player: follow along, click to jump |
-| [`@nanoplayer/bundle`](packages/bundle/) | All of the above in one file, for the `<script>` tag; hls.js comes from its own tag. 37 KB gzip |
+| [`@nanoplayer/plugin-xapi`](packages/plugin-xapi/) | Progress and completion to the LMS, as xAPI Video Profile statements |
+| [`@nanoplayer/bundle`](packages/bundle/) | All of the above in one file, for the `<script>` tag; hls.js comes from its own tag. 39 KB gzip |
 
 ## What is missing
 

@@ -210,6 +210,37 @@ own picker.
 The panel sits right after the player's element, on the page, so it inherits
 the page's colours and fonts. It is not shown in full screen.
 
+### Progress to the LMS (xAPI)
+
+`@nanoplayer/plugin-xapi` reports what was watched as [xAPI Video
+Profile](https://w3id.org/xapi/video) statements, which any LRS reads:
+`initialized` and `played` on the first play, then `paused`, `seeked`,
+`completed` and `terminated` when the page goes away. Progress counts what was
+really watched, each second once: dragging to the end does not complete a
+lecture. The intro and outro are left out.
+
+It is off unless configured, as it needs somewhere to report to: an LRS, or
+the LMS's own channel.
+
+```js
+create('#player', {
+  manifest,
+  plugins: {
+    xapi: {
+      endpoint: 'https://lrs.example.org/xapi',   // statements go to …/statements
+      auth: 'Basic ' + btoa('key:secret'),
+      actor: { objectType: 'Agent', mbox: 'mailto:student@example.org' },
+      // send: (statement) => lms.record(statement),  // instead of endpoint
+      // activityId: 'https://lms.example.org/course/7/lecture/3',
+      // completionThreshold: 0.9,
+    },
+  },
+});
+```
+
+The activity id defaults to `urn:nanoplayer:video:<manifest id>`. A failing
+LRS never stops playback.
+
 ### Audio only
 
 Nothing needs declaring: the MIME type is enough.
