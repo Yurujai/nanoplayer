@@ -168,3 +168,14 @@ describe('NanoPlayer.create · autoplay and loop', () => {
     expect(play).not.toHaveBeenCalled();
   });
 });
+
+describe('NanoPlayer.create · leaving the container clean', () => {
+  it('destroying takes the chain\'s phase off the container, for whoever uses it next', async () => {
+    const withIntro = { ...MANIFEST, intro: { sources: [{ src: 'intro.mp4', type: 'video/mp4' }] } };
+    const p = create('#p', { manifest: withIntro as never, registry: false });
+    await p.resolve();
+    expect(p.container.dataset['phase']).toBe('intro');
+    p.destroy();
+    expect(p.container.dataset['phase']).toBeUndefined();
+  });
+});

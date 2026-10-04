@@ -594,6 +594,9 @@ export class Player {
     if (this.#lc.isDestroyed) return;
     this.#broadcast.reset();
     this.#releaseEngines();
+    // The chain marks the container; a playlist reusing it for a lecture
+    // without an intro inherited the previous one's "intro".
+    delete this.#opts.container.dataset['phase'];
     this.#lc.destroy();
     this.bus.clear();
   }
