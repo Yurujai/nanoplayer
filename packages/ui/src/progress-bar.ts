@@ -9,6 +9,8 @@ import { formatTime, spokenTime } from './format.js';
  * nothing to scrub through, and a control that leads nowhere is noise.
  */
 const MIN_DVR_WINDOW = 30;
+/** Smaller than this, a thumbnail shows nothing recognisable. */
+const MIN_THUMB_SCALE = 0.45;
 
 interface Segment { start: number; end: number; label: string }
 
@@ -25,6 +27,9 @@ export class ProgressBar {
   readonly row: HTMLElement;
   readonly time: HTMLElement;
   readonly segment: HTMLElement;
+  /** The time in two parts, so a narrow player can drop the total and keep "0:42". */
+  readonly #timeNow: HTMLElement;
+  readonly #timeTotal: HTMLElement;
   readonly #range: HTMLInputElement;
   readonly #marks: HTMLElement;
   readonly #tip: HTMLElement;
@@ -63,6 +68,10 @@ export class ProgressBar {
 
     this.time = doc.createElement('span');
     this.time.className = 'np__time';
+    this.#timeNow = doc.createElement('span');
+    this.#timeTotal = doc.createElement('span');
+    this.#timeTotal.className = 'np__time-total';
+    this.time.append(this.#timeNow, this.#timeTotal);
     // Already spoken through the slider's aria-valuetext; repeating it in a live
     // region would be a constant, unbearable drip.
     this.time.setAttribute('aria-hidden', 'true');
@@ -144,8 +153,7 @@ export class ProgressBar {
     const name = this.t(this.player.phase === 'intro' ? 'ui.chain.intro' : 'ui.chain.outro');
     // The bumper's engine is not exposed; its time arrives through `chain:time`,
     // and until it does only the name is shown.
-    this.time.textContent = this.#bumperLeft === null
-      ? name : `${name} · ${formatTime(this.#bumperLeft)}`;
+    this.#setTime(this.#bumperLeft === null ? name : `${name} · ${formatTime(this.#bumperLeft)}`);
   }
 
   /**
@@ -172,7 +180,7 @@ export class ProgressBar {
     // starts there must be no LIVE badge over an empty screen, nor a "−0:00"
     // behind an edge that does not exist.
     const onAir = p.liveStatus === 'live';
-    this.time.textContent = !onAir || p.atLiveEdge ? '' : `−${formatTime(p.behindLive)}`;
+    this.#setTime(!onAir || p.atLiveEdge ? '' : `−${formatTime(p.behindLive)}`);
     this.#renderBadge(onAir);
   }
 
@@ -212,10 +220,16 @@ export class ProgressBar {
     const spoken = spokenTime(t, this.t.lang);
     this.#range.setAttribute('aria-valuetext', label ? `${spoken}, ${label}` : spoken);
     const d = this.player.duration;
-    this.time.textContent = this.remaining
-      ? `−${formatTime(Math.max(0, (d || 0) - t))} / ${formatTime(d)}`
-      : `${formatTime(t)} / ${formatTime(d)}`;
+    this.#setTime(
+      this.remaining ? `−${formatTime(Math.max(0, (d || 0) - t))}` : formatTime(t),
+      ` / ${formatTime(d)}`,
+    );
     this.segment.textContent = label ?? '';
+  }
+
+  #setTime(now: string, total = ''): void {
+    if (this.#timeNow.textContent !== now) this.#timeNow.textContent = now;
+    if (this.#timeTotal.textContent !== total) this.#timeTotal.textContent = total;
   }
 
   #preview(): void {
@@ -247,8 +261,10 @@ export class ProgressBar {
     const image = this.player.manifest?.live ? null : this.#imageAt(frac * (this.player.duration || 0));
     const label = this.doc.createElement('span');
     label.textContent = text;
-    this.#tip.replaceChildren(...(image ? [this.#thumb(image)] : []), label);
+    const thumb = image ? this.#thumb(image) : null;
+    this.#tip.replaceChildren(...(thumb ? [thumb] : []), label);
     this.#tip.hidden = false;
+    if (thumb) this.#fitThumb(thumb);
     // Clamped by its own width, so a picture does not overflow the player's sides.
     const half = this.#tip.offsetWidth / 2;
     const x = frac * box.width;
@@ -262,6 +278,22 @@ export class ProgressBar {
       if (image) return image;
     }
     return null;
+  }
+
+  /**
+   * In a short player the picture ran off the top: it is scaled down to the
+   * room above the bar, and left out when that would make it a postage stamp.
+   */
+  #fitThumb(thumb: HTMLElement): void {
+    const root = this.row.closest('.np');
+    if (!root) return;
+    const room = this.#tip.getBoundingClientRect().bottom - root.getBoundingClientRect().top - 8;
+    const tall = this.#tip.getBoundingClientRect().height;
+    if (tall <= room || tall <= 0) return;
+    const label = tall - thumb.getBoundingClientRect().height;
+    const scale = (room - label) / thumb.getBoundingClientRect().height;
+    if (scale < MIN_THUMB_SCALE) thumb.remove();
+    else thumb.style.zoom = String(scale);
   }
 
   /** A sprite region as a background, so one sheet serves many points. */

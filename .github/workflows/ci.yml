@@ -79,6 +79,12 @@ jobs:
         run: node keyboard.mjs --serve ../demo/dist
         working-directory: e2e
 
+      # Container queries and the bar's fitting need a real layout: no control
+      # outside the player or out of reach, at any width, in two engines.
+      - name: Responsive layout
+        run: node responsive.mjs --serve ../demo/dist
+        working-directory: e2e
+
       # Unit tests chain fake engines that never reject a play(): only a real
       # browser shows whether the outro survives start-up.
       - name: Intro and outro chaining

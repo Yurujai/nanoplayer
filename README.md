@@ -172,6 +172,7 @@ auditing what is actually deployed is more faithful:
 pnpm --filter @nanoplayer/demo build
 cd e2e && node a11y.mjs --serve ../demo/dist
 node keyboard.mjs --serve ../demo/dist
+node responsive.mjs --serve ../demo/dist
 node chaining.mjs --serve ../demo/dist
 ```
 

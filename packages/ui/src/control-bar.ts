@@ -156,7 +156,7 @@ export class ControlBar implements UiSlots {
     row.className = 'np__row';
     row.append(this.#playButton, this.#volume.element, this.#progress.time,
       this.#progress.segment, spacer);
-    this.#pluginControls = new PluginControls(doc, () => this.#menu, this.#t);
+    this.#pluginControls = new PluginControls(doc, () => this.#menu, this.#t, () => this.#volume.growth());
     row.append(this.#pluginControls.element);
     this.#menu = new SettingsMenu(row, this.#t);
     row.append(this.#fullscreen.element);
@@ -388,6 +388,8 @@ export class ControlBar implements UiSlots {
     if (typeof ResizeObserver !== 'undefined') {
       this.#resizeObserver = new ResizeObserver(() => this.#pluginControls.render());
       this.#resizeObserver.observe(this.#root);
+      // The time readout grows too ("Intro · 0:05", "10:00"): what fits beside it changes.
+      this.#resizeObserver.observe(this.#progress.time);
     }
 
     this.#wake();

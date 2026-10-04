@@ -40,6 +40,10 @@ export type SettingsPanel = SettingsChoicePanel | SettingsGroupPanel;
 
 const isGroup = (p: SettingsPanel): p is SettingsGroupPanel => 'panels' in p;
 
+/** Less room than this above the controls, and the menu covers the player instead. */
+const MIN_MENU_HEIGHT = 160;
+const MENU_GAP = 8;
+
 export class SettingsMenu {
   readonly #button: HTMLButtonElement;
   readonly #popup: HTMLElement;
@@ -80,7 +84,8 @@ export class SettingsMenu {
     // `pointerdown`, not `click`, so releasing over the gear does not reopen it.
     const outside = (ev: Event) => {
       if (!this.#open) return;
-      if (!wrapper.contains(ev.target as Node)) this.close();
+      const target = ev.target as Node;
+      if (!wrapper.contains(target) && !this.#popup.contains(target)) this.close();
     };
     doc.addEventListener('pointerdown', outside, true);
     this.#unsubscribe.push(() => doc.removeEventListener('pointerdown', outside, true));
@@ -120,7 +125,7 @@ export class SettingsMenu {
     this.#path = [];
     this.#popup.hidden = false;
     this.#button.setAttribute('aria-expanded', 'true');
-    this.#fitHeight();
+    this.#place();
     this.#render();
     this.#focusFirst();
   }
@@ -142,16 +147,23 @@ export class SettingsMenu {
   }
 
   /**
-   * The player root has `overflow:hidden`, so a menu taller than the space
-   * above the bar would be clipped and leave options unreachable.
+   * Placed in the player, not next to the gear: anchored to the gear it ran
+   * off the left side of a narrow player, and the root's `overflow:hidden`
+   * cut off whatever stuck out. Above the controls when there is room; in a
+   * player too short for that, over the whole player, scrolling, rather than
+   * clipped with options out of reach.
    */
-  #fitHeight(): void {
+  #place(): void {
     const root = this.#button.closest('.np') as HTMLElement | null;
     if (!root) return;
-    const bar = this.#button.closest('.np__bar') as HTMLElement | null;
-    const barHeight = bar?.getBoundingClientRect().height ?? 0;
-    const available = root.getBoundingClientRect().height - barHeight - 16;
-    this.#popup.style.maxHeight = `${Math.max(140, available)}px`;
+    if (this.#popup.parentElement !== root) root.appendChild(this.#popup);
+    const box = root.getBoundingClientRect();
+    const row = (this.#button.closest('.np__row') as HTMLElement | null) ?? this.#button;
+    const above = row.getBoundingClientRect().top - box.top - MENU_GAP * 2;
+    const sheet = above < MIN_MENU_HEIGHT;
+    this.#popup.classList.toggle('np__menu--sheet', sheet);
+    this.#popup.style.bottom = sheet ? '' : `${box.bottom - row.getBoundingClientRect().top + MENU_GAP}px`;
+    this.#popup.style.maxHeight = sheet ? '' : `${above}px`;
   }
 
   #render(): void {

@@ -30,6 +30,17 @@ export class VolumeControl {
     this.#listeners.on(this.#slider, 'input', () => this.set(Number(this.#slider.value)));
   }
 
+  /**
+   * How much wider hovering makes it. The bar keeps that room free: growing
+   * into a full row pushed the last control, full screen, out of the player.
+   * The slider's open size lives in the stylesheet (5rem plus .75rem margin).
+   */
+  growth(): number {
+    if (getComputedStyle(this.#slider).display === 'none') return 0;
+    const rem = parseFloat(getComputedStyle(this.element.ownerDocument.documentElement).fontSize) || 16;
+    return Math.max(0, rem * 5.75 - this.#slider.getBoundingClientRect().width);
+  }
+
   get value(): number {
     return Number(this.#slider.value);
   }

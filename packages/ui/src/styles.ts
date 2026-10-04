@@ -210,7 +210,8 @@ button.np__btn[disabled]{opacity:.4;cursor:default}
   display:inline-block;max-width:100%;
   background:var(--np-cue-bg,rgba(0,0,0,.78));
   color:var(--np-cue-color,#fff);
-  font-size:calc(var(--np-cue-size) * var(--np-cue-scale,1));
+  /* Capped by the player's width: 200 % in a phone-sized player ran off its top. */
+  font-size:min(calc(var(--np-cue-size) * var(--np-cue-scale,1)), 8cqw);
   font-family:var(--np-cue-font,inherit);
   font-variant:var(--np-cue-variant,normal);
   text-shadow:var(--np-cue-edge,none);
@@ -308,13 +309,15 @@ button.np__live:focus-visible{outline:3px solid var(--np-color-focus);outline-of
 /* --- settings menu --- */
 .np__menu-anchor{position:relative;display:inline-flex}
 .np__menu{
-  position:absolute;right:0;bottom:calc(100% + .5rem);
-  min-width:12rem;max-width:min(18rem,90vw);
-  max-height:min(20rem,50vh);overflow-y:auto;
+  /* In the player (see SettingsMenu#place), never wider than it. */
+  position:absolute;right:.5rem;z-index:var(--np-z-alert);
+  min-width:min(12rem,calc(100% - 1rem));max-width:min(18rem,calc(100% - 1rem));
+  overflow-y:auto;
   background:rgba(20,22,26,.96);border-radius:var(--np-radius);
   box-shadow:0 8px 28px rgba(0,0,0,.5);
   padding:.3rem;font-size:.875rem;
 }
+.np__menu--sheet{top:.5rem;bottom:.5rem}
 .np__menu [role="menu"]{display:flex;flex-direction:column}
 .np__menu button{
   display:flex;align-items:center;gap:.5rem;
@@ -327,11 +330,12 @@ button.np__live:focus-visible{outline:3px solid var(--np-color-focus);outline-of
 .np__menu button:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:-3px}
 .np__menu-item--parent{justify-content:space-between}
 .np__menu-value{
-  display:inline-flex;align-items:center;gap:.15rem;
+  display:inline-flex;align-items:center;gap:.15rem;flex-shrink:0;
   color:var(--np-color-control-dim);
   white-space:nowrap;
 }
-.np__menu-item--parent>span:first-child{white-space:nowrap}
+/* A long label wraps instead of running out of a narrow menu. */
+.np__menu-item--parent>span:first-child{min-width:0;overflow-wrap:anywhere}
 .np__menu-chevron{font-size:1.15em;line-height:1}
 .np__menu-tick{width:1rem;flex:0 0 1rem;color:var(--np-color-accent)}
 .np__menu-back{
@@ -346,7 +350,7 @@ button.np__live:focus-visible{outline:3px solid var(--np-color-focus);outline-of
 .np--layout-pip .np__stage{position:relative;display:block}
 .np--layout-pip .np__stage>[data-role="presentation"]{width:100%}
 .np--layout-pip .np__stage>[data-role="presenter"]{
-  position:absolute;right:1rem;bottom:7rem;width:28%;min-width:8rem;
+  position:absolute;right:1rem;bottom:7rem;width:28%;min-width:min(8rem,40%);
   transition:bottom var(--np-transition);
   border-radius:var(--np-radius);overflow:hidden;
   box-shadow:0 4px 16px rgba(0,0,0,.6);z-index:var(--np-z-pip);
@@ -354,8 +358,31 @@ button.np__live:focus-visible{outline:3px solid var(--np-color-focus);outline-of
 
 .np--inactive.np--layout-pip .np__stage>[data-role="presenter"]{bottom:1rem}
 
-@media (max-width:640px){
+/* By the player's width, not the window's: a player in a narrow column of a
+   wide page must adapt too. */
+@container (max-width:640px){
   .np--layout-side-by-side .np__stage{flex-direction:column}
+}
+
+/* --- narrow players ---
+   Every control stays reachable and inside the box: what goes first is what
+   is said elsewhere (the slider speaks the time and chapter, the arrow keys
+   set the volume), never a control. */
+@container (max-width:480px){
+  .np__bar{--np-control-size:2.25rem;padding:2rem .4rem .35rem}
+  /* Just above the compact controls: the full bar's offset left a short
+     player no room for a caption. */
+  .np:not(.np--inactive) .np__overlay--captions{bottom:3.4rem}
+  .np__cue{--np-cue-size:clamp(.8rem,4.5cqw,.95rem)}
+  .np__volume .np__range{display:none}
+  .np__segment{display:none}
+  .np__time{padding:0 .3rem}
+}
+@container (max-width:360px){
+  .np__time-total{display:none}
+}
+@container (max-width:250px){
+  .np__time{display:none}
 }
 
 /* --- intro and outro ---
@@ -395,7 +422,7 @@ button.np__skip svg{width:1.25rem;height:1.25rem;fill:currentColor;pointer-event
   background:rgba(10,12,16,.96);
 }
 .np-h5p:focus{outline:none}
-.np-h5p__header{display:flex;align-items:center;gap:.75rem;padding:.5rem .75rem}
+.np-h5p__header{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .75rem;padding:.5rem .75rem}
 .np-h5p__title{margin:0;flex:1;font-size:1rem;font-weight:600;color:var(--np-color-control)}
 button.np-h5p__continue{
   padding:.5rem 1rem;min-height:2.5rem;border:0;border-radius:var(--np-radius);

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "scripts": { "a11y": "node a11y.mjs", "dist": "node dist.mjs", "script-tag": "node script-tag.mjs", "keyboard": "node keyboard.mjs", "chaining": "node chaining.mjs --serve ../demo/dist", "integration": "node integration.mjs" },
+  "scripts": { "a11y": "node a11y.mjs", "dist": "node dist.mjs", "script-tag": "node script-tag.mjs", "keyboard": "node keyboard.mjs", "responsive": "node responsive.mjs --serve ../demo/dist", "chaining": "node chaining.mjs --serve ../demo/dist", "integration": "node integration.mjs" },
   "dependencies": {
     "@nanoplayer/bundle": "workspace:*",
     "@nanoplayer/core": "workspace:*",

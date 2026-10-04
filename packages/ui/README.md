@@ -34,6 +34,26 @@ attachControls(player, { timeDisplay: 'remaining', aspectRatio: '16:9' });
 With the bundle, the same options go under `controls`:
 `NanoPlayer.create('#p', { manifest, controls: { aspectRatio: '16:9' } })`.
 
+## Any size
+
+The player follows **its own width**, not the window's (CSS container
+queries), so it adapts in a narrow column of a wide page as on a phone. At any
+width every control stays inside the player and reachable; what gives way
+first is what is said elsewhere:
+
+| Player width | |
+|---|---|
+| under 640 px | Two videos side by side stack |
+| under 480 px | Compact controls (36 px, still above WCAG's 24 px); the volume slider and the chapter name go: the mute button and the arrow keys remain, and the progress bar speaks the chapter |
+| under 360 px | The time shows only the position: "0:42" |
+| under 250 px | The time goes; the progress bar still speaks it |
+
+Plugin buttons that do not fit move to **Settings → More**, never out of
+reach. The settings menu is placed within the player; in one too short for it,
+it covers the player and scrolls. Captions scale with the player's width, and
+thumbnails shrink to the room above the bar. `e2e/responsive.mjs` checks all
+of this from 240 to 1440 px in Chromium and WebKit.
+
 ## Accessibility
 
 Not an intention: it is checked in CI and **blocks the merge**.

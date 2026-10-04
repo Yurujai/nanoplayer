@@ -24,6 +24,8 @@ export class PluginControls {
     /** A getter: the menu is created after this, to sit to its right in the row. */
     private readonly menu: () => SettingsMenu,
     private readonly t: Translate,
+    /** Room other controls may still take, as the volume slider opening on hover. */
+    private readonly reserve: () => number = () => 0,
   ) {
     this.element = doc.createElement('span');
     this.element.className = 'np__plugins';
@@ -86,9 +88,13 @@ export class PluginControls {
     const row = this.element.parentElement;
     if (!row) return 0;
     const buttonWidth = this.element.getBoundingClientRect().height || 40;
-    let taken = 0;
+    // The gaps count too: leaving them out overflowed a 300 px row by 13 px.
+    const gap = parseFloat(getComputedStyle(row).columnGap) || 0;
+    let taken = this.reserve() + gap * (row.children.length - 1);
     for (const child of row.children) {
-      if (child === this.element || child.classList.contains('np__spacer')) continue;
+      // The chapter title shrinks to nothing; buttons should not give way to it.
+      if (child === this.element || child.classList.contains('np__spacer')
+        || child.classList.contains('np__segment')) continue;
       taken += child.getBoundingClientRect().width;
     }
     return Math.max(0, Math.floor((row.getBoundingClientRect().width - taken) / buttonWidth));
