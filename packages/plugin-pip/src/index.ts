@@ -9,7 +9,7 @@
  * layout already goes by "picture in picture".
  */
 import {
-  isAudioOnlyManifest, plugins, strings,
+  icon, isAudioOnlyManifest, plugins, strings,
   type Player, type PluginContext, type PluginImpl,
 } from '@nanoplayer/core';
 
@@ -23,11 +23,10 @@ strings.register('en', {
 });
 
 /** A small window in the corner of a larger one. */
-const ICON =
-  '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill-rule="evenodd" d="'
-  + 'M3 4.5h18A1.5 1.5 0 0 1 22.5 6v12a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 18V6A1.5 1.5 0 0 1 3 4.5z'
-  + 'M3.3 6.3v11.4h17.4V6.3z'
-  + 'M12 11.5h7v5h-7z"/></svg>';
+const ICON = icon.svg(
+  icon.line('M4.5 5h15A2.5 2.5 0 0 1 22 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 2 16.5v-9A2.5 2.5 0 0 1 4.5 5z'),
+  icon.solid('M13 11.5h6v4.5h-6z'),
+);
 
 /** Safari before the standard API, and iPhones without it. */
 type WebkitVideo = HTMLVideoElement & {

@@ -4,7 +4,7 @@
  * for reading at one's own pace what the captions only flash by.
  */
 import {
-  parseVtt, plugins, strings,
+  icon, parseVtt, plugins, strings,
   type Player, type PluginContext, type PluginImpl, type TextTrackDef, type Translate,
   type VttCue,
 } from '@nanoplayer/core';
@@ -25,9 +25,16 @@ strings.register('en', {
   'transcript.empty': 'This track has no text.',
 });
 
-/** Lines of text on a page. */
-const ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="'
-  + 'M5 3h10l4 4v14H5zm2 2v14h10V8h-3V5zm2 6h6v1.6H9zm0 3h6v1.6H9zm0 3h4v1.6H9z"/></svg>';
+/** Lines of text on a page; filled while the panel is open, the player's rule for toggles. */
+const PAGE = 'M7 3h7.5L19 7.5V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z';
+/** The text lines as rounded holes, one per line. */
+const HOLES = [
+  'M8.5 7.55H11.5A0.95 0.95 0 0 1 11.5 9.45H8.5A0.95 0.95 0 0 1 8.5 7.55Z',
+  'M8.5 11.05H15.5A0.95 0.95 0 0 1 15.5 12.95H8.5A0.95 0.95 0 0 1 8.5 11.05Z',
+  'M8.5 14.55H15.5A0.95 0.95 0 0 1 15.5 16.45H8.5A0.95 0.95 0 0 1 8.5 14.55Z',
+].join('');
+const ICON_OPEN = icon.svg(icon.cut(PAGE + HOLES));
+const ICON_CLOSED = icon.svg(icon.outline(PAGE), icon.outline('M8.5 8.5h3M8.5 12h7M8.5 15.5h7'));
 
 /** After the viewer scrolls the list, it is theirs for this long. */
 const HANDS_OFF_MS = 4000;
@@ -67,7 +74,8 @@ class Transcript implements PluginImpl {
     ctx.whenUi((ui) => {
       const view = new TranscriptView(ctx.player, ctx.t, tracks, initialTrack(tracks, ctx.lang));
       const panel = ui.addPanel({
-        id: 'transcript', label: ctx.t('transcript.label'), icon: ICON,
+        id: 'transcript', label: ctx.t('transcript.label'),
+        icon: (open) => (open ? ICON_OPEN : ICON_CLOSED),
         onOpen: () => view.open(),
       });
       panel.element.appendChild(view.element);

@@ -224,7 +224,7 @@ export class ControlBar implements UiSlots {
 
     const removeButton = this.#pluginControls.add({
       id: `panel-${decl.id}`,
-      icon: decl.icon,
+      icon: () => (typeof decl.icon === 'function' ? decl.icon(!section.hidden) : decl.icon),
       label: decl.label,
       priority: 35,
       pressed: () => !section.hidden,

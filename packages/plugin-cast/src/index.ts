@@ -9,7 +9,7 @@
  * element, and one screen shows one video.
  */
 import {
-  plugins, strings,
+  icon, plugins, strings,
   type PluginContext, type PluginImpl, type UiSlots,
 } from '@nanoplayer/core';
 
@@ -22,9 +22,17 @@ strings.register('en', {
   'cast.connected': 'Playing on another screen',
 });
 
-/** A screen with a signal: the usual cast glyph. */
-const ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="'
-  + 'M3 5h18v14h-6v-2h4V7H5v3H3zm0 7a8 8 0 0 1 8 8H9a6 6 0 0 0-6-6zm0 4a4 4 0 0 1 4 4H3z"/></svg>';
+/** A screen with a signal. Connected, the screen fills: the player's rule for toggles. */
+const WAVES = 'M3 12.2a6.8 6.8 0 0 1 6.8 6.8M3 15.6a3.4 3.4 0 0 1 3.4 3.4';
+const DOT = 'M3.7 17.3a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5z';
+const ICON = icon.svg(
+  icon.line('M3 8.5v-1A2.5 2.5 0 0 1 5.5 5h13A2.5 2.5 0 0 1 21 7.5v9a2.5 2.5 0 0 1-2.5 2.5H14'),
+  icon.line(WAVES), icon.solid(DOT),
+);
+const ICON_CONNECTED = icon.svg(
+  icon.solid('M3 8.6V7.5A2.5 2.5 0 0 1 5.5 5h13A2.5 2.5 0 0 1 21 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-4.3A11.2 11.2 0 0 0 3 8.6z'),
+  icon.line(WAVES), icon.solid(DOT),
+);
 
 /** Safari before the standard API. */
 type WebkitVideo = HTMLVideoElement & {
@@ -67,7 +75,7 @@ class Cast implements PluginImpl {
       this.#unsubscribe.push(slots.addBarControl({
         id: 'cast',
         priority: 45,
-        icon: ICON,
+        icon: () => (this.#connected ? ICON_CONNECTED : ICON),
         label: () => ctx.t(this.#connected ? 'cast.connected' : 'cast.start'),
         pressed: () => this.#connected,
         // Only with a device to send to: a button that finds nothing is noise.

@@ -202,7 +202,10 @@ describe('panel slot', () => {
   it('is a named region below the player, closed, with a toggle in the bar', async () => {
     const { bar } = await withBar();
     const onOpen = vi.fn();
-    const panel = bar.addPanel({ id: 'transcript', label: 'Transcript', icon: '<svg></svg>', onOpen });
+    const panel = bar.addPanel({
+      id: 'transcript', label: 'Transcript', onOpen,
+      icon: (open) => `<svg data-open="${open}"></svg>`,
+    });
     bar.refresh();
     expect(panel.element.previousElementSibling, 'right after the player').toBe(host);
     expect(panel.element.tagName).toBe('SECTION');
@@ -216,6 +219,8 @@ describe('panel slot', () => {
     expect(panel.isOpen).toBe(true);
     expect(onOpen).toHaveBeenCalledOnce();
     expect(host.querySelector('[data-control="panel-transcript"]')!.getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector('[data-control="panel-transcript"] svg')!.getAttribute('data-open'),
+      'the icon follows the state').toBe('true');
   });
 
   it('goes away with its button', async () => {

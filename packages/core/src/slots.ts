@@ -114,8 +114,8 @@ export interface PanelDecl {
   id: string;
   /** Names both the region and the bar button that shows it. */
   label: string;
-  /** Inline SVG for that button. */
-  icon: string;
+  /** Inline SVG for that button; a function gets whether the panel is open, for its toggle state. */
+  icon: string | ((open: boolean) => string);
   /** Called on every opening: content can be loaded only when wanted. */
   onOpen?: () => void;
   /** Starts open. Closed by default: it takes room on the page. */

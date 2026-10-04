@@ -289,3 +289,23 @@ without forking:
   --np-radius: 0;
 }
 ```
+
+### Icons
+
+One family: filled shapes with rounded corners, details in a thick round
+stroke, and a soft shadow so they read over a white slide. Toggles show their
+state **by form, never by colour alone**: filled when on, outlined when off
+(captions, transcript, casting). Skip intro is a fast-forward, distinct from a
+playlist's next.
+
+A plugin draws its own icons with the same rules through the core's `icon`
+helpers, so they match the bar without copying numbers:
+
+```ts
+import { icon } from '@nanoplayer/core';
+
+const ON = icon.svg(icon.solid('M5 5h14v14H5z'));
+const OFF = icon.svg(icon.outline('M5 5h14v14H5z'));
+```
+
+No masks or ids: several players on one page would repeat them.

@@ -65,6 +65,9 @@ export type { BatchResolverOptions, RegistryOptions } from './registry.js';
 export { backoff, LiveTracker } from './live.js';
 export type { LiveStatus, RetryPolicy } from './live.js';
 
+// --- icons ------------------------------------------------------------------
+export { icon } from './icon.js';
+
 // --- WebVTT -----------------------------------------------------------------
 export { parseVtt } from './vtt.js';
 export type { VttCue } from './vtt.js';

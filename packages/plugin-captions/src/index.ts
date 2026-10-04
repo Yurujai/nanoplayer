@@ -12,7 +12,7 @@
  * Description tracks travel the same way but are read out, not drawn.
  */
 import {
-  plugins, strings,
+  icon, plugins, strings,
   type PluginContext, type PluginImpl, type SettingsChoiceDecl, type TextTrackDef,
   type Translate, type UiSlots,
 } from '@nanoplayer/core';
@@ -20,24 +20,22 @@ import { CHOICES, captionStyle, cssVariables, type CaptionStyleKey } from './sty
 import { OFF, TrackChoice, trackName } from './track-choice.js';
 
 /*
- * The top half of the box is empty on purpose: it stands for the picture, with
- * the text below. On and off differ by fill versus outline, not by opacity, so
- * the difference does not depend on telling shades apart.
+ * A caption box: text lines in a frame. On and off differ by fill versus
+ * outline, the player's rule for toggles, so the state does not depend on
+ * telling shades apart.
  */
-const BOX =
-  'M4 4.5h16a2.5 2.5 0 0 1 2.5 2.5v10a2.5 2.5 0 0 1-2.5 2.5H4A2.5 2.5 0 0 1 1.5 17V7A2.5 2.5 0 0 1 4 4.5z';
-const HOLE =
-  'M4.1 6.2h15.8c.5 0 .9.4.9.9v9.8c0 .5-.4.9-.9.9H4.1a.9.9 0 0 1-.9-.9V7.1c0-.5.4-.9.9-.9z';
-const TEXT =
-  'M5.2 11.2h3.9v1.8H5.2zM10.8 11.2h8v1.8h-8z'
-  + 'M5.2 14.4h7.6v1.8H5.2zM14.5 14.4h4.3v1.8h-4.3z';
+const BOX = 'M5.5 5h13A3.5 3.5 0 0 1 22 8.5v7a3.5 3.5 0 0 1-3.5 3.5h-13A3.5 3.5 0 0 1 2 15.5v-7A3.5 3.5 0 0 1 5.5 5z';
+const LINES = 'M6.5 10.5h3M12 10.5h5.5M6.5 14h6M15 14h2.5';
+/** The text lines as rounded holes, one per line. */
+const HOLES = [
+  'M6.5 9.55H9.5A0.95 0.95 0 0 1 9.5 11.45H6.5A0.95 0.95 0 0 1 6.5 9.55Z',
+  'M12 9.55H17.5A0.95 0.95 0 0 1 17.5 11.45H12A0.95 0.95 0 0 1 12 9.55Z',
+  'M6.5 13.05H12.5A0.95 0.95 0 0 1 12.5 14.95H6.5A0.95 0.95 0 0 1 6.5 13.05Z',
+  'M15 13.05H17.5A0.95 0.95 0 0 1 17.5 14.95H15A0.95 0.95 0 0 1 15 13.05Z',
+].join('');
 
-const svg = (d: string) =>
-  `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">`
-  + `<path fill-rule="evenodd" d="${d}"/></svg>`;
-
-const ICON_ON = svg(BOX + TEXT);
-const ICON_OFF = svg(BOX + HOLE + TEXT);
+const ICON_ON = icon.svg(icon.cut(BOX + HOLES));
+const ICON_OFF = icon.svg(icon.outline(BOX), icon.outline(LINES));
 
 strings.register('es', {
   'captions.label': 'Subtítulos',

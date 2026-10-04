@@ -11,7 +11,7 @@
  *     create: (el, manifest) => { const p = create(el, { manifest }); attachControls(p); return p; },
  *   });
  */
-import { strings, type Manifest, type Player, type UiSlots } from '@nanoplayer/core';
+import { icon, strings, type Manifest, type Player, type UiSlots } from '@nanoplayer/core';
 
 strings.register('es', {
   'playlist.label': 'Lista de reproducción',
@@ -43,10 +43,14 @@ export interface PlaylistOptions {
   loop?: boolean;
 }
 
-const icon = (d: string) =>
-  `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="${d}"/></svg>`;
-const ICON_NEXT = icon('M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z');
-const ICON_PREVIOUS = icon('M6 6h2v12H6zm3.5 6 8.5 6V6z');
+const ICON_NEXT = icon.svg(
+  icon.solid('M5 6.4v11.2c0 .8.9 1.2 1.5.8l8.1-5.6c.6-.4.6-1.2 0-1.6L6.5 5.6C5.9 5.2 5 5.6 5 6.4z'),
+  icon.line('M18.5 6v12'),
+);
+const ICON_PREVIOUS = icon.svg(
+  icon.solid('M19 6.4v11.2c0 .8-.9 1.2-1.5.8l-8.1-5.6c-.6-.4-.6-1.2 0-1.6l8.1-5.6c.6-.4 1.5 0 1.5.8z'),
+  icon.line('M5.5 6v12'),
+);
 
 function isWrapped(item: PlaylistItem): item is { manifest: ManifestSource; title?: string } {
   return typeof item === 'object' && item !== null && 'manifest' in item;

@@ -103,8 +103,10 @@ describe('cast plugin', () => {
   it('while connected it says where the picture went', async () => {
     const { control, label, overlays } = await mount();
     remotes[0]!.onAvailability!(true);
+    const before = (control().icon as () => string)();
     remotes[0]!.setState('connected');
     expect(control().pressed!()).toBe(true);
+    expect((control().icon as () => string)(), 'connected: the screen fills').not.toBe(before);
     expect(label()).toBe('Playing on another screen');
     const notice = overlays.get('cast')!.querySelector('[role="status"]')!;
     expect(notice.textContent).toBe('Playing on another screen');

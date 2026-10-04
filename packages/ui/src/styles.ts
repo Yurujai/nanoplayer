@@ -108,6 +108,8 @@ button.np__btn{
 button.np__btn:hover{background:rgba(255,255,255,.16)}
 button.np__btn:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:-3px}
 button.np__btn svg{width:60%;height:60%;fill:currentColor;pointer-events:none}
+/* A soft shadow keeps the icons legible over a white slide or a bright frame. */
+button.np__btn svg,button.np__skip svg{filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.55))}
 button.np__btn[disabled]{opacity:.4;cursor:default}
 
 .np__time{

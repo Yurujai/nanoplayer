@@ -266,6 +266,27 @@ describe('text descriptions', () => {
     expect(overlays.get('captions')!.textContent).toBe('First subtitle');
   });
 
+  it('the button shows its state by form: filled when on, outlined when off', async () => {
+    const host = document.createElement('div');
+    page.appendChild(host);
+    const player = create(host, { manifest: lecture, engines, registry: false });
+    await player.resolve();
+    await new Promise((r) => setTimeout(r, 0));
+    let icon: (() => string) | undefined;
+    let activate: (() => void) | undefined;
+    player.setUi({
+      addBarControl: (c) => { icon = c.icon as () => string; activate = c.onActivate; return () => {}; },
+      addSettingsPanel: () => () => {}, addTimelineMarkers: () => () => {}, addTimelinePreview: () => () => {},
+      addOverlay: () => ({ element: document.createElement('div'), remove: () => {} }),
+      addPanel: () => ({ element: document.createElement('div'), isOpen: false, remove: () => {} }),
+      refresh: () => {},
+    });
+    expect(icon!()).toContain('fill="none"');
+    activate!();
+    expect(icon!()).toContain('fill-rule="evenodd"');
+    expect(icon!()).not.toContain('fill="none"');
+  });
+
   it('a video with only descriptions gets no captions button', async () => {
     const { panel, bar } = await mountWith({
       ...lecture,

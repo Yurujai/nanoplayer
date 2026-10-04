@@ -130,6 +130,8 @@ export {
   topoSort,
   // WebVTT
   parseVtt,
+  // icons
+  icon,
 } from '@nanoplayer/core';
 
 export type {

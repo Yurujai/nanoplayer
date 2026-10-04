@@ -63,6 +63,9 @@ describe('transcript plugin', () => {
   it('asks for a panel, and downloads nothing until it is opened', async () => {
     const { decl } = await mount();
     expect(decl()?.label).toBe('Transcript');
+    const icon = decl()!.icon as (open: boolean) => string;
+    expect(icon(false), 'closed: outlined').toContain('fill="none"');
+    expect(icon(true), 'open: filled').not.toContain('fill="none"');
     expect(fetch).not.toHaveBeenCalled();
   });
 
