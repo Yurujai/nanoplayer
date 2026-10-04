@@ -85,9 +85,42 @@ for (const [name, engine] of [['Chromium', chromium], ['WebKit', webkit]]) {
   check(await page.locator('#player [data-bumper="outro"]').count() === 1,
     'the outro is still attached', 'it was dropped at start-up');
 
-  await page.evaluate(() => document.querySelector('#player')?.focus());
-  await page.keyboard.press('9');
-  check(await waitPhase(page, 'outro', 10000), 'reaching the end of the content plays the outro');
+  // A timeline of what the media does from here, printed if the outro never comes:
+  // this step fails only on Linux WebKit in CI, where it cannot be watched.
+  await page.evaluate(() => {
+    const t0 = performance.now();
+    window.__chainLog = [];
+    for (const v of document.querySelectorAll('#player video')) {
+      const who = v.closest('[data-stream]')?.dataset['stream'] ?? v.closest('[data-bumper]')?.dataset['bumper'];
+      for (const type of ['play', 'playing', 'pause', 'waiting', 'seeking', 'seeked', 'ended', 'error', 'stalled']) {
+        v.addEventListener(type, () => window.__chainLog.push(
+          `${Math.round(performance.now() - t0)}ms ${who} ${type} t=${v.currentTime.toFixed(2)}`));
+      }
+    }
+  });
+  const before = await page.evaluate(() => document.querySelector('#player video')?.currentTime ?? 0);
+  await page.locator('#player').press('9');
+  const after = await page.waitForFunction((t) => (document.querySelector('#player video')?.currentTime ?? 0) > t + 10,
+    before, { timeout: 5000 }).then(() => true, () => false);
+  check(after, 'the 9 key seeks to 90 %', `still near ${before.toFixed(1)} s`);
+  const reached = await waitPhase(page, 'outro', 15000);
+  check(reached, 'reaching the end of the content plays the outro');
+  if (!reached) {
+    console.log('    state:', JSON.stringify(await page.evaluate(() => {
+      const p = document.querySelector('#player');
+      return {
+        phase: p?.dataset['phase'],
+        focus: document.activeElement?.id || document.activeElement?.className,
+        status: p?.querySelector('[role="status"]')?.textContent,
+        media: [...(p?.querySelectorAll('video') ?? [])].map((v) => ({
+          who: v.closest('[data-stream]')?.dataset['stream'] ?? v.closest('[data-bumper]')?.dataset['bumper'],
+          t: +v.currentTime.toFixed(2), d: +v.duration.toFixed(2), paused: v.paused, ended: v.ended,
+          ready: v.readyState, network: v.networkState, error: v.error?.code ?? null, muted: v.muted,
+        })),
+      };
+    })));
+    for (const line of await page.evaluate(() => window.__chainLog.slice(-40))) console.log(`    ${line}`);
+  }
 
   await page.keyboard.press('End');
   await page.keyboard.press('ArrowRight');
