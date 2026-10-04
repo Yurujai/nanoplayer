@@ -138,6 +138,8 @@ class Captions implements PluginImpl {
   #announcer: HTMLElement | null = null;
   #removeLayers: Array<() => void> = [];
   #last: string | null = null;
+  /** The intro and outro are not the lecture: its cues do not belong over them. */
+  #inContent: () => boolean = () => true;
   #unsubscribe: Array<() => void> = [];
 
   activate(ctx: PluginContext): void {
@@ -148,6 +150,10 @@ class Captions implements PluginImpl {
     this.#captions = captions;
     this.#descriptions = descriptions;
     if (captions.active !== OFF) this.#last = captions.active;
+    // The content waits behind the intro at its first frame, its first cue
+    // active, and that caption was drawn over the intro.
+    this.#inContent = () => ctx.player.phase === 'main';
+    this.#unsubscribe.push(ctx.bus.on('chain:phase', () => this.#renderCues(captions.cues())));
     const t = ctx.t;
 
     // Engines attach lazily, and a detach replaces the `<video>`: mount on every attach.
@@ -264,6 +270,7 @@ class Captions implements PluginImpl {
     const layer = this.#layer;
     if (!layer) return;
     layer.textContent = '';
+    if (!this.#inContent()) return;
     for (const cue of cues) {
       const line = document.createElement('div');
       line.className = 'np__cue';
@@ -276,7 +283,7 @@ class Captions implements PluginImpl {
 
   /** An emptied region is not read, so a cue ending says nothing. */
   #announce(cues: TextTrackCue[]): void {
-    if (!this.#announcer) return;
+    if (!this.#announcer || !this.#inContent()) return;
     this.#announcer.textContent = cues
       .map((cue) => {
         const vtt = cue as VTTCue & { getCueAsHTML?: () => DocumentFragment };

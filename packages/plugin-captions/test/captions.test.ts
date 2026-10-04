@@ -255,6 +255,17 @@ describe('text descriptions', () => {
     expect(overlays.get('descriptions')!.textContent).toBe('');
   });
 
+  it('the lecture\'s captions are not drawn over the intro', async () => {
+    const { player, panel, overlays } = await mountWith(withDescriptions);
+    const phase = vi.spyOn(player, 'phase', 'get').mockReturnValue('intro');
+    panel('captions')!.onSelect('en');
+    showCues(player, 'subtitles', ['First subtitle']);
+    expect(overlays.get('captions')!.textContent).toBe('');
+    phase.mockReturnValue('main');
+    player.bus.emit('chain:phase', { from: 'intro', to: 'main', skipped: false });
+    expect(overlays.get('captions')!.textContent).toBe('First subtitle');
+  });
+
   it('a video with only descriptions gets no captions button', async () => {
     const { panel, bar } = await mountWith({
       ...lecture,
