@@ -354,19 +354,24 @@ export class Player {
 
       await this.#chain.attachIntro(m);
 
-      for (const stream of m.streams) {
-        try {
-          engineName = await this.#attachStream(stream);
+      // Together, not one after another: in turn, the slides began loading only
+      // once the speaker had data, and on Pages Safari waited nearly 3 s for
+      // the sum. Each box is added before its first wait, so order holds.
+      const results = await Promise.allSettled(m.streams.map((stream) => this.#attachStream(stream)));
+      results.forEach((result, i) => {
+        const stream = m.streams[i]!;
+        if (result.status === 'fulfilled') {
+          engineName = result.value;
           if (m.live) this.#broadcast.markLive(stream.id);
-        } catch (error) {
-          // Live, one stream not broadcasting does not block the others; on
-          // demand a missing source means incomplete content.
-          if (!m.live) throw error;
-          failed.push(stream.id);
-          this.#broadcast.markUnavailable(stream.id);
-          this.#broadcast.retryLater(stream.id);
+          return;
         }
-      }
+        // Live, one stream not broadcasting does not block the others; on
+        // demand a missing source means incomplete content.
+        if (!m.live) throw result.reason;
+        failed.push(stream.id);
+        this.#broadcast.markUnavailable(stream.id);
+        this.#broadcast.retryLater(stream.id);
+      });
 
       if (m.live && failed.length === m.streams.length) {
         this.#lc.transition('resolved');

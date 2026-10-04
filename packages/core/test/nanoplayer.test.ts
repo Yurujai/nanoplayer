@@ -179,3 +179,34 @@ describe('NanoPlayer.create · leaving the container clean', () => {
     expect(p.container.dataset['phase']).toBeUndefined();
   });
 });
+
+describe('NanoPlayer.create · attaching streams', () => {
+  it('prepares the streams together, so the waits do not add up, in their order', async () => {
+    const started: string[] = [];
+    const arrive: Array<() => void> = [];
+    const engines: EngineFactory[] = [{
+      name: 'slow', canPlay: () => 'probably',
+      create: () => ({
+        element: null, paused: true, currentTime: 0, duration: 60,
+        attach: (_box: HTMLElement, stream: { id: string }) => {
+          started.push(stream.id);
+          return new Promise<void>((r) => arrive.push(r));
+        },
+        destroy() {}, pause() {}, seek() {}, setVolume() {}, setMuted() {}, async play() {},
+        getPlaybackRate: () => 1, setPlaybackRate() {},
+      }) as never,
+    }];
+    const dual = { ...MANIFEST, streams: [MANIFEST.streams[0], {
+      id: 'slides', role: 'presentation', audio: false, sources: [{ src: 's.mp4', type: 'video/mp4' }],
+    }] };
+    const p = create('#p', { manifest: dual as never, engines, registry: false });
+    const attaching = p.attach();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(started, 'the slides do not wait for the speaker').toEqual(['cam', 'slides']);
+    expect([...p.container.querySelectorAll('[data-stream]')].map((b) => (b as HTMLElement).dataset['stream']))
+      .toEqual(['cam', 'slides']);
+    arrive.forEach((r) => r());
+    await attaching;
+    expect(p.state).toBe('attached');
+  });
+});
