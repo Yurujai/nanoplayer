@@ -72,12 +72,14 @@ button.np__poster-play:hover:not([disabled]){background:rgba(0,0,0,.75);transfor
 button.np__poster-play:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:3px}
 button.np__poster-play svg{width:45%;height:45%;fill:currentColor;pointer-events:none}
 .np__poster-play{position:relative}
-.np__poster--loading button{cursor:progress}
+.np__poster--loading button{cursor:progress;background:rgba(0,0,0,.72)}
 .np__poster--loading button svg{opacity:.55}
-/* A ring turning round the button: a click that is loading must not look ignored. */
+/* A ring turning inside the button: a click that is loading must not look
+   ignored. Inside the dark disc, not round it, so a light poster cannot wash
+   it out (WCAG 1.4.11). */
 .np__poster--loading button::after{
-  content:"";position:absolute;inset:-6px;border-radius:50%;
-  border:3px solid rgba(255,255,255,.25);border-top-color:var(--np-color-control);
+  content:"";position:absolute;inset:5px;border-radius:50%;
+  border:3px solid rgba(255,255,255,.22);border-top-color:var(--np-color-control);
   animation:np-spin .9s linear infinite;
 }
 @keyframes np-pulse{50%{opacity:.35}}
