@@ -71,8 +71,15 @@ button.np__poster-play{
 button.np__poster-play:hover:not([disabled]){background:rgba(0,0,0,.75);transform:scale(1.06)}
 button.np__poster-play:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:3px}
 button.np__poster-play svg{width:45%;height:45%;fill:currentColor;pointer-events:none}
-.np__poster--loading button{opacity:.5;cursor:progress}
-.np__poster--loading button svg{animation:np-pulse 1s ease-in-out infinite}
+.np__poster-play{position:relative}
+.np__poster--loading button{cursor:progress}
+.np__poster--loading button svg{opacity:.55}
+/* A ring turning round the button: a click that is loading must not look ignored. */
+.np__poster--loading button::after{
+  content:"";position:absolute;inset:-6px;border-radius:50%;
+  border:3px solid rgba(255,255,255,.25);border-top-color:var(--np-color-control);
+  animation:np-spin .9s linear infinite;
+}
 @keyframes np-pulse{50%{opacity:.35}}
 .np--with-poster .np__bar{opacity:0;pointer-events:none}
 
@@ -470,7 +477,7 @@ button.np-h5p__continue:focus-visible{outline:3px solid var(--np-color-focus);ou
 
 @media (prefers-reduced-motion:reduce){
   .np *,.np *::before,.np *::after{transition-duration:.01ms!important}
-  .np__spinner{animation:np-pulse 1.6s ease-in-out infinite}
+  .np__spinner,.np__poster--loading button::after{animation:np-pulse 1.6s ease-in-out infinite}
 }
 /* Forced colours drop translucent backgrounds: borders keep controls visible. */
 @media (forced-colors:active){

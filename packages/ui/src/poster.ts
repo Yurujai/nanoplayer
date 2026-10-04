@@ -82,7 +82,11 @@ export class Poster {
     this.#button.hidden = hasMedia && audioOnly;
     this.#root.classList.toggle('np--audio-only', audioOnly);
     this.#root.classList.toggle('np--with-poster', !hasMedia);
-    if (!hasMedia) {
+    // Not while a play is starting: the lifecycle passes through states without
+    // media on its way, and resetting here dropped the loading state at once.
+    // The button looked idle for seconds and viewers pressed it again
+    // (test: "keeps showing it is loading").
+    if (!hasMedia && !this.#busy) {
       this.#button.disabled = false;
       this.#button.setAttribute('aria-label', this.#t('ui.poster.play'));
       this.#layer.classList.remove('np__poster--loading');
