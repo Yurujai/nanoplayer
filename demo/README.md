@@ -1,14 +1,21 @@
 # Demo
 
-The project's public website. Four pages served by the same Vite, published at
+The project's public website. Six pages served by the same Vite, published at
 the root of GitHub Pages:
 
 | | |
 |---|---|
-| [`index.html`](index.html) | **Landing page.** What the player is, why it exists and what it solves. Text and three buttons |
+| [`index.html`](index.html) | **Landing page.** What the player is, why it exists and what it solves, and links to the rest |
 | [`video/`](video/index.html) | **Video demo.** The full player with MP4, single or dual, with or without intro and outro |
 | [`live/`](live/index.html) | **Live demo.** Dual live on a public test channel |
 | [`bench/`](bench/index.html) | **Test bench** for the core, with the raw lifecycle |
+| [`manifest/`](manifest/index.html) | **Manifest reference.** Every field, and a complete example that plays |
+| [`analytics/`](analytics/index.html) | **Analytics and xAPI.** How viewing data is sent and what, with a live log |
+
+The manifest reference shows [`public/manifest/example.json`](public/manifest/example.json)
+and [`live.json`](public/manifest/live.json) as served. A test in the core
+fails when a field is added to the types and not to them, so the page cannot
+fall behind.
 
 ```bash
 ./gen-media.sh     # needs ffmpeg; generates the videos with a burned-in timecode

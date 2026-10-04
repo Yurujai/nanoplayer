@@ -1,7 +1,7 @@
 /**
- * Coordination between the players on one page. It comes from a real page with
- * **32 players** where each fetched its metadata and buffered on load, bringing
- * the application's servers down. Here it is default behaviour:
+ * Coordination between the players on one page. It comes from a real course
+ * page with dozens of players where each fetched its metadata and buffered on
+ * load, bringing the application's servers down. Here it is default behaviour:
  *
  *   1. **Exclusive playback** — starting one pauses the others.
  *   2. **Resource budget** — at most N players with engines attached; the one
@@ -190,8 +190,8 @@ export interface BatchResolverOptions {
 }
 
 /**
- * Turns a batch resolver into a single one: with 32 players on a page,
- * `fetchMany` gets the 32 keys at once and makes **one** request. It also
+ * Turns a batch resolver into a single one: however many players a page has,
+ * `fetchMany` gets all their keys at once and makes **one** request. It also
  * deduplicates: two players of the same video share the answer.
  *
  * ```ts

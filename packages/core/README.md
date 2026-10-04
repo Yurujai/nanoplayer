@@ -3,7 +3,7 @@
 The player's core: manifest, lifecycle, engines, sync and plugin registry. No
 UI — the controls live in `@nanoplayer/ui`.
 
-No runtime dependencies. **7.5 KB gzip** in the IIFE bundle.
+No runtime dependencies, and kept as light as possible.
 
 ---
 

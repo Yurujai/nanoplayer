@@ -45,3 +45,13 @@ footer{margin-top:3rem;padding-top:1.2rem;border-top:1px solid var(--line);
 footer p{margin:0 0 .5rem}
 
 .player{width:100%;border-radius:10px;overflow:hidden}
+
+/* Reference pages: field tables and a contents list. */
+.toc{display:flex;flex-wrap:wrap;gap:.4rem .9rem;margin:0 0 1.5rem;padding:0;list-style:none;font-size:.92rem}
+.table-wrap{overflow-x:auto;margin:0 0 1.2rem}
+table.ref{width:100%;border-collapse:collapse;font-size:.9rem}
+table.ref th,table.ref td{text-align:left;vertical-align:top;padding:.45rem .6rem;border-bottom:1px solid var(--line)}
+table.ref th{color:var(--dim);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.04em}
+table.ref td:first-child{white-space:nowrap}
+.req{color:var(--warn);font-size:.8rem;font-weight:600}
+h3.ref{font-size:1.05rem;margin:1.6rem 0 .5rem}

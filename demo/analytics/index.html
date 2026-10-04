@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>NanoPlayer · Analytics and xAPI</title>
+<meta name="description" content="How NanoPlayer sends viewing data to an analytics service or an LMS, and what it sends.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/src/site.css">
+<style>
+  .logs{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-top:.75rem}
+  .logs h3{margin:0 0 .35rem;font-size:.9rem;color:var(--dim)}
+  .logs pre{height:22rem;overflow:auto;font-size:.75rem}
+  @media (max-width:760px){.logs{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main class="wide">
+  <p class="breadcrumb"><a href="../">← NanoPlayer</a></p>
+  <h1>Analytics and xAPI</h1>
+  <p class="lead">
+    Two plugins send viewing data out of the player: <strong>analytics</strong>
+    for your statistics, <strong>xAPI</strong> for your learning platform. Both
+    are off until configured, both read the player's event bus, and neither
+    stops playback when its destination fails.
+  </p>
+
+  <ul class="toc" aria-label="On this page">
+    <li><a href="#try">Try it</a></li>
+    <li><a href="#sending">How analytics sends</a></li>
+    <li><a href="#event">The event</a></li>
+    <li><a href="#events">Which events</a></li>
+    <li><a href="#options">Options</a></li>
+    <li><a href="#recipes">Recipes</a></li>
+    <li><a href="#privacy">Privacy</a></li>
+    <li><a href="#xapi">xAPI</a></li>
+  </ul>
+
+  <h2 id="try">Try it</h2>
+  <p>
+    Play, pause, seek, change the speed. Both plugins are configured here with
+    a <code>send</code> function that writes below what would go out: nothing
+    leaves this page. Analytics batches every 3 seconds in this demo.
+  </p>
+  <div id="player" class="player"></div>
+  <div class="logs">
+    <section aria-labelledby="log-analytics-title">
+      <h3 id="log-analytics-title">Analytics batches</h3>
+      <pre tabindex="0" aria-labelledby="log-analytics-title"><code id="log-analytics">Waiting for the first batch…</code></pre>
+    </section>
+    <section aria-labelledby="log-xapi-title">
+      <h3 id="log-xapi-title">xAPI statements</h3>
+      <pre tabindex="0" aria-labelledby="log-xapi-title"><code id="log-xapi">Waiting for the first statement…</code></pre>
+    </section>
+  </div>
+
+  <h2 id="sending">How analytics sends</h2>
+  <pre><code>import '@nanoplayer/plugin-analytics';
+
+create('#player', {
+  manifest,
+  plugins: {
+    analytics: {
+      endpoint: 'https://stats.example.org/collect',
+      // or: send: (events) => { … },
+      context: { course: 'PHY-101' },
+    },
+  },
+});</code></pre>
+  <ul>
+    <li><strong>In batches,</strong> not one request per event: every 10 seconds
+        (<code>flushEvery</code>), as soon as 20 events are waiting, when the tab
+        is hidden, and when the page goes away.</li>
+    <li><strong>To an <code>endpoint</code>,</strong> each batch is a
+        <code>POST</code> whose body is a JSON array of events, sent with
+        <code>keepalive</code> and <code>Content-Type: application/json</code>.</li>
+    <li><strong>As the page goes away,</strong> the last batch goes by
+        <code>navigator.sendBeacon</code>, which survives closing the tab but
+        carries no headers and is sent as <code>text/plain</code>. So the server
+        should <strong>parse the body as JSON whatever its type</strong>, and
+        authenticate by a token in the URL or a cookie, not by a header.</li>
+    <li><strong>With <code>send</code>,</strong> your function gets each batch
+        as an array and forwards it anywhere: an analytics library, your own
+        API, a queue.</li>
+    <li><strong>Failures are dropped,</strong> without retries: analytics must
+        never slow down or break a lecture.</li>
+    <li><strong>Cross-origin endpoints</strong> must allow the page's origin
+        (CORS) for the <code>fetch</code> batches.</li>
+  </ul>
+
+  <h2 id="event">The event</h2>
+  <div class="table-wrap"><table class="ref">
+    <thead><tr><th>Field</th><th>What it is</th></tr></thead>
+    <tbody>
+      <tr><td><code>type</code></td><td>The bus event, <code>play</code> or <code>seek:end</code>, or a derived one: <code>milestone</code>, <code>session:end</code>.</td></tr>
+      <tr><td><code>time</code></td><td>When it happened, ISO 8601.</td></tr>
+      <tr><td><code>session</code></td><td>A random id for this viewing: one page load, one player.</td></tr>
+      <tr><td><code>video</code></td><td>The manifest's <code>id</code>.</td></tr>
+      <tr><td><code>position</code>, <code>duration</code></td><td>Seconds, in the visible timeline (after any trim).</td></tr>
+      <tr><td><code>data</code></td><td>The event's own payload, as plain JSON.</td></tr>
+      <tr><td><code>context</code></td><td>Whatever you passed in <code>context</code>, on every event.</td></tr>
+    </tbody>
+  </table></div>
+<pre><code>[
+  {
+    "type": "pause",
+    "time": "2026-10-04T10:15:32.120Z",
+    "session": "6f1c2b4e-…",
+    "video": "thermodynamics-1",
+    "position": 128.4,
+    "duration": 2400,
+    "data": { "at": 128.4 },
+    "context": { "course": "PHY-101" }
+  }
+]</code></pre>
+
+  <h2 id="events">Which events</h2>
+  <p>
+    By default, the ones that say how a lecture was watched, never the
+    per-second <code>time</code> or the internal sync events.
+    <code>events: 'all'</code> sends everything; a list sends just those.
+  </p>
+  <div class="table-wrap"><table class="ref">
+    <thead><tr><th>Type</th><th><code>data</code></th></tr></thead>
+    <tbody>
+      <tr><td><code>play</code>, <code>pause</code>, <code>ended</code>, <code>seek:end</code></td><td><code>{ at }</code></td></tr>
+      <tr><td><code>ratechange</code></td><td><code>{ rate }</code></td></tr>
+      <tr><td><code>error</code></td><td><code>{ error: { code, message, retryable } }</code></td></tr>
+      <tr><td><code>stall:end</code></td><td><code>{ stream, durationMs }</code>: how long it buffered</td></tr>
+      <tr><td><code>quality:change</code></td><td><code>{ qualities, selected, playing }</code></td></tr>
+      <tr><td><code>audio:tracks</code></td><td><code>{ tracks, active }</code></td></tr>
+      <tr><td><code>chain:phase</code></td><td><code>{ from, to, skipped }</code>: intro, content, outro</td></tr>
+      <tr><td><code>live:status</code></td><td><code>{ stream, status, retryInMs }</code></td></tr>
+      <tr><td><code>engine:attach:ok</code></td><td><code>{ engine, resumeAt }</code>: playback could start</td></tr>
+      <tr><td><code>manifest:resolve:fail</code></td><td><code>{ error }</code></td></tr>
+      <tr><td><code>milestone</code></td><td><code>{ percent }</code>: 25, 50 and 75 <strong>played through</strong>, a seek past them does not count; 100 at the end</td></tr>
+      <tr><td><code>session:end</code></td><td><code>{ watched, milestones }</code>: seconds really watched, each second once</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2 id="options">Options</h2>
+  <div class="table-wrap"><table class="ref">
+    <thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>endpoint</code></td><td>none</td><td>Where batches are <code>POST</code>ed.</td></tr>
+      <tr><td><code>send</code></td><td>none</td><td>Your function, given each batch. Wins over <code>endpoint</code>.</td></tr>
+      <tr><td><code>events</code></td><td>the list above</td><td>Which bus events to send, or <code>'all'</code>. Milestones and the session summary always go.</td></tr>
+      <tr><td><code>sample</code></td><td><code>1</code></td><td>Share of sessions reported, 0 to 1, decided once per session.</td></tr>
+      <tr><td><code>context</code></td><td>none</td><td>Added to every event.</td></tr>
+      <tr><td><code>flushEvery</code></td><td><code>10</code></td><td>Seconds between batches.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2 id="recipes">Recipes</h2>
+  <h3 class="ref">Google Analytics 4</h3>
+<pre><code>analytics: {
+  send: (events) => events.forEach((e) =>
+    gtag('event', e.type.replace(':', '_'), { video_id: e.video, position: e.position, ...e.data })),
+}</code></pre>
+  <h3 class="ref">Matomo</h3>
+<pre><code>analytics: {
+  send: (events) => events.forEach((e) =>
+    _paq.push(['trackEvent', 'Video', e.type, e.video, Math.round(e.position)])),
+}</code></pre>
+  <h3 class="ref">Your own endpoint (Node)</h3>
+<pre><code>app.post('/collect', express.text({ type: '*/*' }), (req, res) => {
+  const events = JSON.parse(req.body);   // fetch sends JSON, the last beacon text/plain
+  saveEvents(events);
+  res.sendStatus(204);
+});</code></pre>
+
+  <h2 id="privacy">Privacy</h2>
+  <p>
+    No personal data: a random session id, the video's <code>id</code>, the
+    position and what the player did. Nothing identifies the viewer unless you
+    put it in <code>context</code>, deliberately. With <code>sample</code>, only
+    a share of sessions is reported at all.
+  </p>
+
+  <h2 id="xapi">xAPI</h2>
+  <p>
+    For a learning platform, <code>@nanoplayer/plugin-xapi</code> reports what
+    was watched and whether the lecture was completed, as
+    <a href="https://w3id.org/xapi/video">xAPI Video Profile</a> statements that
+    any LRS understands.
+  </p>
+<pre><code>import '@nanoplayer/plugin-xapi';
+
+create('#player', {
+  manifest,
+  plugins: {
+    xapi: {
+      endpoint: 'https://lrs.example.org/xapi',
+      auth: 'Basic ' + btoa('key:secret'),
+      actor: { objectType: 'Agent', mbox: 'mailto:student@example.org' },
+      // or: send: (statement) => lms.record(statement),
+    },
+  },
+});</code></pre>
+  <ul>
+    <li><strong>One statement per request,</strong> <code>POST</code>ed to
+        <code>&lt;endpoint&gt;/statements</code> with
+        <code>X-Experience-API-Version: 1.0.3</code>, your
+        <code>Authorization</code> header and <code>keepalive</code>, so the last
+        one survives closing the tab.</li>
+    <li><strong>With <code>send</code>,</strong> your function gets each
+        statement instead: the usual way when the LMS records through its own
+        channel (cmi5, a backend that adds the actor).</li>
+    <li><strong>The actor</strong> comes from you: the player does not know who
+        is watching.</li>
+  </ul>
+  <div class="table-wrap"><table class="ref">
+    <thead><tr><th>Verb</th><th>When</th><th>Result extensions</th></tr></thead>
+    <tbody>
+      <tr><td><code>initialized</code></td><td>The first play, not page load: unwatched videos send nothing.</td><td></td></tr>
+      <tr><td><code>played</code></td><td>Each play.</td><td><code>time</code></td></tr>
+      <tr><td><code>paused</code></td><td>Each pause.</td><td><code>time</code>, <code>progress</code>, <code>played-segments</code></td></tr>
+      <tr><td><code>seeked</code></td><td>Each seek.</td><td><code>time-from</code>, <code>time-to</code></td></tr>
+      <tr><td><code>completed</code></td><td>Once, when the share <strong>really watched</strong> reaches <code>completionThreshold</code> (0.9). Dragging to the end does not complete it.</td><td><code>progress</code>, <code>played-segments</code>, plus <code>completion: true</code> and <code>duration</code></td></tr>
+      <tr><td><code>terminated</code></td><td>When the page goes away.</td><td><code>time</code>, <code>progress</code>, <code>played-segments</code></td></tr>
+    </tbody>
+  </table></div>
+  <p>
+    Every statement carries the profile in <code>context.contextActivities</code>,
+    and <code>session-id</code>, <code>length</code> and
+    <code>completion-threshold</code> as context extensions. The activity id is
+    <code>activityId</code>, or <code>urn:nanoplayer:video:&lt;manifest id&gt;</code>.
+    The intro and outro are not the lecture: they neither count nor report.
+  </p>
+  <div class="table-wrap"><table class="ref">
+    <thead><tr><th>Option</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>endpoint</code>, <code>auth</code></td><td>The LRS and its <code>Authorization</code> header.</td></tr>
+      <tr><td><code>send</code></td><td>Your function, given each statement. Wins over <code>endpoint</code>.</td></tr>
+      <tr><td><code>actor</code></td><td>Who is watching, as xAPI expects it.</td></tr>
+      <tr><td><code>activityId</code></td><td>The activity's IRI.</td></tr>
+      <tr><td><code>registration</code></td><td>The xAPI registration, when the LMS uses one.</td></tr>
+      <tr><td><code>completionThreshold</code></td><td>Share watched, 0 to 1, that completes it. <code>0.9</code> by default.</td></tr>
+    </tbody>
+  </table></div>
+
+  <footer>
+    <p>The manifest's fields are in the <a href="../manifest/">manifest reference</a>.
+       Source on <a href="https://github.com/Yurujai/nanoplayer">GitHub</a>.</p>
+  </footer>
+</main>
+<script type="module" src="/src/analytics.ts"></script>
+</body>
+</html>

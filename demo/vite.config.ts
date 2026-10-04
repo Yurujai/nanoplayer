@@ -31,6 +31,12 @@ export default defineConfig({
         new URL('../packages/plugin-thumbnails/src/index.ts', import.meta.url)),
       '@nanoplayer/plugin-cast': fileURLToPath(
         new URL('../packages/plugin-cast/src/index.ts', import.meta.url)),
+      '@nanoplayer/plugin-xapi': fileURLToPath(
+        new URL('../packages/plugin-xapi/src/index.ts', import.meta.url)),
+      '@nanoplayer/plugin-analytics': fileURLToPath(
+        new URL('../packages/plugin-analytics/src/index.ts', import.meta.url)),
+      '@nanoplayer/plugin-h5p': fileURLToPath(
+        new URL('../packages/plugin-h5p/src/index.ts', import.meta.url)),
     },
   },
   build: {
@@ -40,6 +46,8 @@ export default defineConfig({
         video: fileURLToPath(new URL('video/index.html', import.meta.url)),
         live: fileURLToPath(new URL('live/index.html', import.meta.url)),
         bench: fileURLToPath(new URL('bench/index.html', import.meta.url)),
+        manifest: fileURLToPath(new URL('manifest/index.html', import.meta.url)),
+        analytics: fileURLToPath(new URL('analytics/index.html', import.meta.url)),
       },
     },
   },

@@ -6,6 +6,8 @@ name: Publish the site and the spikes
 #   /video/                  video demo (MP4, single and dual)
 #   /live/                   live demo
 #   /bench/                  core test bench
+#   /manifest/               manifest reference, with a complete example
+#   /analytics/              how analytics and xAPI send data
 #   /demo/                   redirects from the old addresses
 #   /spikes/s1-dual-sync/    dual-stream sync spike
 #   /spikes/s6-chaining/     intro and outro chaining spike

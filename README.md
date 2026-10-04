@@ -19,10 +19,9 @@ the whole architecture:
 architectural requirement, checked automatically in CI. Accessibility added at
 the end always costs more and always comes out worse.
 
-**No network until the user asks.** A page can hold dozens of players — the
-real case that prompted this had 32. Creating one downloads nothing: no
-metadata, no manifest, not a byte of video. And an exclusive-playback policy
-keeps them from competing.
+**No network until the user asks.** A page can hold as many players as it
+needs. Creating one downloads nothing: no metadata, no manifest, not a byte of
+video. And an exclusive-playback policy keeps them from competing.
 
 **Configuration, not forks.** Turning any plugin on or off is runtime
 configuration. You never need a custom build to change which features are on.
@@ -46,11 +45,11 @@ The thesis, in one sentence: **a player that never makes you fork it.**
 | **Sync** | Proportional control with hysteresis and per-engine profiles. Live streams are measured by absolute time (`EXT-X-PROGRAM-DATE-TIME`), not by `currentTime` |
 | **Interface** | Accessible control bar, fully keyboard-operable, and a settings menu of stacked panels with YouTube's ergonomics |
 | **Layouts** | Side by side, picture in picture, speaker only and slides only |
-| **Multi-instance** | Shared registry with exclusive playback and batched manifest resolution — 32 players, one request |
+| **Many players, one page** | Shared registry with exclusive playback and batched manifest resolution: however many players, one request |
 | **Plugins** | Registry with topological order and UI slots. Plugins declare their condition and switch on by themselves from the manifest, each player with its own |
 | **Chapters** | Marks on the progress bar, the current chapter on screen and announced to screen readers, and a list in settings to jump to one |
 | **Theming** | Documented CSS variables, no Shadow DOM |
-| **Installation** | The packages separately from npm, or one `<script>` tag and three lines with the 27 KB gzip bundle. Also UMD for AMD loaders, and the stylesheet as a file for sites with a strict CSP |
+| **Installation** | The packages separately from npm, or one `<script>` tag and three lines with the bundle, kept as light as possible. Also UMD for AMD loaders, and the stylesheet as a file for sites with a strict CSP |
 | **Errors** | A `code` to decide what the user is told —translatable— and an English `message` as a diagnostic for integrators |
 | **Languages** | Spanish and English built in, with an open catalogue: adding another —or changing one word— is configuration, not a fork. Times and percentages are formatted by `Intl`, so they come out right in any language |
 
@@ -78,7 +77,7 @@ first time HLS has to play: whoever plays MP4 does not pay for it.
 | [`@nanoplayer/playlist`](packages/playlist/) | Several lectures in a row: previous, next, a list, and the next one at the end |
 | [`@nanoplayer/plugin-h5p`](packages/plugin-h5p/) | H5P activities at a time: the video pauses and the activity opens over it |
 | [`@nanoplayer/plugin-analytics`](packages/plugin-analytics/) | Player events, milestones and time watched to any analytics destination |
-| [`@nanoplayer/bundle`](packages/bundle/) | All of the above in one file, for the `<script>` tag; hls.js comes from its own tag. 43 KB gzip |
+| [`@nanoplayer/bundle`](packages/bundle/) | All of the above in one file, for the `<script>` tag; hls.js comes from its own tag |
 
 ## What is missing
 
@@ -185,7 +184,10 @@ pnpm --filter @nanoplayer/demo dev      # http://localhost:5180
 ```
 
 It is the public website: a landing page explaining what the player is, a video
-demo, a live demo on a public test channel, and the core's **test bench**. See
+demo, a live demo on a public test channel, the core's **test bench**, and two
+reference pages: the **manifest**, every field with a complete example that
+plays (`demo/public/manifest/example.json`, kept in step with the types by a
+test), and **analytics and xAPI**, how viewing data is sent and what. See
 [`demo/README.md`](demo/README.md).
 
 ### The spikes

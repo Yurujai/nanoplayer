@@ -26,6 +26,9 @@ importers:
       '@nanoplayer/engine-hls':
         specifier: workspace:*
         version: link:../packages/engine-hls
+      '@nanoplayer/plugin-analytics':
+        specifier: workspace:*
+        version: link:../packages/plugin-analytics
       '@nanoplayer/plugin-audio-tracks':
         specifier: workspace:*
         version: link:../packages/plugin-audio-tracks
@@ -38,6 +41,9 @@ importers:
       '@nanoplayer/plugin-chapters':
         specifier: workspace:*
         version: link:../packages/plugin-chapters
+      '@nanoplayer/plugin-h5p':
+        specifier: workspace:*
+        version: link:../packages/plugin-h5p
       '@nanoplayer/plugin-media-session':
         specifier: workspace:*
         version: link:../packages/plugin-media-session
@@ -56,6 +62,9 @@ importers:
       '@nanoplayer/plugin-transcript':
         specifier: workspace:*
         version: link:../packages/plugin-transcript
+      '@nanoplayer/plugin-xapi':
+        specifier: workspace:*
+        version: link:../packages/plugin-xapi
       '@nanoplayer/ui':
         specifier: workspace:*
         version: link:../packages/ui

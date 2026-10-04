@@ -1,0 +1,47 @@
+{
+  "id": "thermodynamics-1",
+  "title": "Introduction to thermodynamics",
+  "poster": "../media/poster.jpg",
+  "duration": 40,
+  "streams": [
+    {
+      "id": "speaker",
+      "role": "presenter",
+      "label": "Speaker",
+      "kind": "video",
+      "audio": true,
+      "poster": "../media/poster.jpg",
+      "sources": [
+        { "src": "../media/presenter.mp4", "type": "video/mp4", "height": 540, "label": "540p" }
+      ]
+    },
+    {
+      "id": "slides",
+      "role": "presentation",
+      "label": "Slides",
+      "audio": false,
+      "sources": [
+        { "src": "../media/slides.mp4", "type": "video/mp4" }
+      ]
+    }
+  ],
+  "intro": {
+    "sources": [{ "src": "../media/intro.mp4", "type": "video/mp4" }]
+  },
+  "outro": {
+    "sources": [{ "src": "../media/outro.mp4", "type": "video/mp4" }]
+  },
+  "annotations": [
+    { "kind": "trim", "start": 1, "end": 39 },
+    { "kind": "chapter", "start": 1, "end": 12, "title": "Welcome" },
+    { "kind": "chapter", "start": 12, "end": 28, "title": "The first law" },
+    { "kind": "chapter", "start": 28, "title": "Wrap-up" },
+    { "kind": "h5p", "start": 20, "data": { "src": "activity.html", "title": "Quick check" } }
+  ],
+  "textTracks": [
+    { "src": "../media/en.vtt", "lang": "en", "label": "English", "kind": "subtitles", "default": true },
+    { "src": "../media/es.vtt", "lang": "es", "label": "Español", "kind": "subtitles" },
+    { "src": "../media/en-descriptions.vtt", "lang": "en", "label": "English", "kind": "descriptions" }
+  ],
+  "thumbnails": "../media/thumbs.vtt"
+}

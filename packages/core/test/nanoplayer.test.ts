@@ -64,10 +64,10 @@ describe('NanoPlayer.create', () => {
   });
 
   it('downloads nothing on creation', () => {
-    // A page with 32 create() calls makes zero requests.
+    // A page full of create() calls makes zero requests.
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
-    for (let i = 0; i < 32; i++) {
+    for (let i = 0; i < 50; i++) {
       const el = document.createElement('div');
       document.body.appendChild(el);
       create(el, { manifest: 'https://example/v.json', registry: false });

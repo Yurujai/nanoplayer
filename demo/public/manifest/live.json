@@ -1,0 +1,21 @@
+{
+  "id": "thermodynamics-live",
+  "title": "Thermodynamics, live",
+  "live": true,
+  "poster": "https://example.org/lecture/poster.jpg",
+  "liveWaitingImage": "https://example.org/lecture/starting-soon.jpg",
+  "streams": [
+    {
+      "id": "speaker",
+      "role": "presenter",
+      "audio": true,
+      "sources": [{ "src": "https://example.org/live/speaker.m3u8", "type": "application/vnd.apple.mpegurl" }]
+    },
+    {
+      "id": "slides",
+      "role": "presentation",
+      "audio": false,
+      "sources": [{ "src": "https://example.org/live/slides.m3u8", "type": "application/vnd.apple.mpegurl" }]
+    }
+  ]
+}

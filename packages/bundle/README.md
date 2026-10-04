@@ -2,8 +2,9 @@
 
 The whole player in one file, with the interface, captions, chapters, picture
 in picture, cast, audio tracks, quality, media session, resume, transcript,
-xAPI, analytics, thumbnails, playlists, H5P and the HLS engine already included.
-**139 KB, 43 KB gzip.**
+xAPI, analytics, thumbnails, playlists, H5P and the HLS engine already included,
+and kept as light as possible: no runtime dependencies, and nothing a page may
+not need, hls.js above all, travels inside.
 
 It is the package for installing with one `<script>` tag and three lines: no
 build, no tooling and no npm.
@@ -133,8 +134,8 @@ tag, from any CDN or your own server, before the bundle.
 | Safari and iOS | **Yes**, natively, with or without hls.js |
 | MP4 everywhere | Yes, nothing extra |
 
-- **Why not inside.** It would add some 150 KB that MP4-only pages would pay
-  for, and each site can pick the version and where it comes from: its own
+- **Why not inside.** It is far heavier than the whole player, and MP4-only
+  pages would pay for it; and each site can pick the version and where it comes from: its own
   server, if its CSP allows no third parties.
 - **Any 1.x.** Tested with 1.6. The example pins a version so the `integrity`
   hash holds.

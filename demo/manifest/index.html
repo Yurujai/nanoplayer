@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>NanoPlayer · Manifest reference</title>
+<meta name="description" content="Every field of a NanoPlayer manifest, with a complete example that plays.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/src/site.css">
+</head>
+<body>
+<main class="wide">
+  <p class="breadcrumb"><a href="../">← NanoPlayer</a></p>
+  <h1>Manifest reference</h1>
+  <p class="lead">
+    The manifest describes one lecture: its videos, intro and outro, captions,
+    chapters, activities and thumbnails. Pass it to the player as an object, or
+    as the URL of a JSON file.
+  </p>
+
+  <ul class="toc" aria-label="On this page">
+    <li><a href="#example">Complete example</a></li>
+    <li><a href="#manifest">Manifest</a></li>
+    <li><a href="#streams">Streams</a></li>
+    <li><a href="#sources">Sources</a></li>
+    <li><a href="#bumpers">Intro and outro</a></li>
+    <li><a href="#annotations">Annotations</a></li>
+    <li><a href="#text-tracks">Text tracks</a></li>
+    <li><a href="#thumbnails">Thumbnails</a></li>
+    <li><a href="#live">Live</a></li>
+    <li><a href="#rules">Rules</a></li>
+  </ul>
+
+  <div id="player" class="player"></div>
+
+  <h2 id="example">Complete example</h2>
+  <p>
+    The player above plays this file, as it is: every feature at once. A test
+    checks that it uses every field the player knows and that it validates
+    without a warning, so this page cannot fall behind the code.
+  </p>
+  <pre><code id="example-json">Loading…</code></pre>
+  <p>
+    <a href="example.json">example.json</a> · the URLs are relative to this page:
+    see <a href="#rules">Rules</a>.
+  </p>
+
+  <h2 id="manifest">Manifest</h2>
+  <div class="table-wrap"><table class="ref">
+    <thead><tr><th>Field</th><th>Type</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code> <span class="req">required</span></td><td>string</td><td>Identifies the lecture: where the position is remembered, what analytics and xAPI report.</td></tr>
+      <tr><td><code>title</code></td><td>string</td><td>Shown on the lock screen and in playlists; named in xAPI statements.</td></tr>
+      <tr><td><code>poster</code></td><td>URL</td><td>The image before playback. The player can also take it directly, to show it without fetching the manifest.</td></tr>
+      <tr><td><code>duration</code></td><td>seconds</td><td>Known in advance, the bar shows the length before a byte is downloaded.</td></tr>
+      <tr><td><code>streams</code> <span class="req">required</span></td><td><a href="#streams">Stream</a>[]</td><td>One video, or two kept in sync: the speaker and the slides.</td></tr>
+      <tr><td><code>intro</code>, <code>outro</code></td><td><a href="#bumpers">Bumper</a></td><td>Chained before and after the content. The intro can be skipped; the outro cannot.</td></tr>
+      <tr><td><code>annotations</code></td><td><a href="#annotations">Annotation</a>[]</td><td>Data anchored to the timeline: a trim, chapters, activities.</td></tr>
+      <tr><td><code>textTracks</code></td><td><a href="#text-tracks">TextTrack</a>[]</td><td>Captions, subtitles and descriptions, as WebVTT.</td></tr>
+      <tr><td><code>thumbnails</code></td><td>URL</td><td>A WebVTT file of pictures for the progress bar: <a href="#thumbnails">Thumbnails</a>.</td></tr>
+      <tr><td><code>live</code></td><td>boolean</td><td>A live broadcast: <a href="#live">Live</a>.</td></tr>
+      <tr><td><code>liveWaitingImage</code></td><td>URL</td><td>Live only: the image while the broadcast has not started. Falls back to the poster.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2 id="streams">Streams</h2>
+  <div class="table-wrap"><table class="ref">
+    <thead><tr><th>Field</th><th>Type</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code> <span class="req">required</span></td><td>string</td><td>Unique within the manifest.</td></tr>
+      <tr><td><code>role</code> <span class="req">required</span></td><td><code>presenter</code> · <code>presentation</code> · any</td><td>What the layouts arrange: speaker only, slides only, side by side, picture in picture.</td></tr>
+      <tr><td><code>audio</code> <span class="req">required</span></td><td>boolean</td><td><strong>Exactly one</strong> stream carries the sound: it is the clock the others follow, and iPhone cannot play two at once.</td></tr>
+      <tr><td><code>sources</code> <span class="req">required</span></td><td><a href="#sources">Source</a>[]</td><td>The same video in one or more formats or qualities.</td></tr>
+      <tr><td><code>label</code></td><td>string</td><td>A readable name for the stream.</td></tr>
+      <tr><td><code>kind</code></td><td><code>video</code> · <code>audio</code></td><td>Inferred from the MIME type; only needed when that is ambiguous, as in audio-only HLS.</td></tr>
+      <tr><td><code>poster</code></td><td>URL</td><td>This stream's own image.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2 id="sources">Sources</h2>
+  <div class="table-wrap"><table class="ref">
+    <thead><tr><th>Field</th><th>Type</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>src</code> <span class="req">required</span></td><td>URL</td><td>The file or playlist.</td></tr>
+      <tr><td><code>type</code> <span class="req">required</span></td><td>MIME type</td><td>Picks the engine: <code>video/mp4</code> plays natively, <code>application/vnd.apple.mpegurl</code> through hls.js or natively on Safari.</td></tr>
+      <tr><td><code>height</code></td><td>pixels</td><td>With two or more MP4 sources that declare it, each is a choice in <strong>Settings → Quality</strong>, switched keeping the position.</td></tr>
+      <tr><td><code>label</code></td><td>string</td><td>A readable name for the source.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2 id="bumpers">Intro and outro</h2>
+  <p>
+    Each is an object with <code>sources</code>, like a stream's: one video with
+    its own sound. Both are optional. The intro has a <em>Skip intro</em> button
+    and is not replayed by <code>loop</code>; the outro cannot be skipped. Not
+    allowed on a live stream.
+  </p>
+
+  <h2 id="annotations">Annotations</h2>
+  <p>
+    All share <code>kind</code>, <code>start</code> and an optional
+    <code>end</code>, in seconds of the media file. A <code>kind</code> no
+    plugin knows still passes validation.
+  </p>
+  <h3 class="ref"><code>trim</code></h3>
+  <p>
+    Plays only <code>start</code> to <code>end</code> without editing the file:
+    the bar, the time and seeking all count from <code>start</code>. One at
+    most, it needs <code>end</code>, and not on a live stream.
+  </p>
+  <h3 class="ref"><code>chapter</code></h3>
+  <p>
+    <code>title</code> is required: it is read by screen readers. Marked on the
+    bar, shown next to the time, listed in <strong>Settings → Chapters</strong>,
+    and next and previous on the lock screen jump between them. Without
+    <code>end</code>, a chapter runs to the next one.
+  </p>
+  <h3 class="ref"><code>h5p</code></h3>
+  <p>
+    <code>data.src</code> is the activity's embed URL, the one Moodle, H5P.com or
+    WordPress give; <code>data.title</code> names it. Playing through
+    <code>start</code> pauses the video and opens the activity over it. Only
+    <code>http(s)</code> URLs are accepted.
+  </p>
+
+  <h2 id="text-tracks">Text tracks</h2>
+  <div class="table-wrap"><table class="ref">
+    <thead><tr><th>Field</th><th>Type</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>src</code> <span class="req">required</span></td><td>URL</td><td>A WebVTT file.</td></tr>
+      <tr><td><code>lang</code> <span class="req">required</span></td><td>BCP 47</td><td>The language: without it the track cannot be offered.</td></tr>
+      <tr><td><code>kind</code></td><td><code>subtitles</code> · <code>captions</code> · <code>descriptions</code> · <code>chapters</code></td><td>Subtitles and captions are offered as captions and in the transcript. <code>descriptions</code> are read out to screen readers, never drawn. <code>chapters</code> tracks are left alone: chapters come from annotations.</td></tr>
+      <tr><td><code>label</code></td><td>string</td><td>The name in the menus; else the language's own name.</td></tr>
+      <tr><td><code>default</code></td><td>boolean</td><td>On from the start. One track at most.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2 id="thumbnails">Thumbnails</h2>
+  <p>
+    A WebVTT file whose cues name the picture for each stretch, usually a region
+    of one sprite sheet, so one request serves the whole bar. The image URLs are
+    relative to the WebVTT file, not to the page.
+  </p>
+<pre><code>WEBVTT
+
+00:00:00.000 --> 00:00:05.000
+thumbs.jpg#xywh=0,0,160,90
+
+00:00:05.000 --> 00:00:10.000
+thumbs.jpg#xywh=160,0,160,90</code></pre>
+
+  <h2 id="live">Live</h2>
+  <p>
+    <code>live: true</code> turns the bar into the DVR window, adds the live
+    badge, and waits and retries while the broadcast has not started. An intro,
+    an outro and a trim are not allowed: the broadcast moves on while they play.
+  </p>
+  <pre><code id="live-json">Loading…</code></pre>
+  <p><a href="live.json">live.json</a></p>
+
+  <h2 id="rules">Rules</h2>
+  <ul>
+    <li><strong>Relative URLs resolve against the page</strong> that shows the
+        player, as an <code>&lt;img&gt;</code>'s would; here, against this page.
+        Thumbnail images are the exception: relative to their WebVTT.</li>
+    <li><strong>Exactly one stream with <code>audio: true</code>.</strong> Two are
+        rejected rather than failing only on iPhone.</li>
+    <li><strong>Validation reports every error at once</strong>, each with the path
+        to the field and why, and unknown fields are ignored: a manifest can carry
+        data for your own code.</li>
+    <li><strong>Plugin settings are not in the manifest</strong>: they go to
+        <code>create()</code>. See <a href="../analytics/">Analytics and xAPI</a>
+        for the ones that send data.</li>
+  </ul>
+
+  <footer>
+    <p>Source and package documentation on <a href="https://github.com/Yurujai/nanoplayer">GitHub</a></p>
+  </footer>
+</main>
+<script type="module" src="/src/manifest.ts"></script>
+</body>
+</html>

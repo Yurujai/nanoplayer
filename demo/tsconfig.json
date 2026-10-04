@@ -16,6 +16,9 @@
       "@nanoplayer/plugin-transcript": ["../packages/plugin-transcript/src/index.ts"],
       "@nanoplayer/plugin-thumbnails": ["../packages/plugin-thumbnails/src/index.ts"],
       "@nanoplayer/plugin-cast": ["../packages/plugin-cast/src/index.ts"],
+      "@nanoplayer/plugin-xapi": ["../packages/plugin-xapi/src/index.ts"],
+      "@nanoplayer/plugin-analytics": ["../packages/plugin-analytics/src/index.ts"],
+      "@nanoplayer/plugin-h5p": ["../packages/plugin-h5p/src/index.ts"],
       "@nanoplayer/engine-hls": ["../packages/engine-hls/src/index.ts"]
     }
   },

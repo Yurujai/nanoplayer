@@ -41,7 +41,7 @@ export interface PlayerOptions {
   engines?: readonly EngineFactory[];
   /**
    * How to fetch a manifest by URL. The extension point for resolving many in
-   * one request: 32 players on a page become one call instead of 32.
+   * one request: a page full of players makes one call, not one each.
    */
   manifestResolver?: ManifestResolver;
   /**
