@@ -34,6 +34,7 @@ import '@nanoplayer/plugin-xapi';
 import '@nanoplayer/plugin-thumbnails';
 import '@nanoplayer/plugin-cast';
 import '@nanoplayer/plugin-h5p';
+import '@nanoplayer/plugin-time-links';
 import '@nanoplayer/plugin-analytics';
 
 export interface Config extends CreateConfig {
@@ -148,7 +149,7 @@ export type {
   ManifestResolver, PlayerOptions, BatchResolverOptions, RegistryOptions,
   LiveStatus, RetryPolicy,
   BarControlDecl, OverlayDecl, OverlayHandle, PanelDecl, PanelHandle,
-  SettingsChoiceDecl, SettingsGroupDecl, SettingsOptionDecl, SettingsPanelDecl,
+  SettingsActionDecl, SettingsChoiceDecl, SettingsGroupDecl, SettingsOptionDecl, SettingsPanelDecl,
   TimelineImage, TimelineMarkerDecl, TimelineMarkersDecl, TimelinePreviewDecl, UiSlots, ActivationResult, PluginConfig, PluginContext, PluginImpl, PluginManifest,
   CreateConfig,
 } from '@nanoplayer/core';
@@ -159,7 +160,7 @@ export {
 } from '@nanoplayer/ui';
 
 export type {
-  ControlBarOptions, SettingsChoicePanel, SettingsGroupPanel, SettingsOption, SettingsPanel,
+  ControlBarOptions, SettingsAction, SettingsChoicePanel, SettingsGroupPanel, SettingsOption, SettingsPanel,
   LayoutDef, LayoutId,
 } from '@nanoplayer/ui';
 

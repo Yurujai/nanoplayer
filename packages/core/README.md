@@ -210,6 +210,23 @@ own picker.
 The panel sits right after the player's element, on the page, so it inherits
 the page's colours and fonts. It is not shown in full screen.
 
+### Links to a time
+
+With `@nanoplayer/plugin-time-links` loaded, a lecture opens at the minute a
+link names, and **Settings → Copy link to this moment** makes such a link:
+
+```text
+https://campus.example/lecture-3#t=23:10
+https://campus.example/lecture-3?t=1390
+https://campus.example/lecture-3#t=1h2m30s&v=lecture-3
+```
+
+`t` takes seconds, `mm:ss`, `h:mm:ss` or `1h2m30s`. With several players on
+a page, `v` names the manifest the time is for; without it, the first player
+takes it. A link on the same page (`<a href="#t=12:30">`) jumps there and
+plays. A time from a link wins over the position the resume plugin
+remembers. Not for live streams.
+
 ### Thumbnails
 
 ```json

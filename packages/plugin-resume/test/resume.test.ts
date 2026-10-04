@@ -82,12 +82,14 @@ describe('resume plugin', () => {
     expect(localPositionStore.load('lecture-7')).toEqual({ time: 130, duration: 600 });
 
     const again = await mount();
+    await again.player.attach();
     expect(again.player.resumeAt).toBe(130);
   });
 
   it('says where it continues from, once playback starts', async () => {
     localPositionStore.save('lecture-7', { time: 750, duration: 3600 });
     const { player, overlays } = await mount();
+    await player.attach();
     expect(overlays).toHaveLength(0);
     player.bus.emit('play', { at: 750 });
     const notice = overlays[0]!.querySelector('[role="status"]')!;
@@ -125,11 +127,20 @@ describe('resume plugin', () => {
       clear: vi.fn(),
     };
     const { player } = await mount({ store });
+    await player.attach();
     expect(player.resumeAt).toBe(200);
     const at = playing(player);
     at(240);
     expect(store.save).toHaveBeenCalledWith('lecture-7', { time: 240, duration: 600 });
     expect(localPositionStore.load('lecture-7')).toBeNull();
+  });
+
+  it('a start already chosen, as a link to a time, wins over the remembered one', async () => {
+    localPositionStore.save('lecture-7', { time: 300, duration: 600 });
+    const { player } = await mount();
+    player.seek(42);
+    await player.attach();
+    expect(player.resumeAt).toBe(42);
   });
 
   it('does not switch on for live', async () => {

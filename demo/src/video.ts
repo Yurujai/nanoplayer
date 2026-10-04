@@ -10,6 +10,7 @@ import '@nanoplayer/plugin-resume';
 import '@nanoplayer/plugin-transcript';
 import '@nanoplayer/plugin-thumbnails';
 import '@nanoplayer/plugin-cast';
+import '@nanoplayer/plugin-time-links';
 
 // The page lives under /video/ and the media at the site root.
 const MEDIA = '../media/';

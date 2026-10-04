@@ -141,16 +141,23 @@ class Resume implements PluginImpl {
       else quietly(() => store.save(id, { time, duration }));
     };
 
-    // The store may answer after the viewer already pressed play or seeked:
-    // then their choice stands.
+    // Applied as the media starts loading, not as soon as the store answers:
+    // by then a link to a time (or any code) has had its say, and a start
+    // already chosen wins over a remembered one. A store answering later still
+    // applies, unless the viewer already pressed play or seeked.
+    let saved: SavedPosition | null = null;
+    let attaching = false;
+    const apply = () => {
+      if (started || resumedFrom !== null || !shouldResume(saved)) return;
+      if (player.resumeAt > 0) return;
+      resumedFrom = saved.time;
+      player.seek(saved.time);
+    };
     void Promise.resolve()
       .then(() => store.load(id))
-      .then((saved) => {
-        if (started || !shouldResume(saved)) return;
-        resumedFrom = saved.time;
-        player.seek(saved.time);
-      })
+      .then((answer) => { saved = answer; if (attaching) apply(); })
       .catch(() => {});
+    this.#unsubscribe.push(player.on('engine:attach:start', () => { attaching = true; apply(); }));
 
     this.#unsubscribe.push(
       player.on('play', () => {

@@ -64,6 +64,11 @@
         <strong>⚙ Settings → Chapters</strong>.</li>
     <li><strong>Transcript.</strong> The page icon in the bar opens it below the
         player: the current phrase follows along, and any phrase jumps there.</li>
+    <li><strong>Links to a time.</strong> <strong>⚙ Settings → Copy link to this
+        moment</strong>, then open the link: the lecture starts there. Or add
+        <code>#t=0:20</code> to this page's address.</li>
+    <li><strong>Keyboard help.</strong> Press <kbd>?</kbd> for the list of shortcuts,
+        or open it from <strong>⚙ Settings</strong>.</li>
     <li><strong>Resume.</strong> Leave halfway and reload: playback continues where
         you were, and says so.</li>
     <li><strong>Media keys and lock screen.</strong> Play/pause keys and headphone
@@ -106,6 +111,7 @@ import '@nanoplayer/plugin-resume';
 import '@nanoplayer/plugin-transcript';
 import '@nanoplayer/plugin-thumbnails';
 import '@nanoplayer/plugin-cast';
+import '@nanoplayer/plugin-time-links';
 
 const player = create('#player', { manifest: '/api/video/123' });
 attachControls(player);</code></pre>
