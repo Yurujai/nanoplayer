@@ -374,6 +374,20 @@ does not change: **the audio is the master** and the muted video chases it.
 ]
 ```
 
+### Sign language interpreter
+
+A third stream with the role `interpreter`, kept in sync like the slides. It
+is not one of the layouts: it shows in a corner, over them, and the viewer
+hides it, moves it or resizes it (`@nanoplayer/plugin-sign-language`). There
+can be one, it never carries the sound, and it needs another stream to
+interpret.
+
+```json
+{ "id": "interpreter", "role": "interpreter", "audio": false,
+  "label": "Sign language interpreter",
+  "sources": [{ "src": "interpreter.mp4", "type": "video/mp4" }] }
+```
+
 ### Intro and outro
 
 Pieces chained before and after the content: an institutional intro or an
@@ -596,7 +610,7 @@ player is created. Sound that starts on its own needs a way to stop it (WCAG
 | Field | Type | |
 |---|---|---|
 | `id` | `string` | **Required**, unique |
-| `role` | `string` | **Required**. `presenter`, `presentation` or another |
+| `role` | `string` | **Required**. `presenter`, `presentation`, `interpreter` or another |
 | `audio` | `boolean` | **Required**. Exactly one set to `true` |
 | `sources` | `Source[]` | **Required**, at least one |
 | `kind` | `'video' \| 'audio'` | Inferred from the MIME type; only needed if ambiguous |

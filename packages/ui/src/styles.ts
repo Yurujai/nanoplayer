@@ -369,6 +369,33 @@ button.np__live:focus-visible{outline:3px solid var(--np-color-focus);outline-of
 
 .np--inactive.np--layout-pip .np__stage>[data-role="presenter"]{bottom:1rem}
 
+/* --- sign language interpreter ---
+   Over the picture in a corner, never laid out beside it, and big enough to
+   read the signs. Bottom right unless the plugin says otherwise; above the
+   bar while it shows. */
+.np{--np-interpreter-width:28%}
+.np__stage>[data-role="interpreter"]{
+  position:absolute;right:1rem;bottom:7rem;z-index:var(--np-z-pip);
+  flex:none;width:var(--np-interpreter-width);min-width:min(7.5rem,45%);
+  border-radius:var(--np-radius);overflow:hidden;
+  box-shadow:0 4px 16px rgba(0,0,0,.6);
+  transition:bottom var(--np-transition);
+}
+.np--inactive .np__stage>[data-role="interpreter"]{bottom:1rem}
+.np[data-interpreter-corner^="top"] .np__stage>[data-role="interpreter"]{top:1rem;bottom:auto}
+.np[data-interpreter-corner$="left"] .np__stage>[data-role="interpreter"]{left:1rem;right:auto}
+/* Hidden, not removed: it keeps in step and comes back without a seek. */
+.np[data-interpreter="off"] .np__stage>[data-role="interpreter"]{visibility:hidden}
+/* The two never share a corner: picture in picture's speaker moves aside. */
+.np--layout-pip:has(.np__stage>[data-role="interpreter"]):not([data-interpreter="off"]):not([data-interpreter-corner$="left"]):not([data-interpreter-corner^="top"]) .np__stage>[data-role="presenter"]{right:auto;left:1rem}
+/* Captions leave it room: whoever needs the interpreter often reads the captions too. */
+.np:has(.np__stage>[data-role="interpreter"]):not([data-interpreter="off"]):not([data-interpreter-corner^="top"]) .np__overlay--captions{
+  padding-right:calc(var(--np-interpreter-width) + 2rem);
+}
+.np[data-interpreter-corner="bottom-left"]:has(.np__stage>[data-role="interpreter"]):not([data-interpreter="off"]) .np__overlay--captions{
+  padding-right:5%;padding-left:calc(var(--np-interpreter-width) + 2rem);
+}
+
 /* By the player's width, not the window's: a player in a narrow column of a
    wide page must adapt too. */
 @container (max-width:640px){

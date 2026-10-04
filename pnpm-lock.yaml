@@ -59,6 +59,9 @@ importers:
       '@nanoplayer/plugin-resume':
         specifier: workspace:*
         version: link:../packages/plugin-resume
+      '@nanoplayer/plugin-sign-language':
+        specifier: workspace:*
+        version: link:../packages/plugin-sign-language
       '@nanoplayer/plugin-thumbnails':
         specifier: workspace:*
         version: link:../packages/plugin-thumbnails
@@ -126,6 +129,9 @@ importers:
       '@nanoplayer/plugin-resume':
         specifier: workspace:*
         version: link:../packages/plugin-resume
+      '@nanoplayer/plugin-sign-language':
+        specifier: workspace:*
+        version: link:../packages/plugin-sign-language
       '@nanoplayer/plugin-thumbnails':
         specifier: workspace:*
         version: link:../packages/plugin-thumbnails
@@ -193,6 +199,9 @@ importers:
       '@nanoplayer/plugin-resume':
         specifier: workspace:*
         version: link:../plugin-resume
+      '@nanoplayer/plugin-sign-language':
+        specifier: workspace:*
+        version: link:../plugin-sign-language
       '@nanoplayer/plugin-thumbnails':
         specifier: workspace:*
         version: link:../plugin-thumbnails
@@ -333,6 +342,16 @@ importers:
         version: 6.4.3(@types/node@26.1.2)
 
   packages/plugin-resume:
+    dependencies:
+      '@nanoplayer/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.3(@types/node@26.1.2)
+
+  packages/plugin-sign-language:
     dependencies:
       '@nanoplayer/core':
         specifier: workspace:*

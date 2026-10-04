@@ -5,7 +5,7 @@
  *
  * It composes the bar's components and implements the plugin slots.
  */
-import { hasEngine, strings } from '@nanoplayer/core';
+import { hasEngine, mainStreams, strings } from '@nanoplayer/core';
 import type {
   BarControlDecl, Catalogues, OverlayDecl, OverlayHandle, PanelDecl, PanelHandle,
   Player, PlayerError,
@@ -280,7 +280,8 @@ export class ControlBar implements UiSlots {
     });
 
     const addLayouts = () => {
-      const layouts = layoutsFor(this.#player.manifest?.streams.length ?? 1, this.#t);
+      const m = this.#player.manifest;
+      const layouts = layoutsFor(m ? mainStreams(m).length : 1, this.#t);
       if (layouts.length > 0) this.#addLayoutPanel(layouts);
     };
     if (this.#player.manifest) addLayouts();

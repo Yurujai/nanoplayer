@@ -23,6 +23,15 @@
       "sources": [
         { "src": "../media/slides.mp4", "type": "video/mp4" }
       ]
+    },
+    {
+      "id": "interpreter",
+      "role": "interpreter",
+      "label": "Sign language interpreter",
+      "audio": false,
+      "sources": [
+        { "src": "../media/interpreter.mp4", "type": "video/mp4" }
+      ]
     }
   ],
   "intro": {

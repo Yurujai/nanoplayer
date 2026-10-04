@@ -12,8 +12,12 @@ export interface Source {
   label?: string;
 }
 
-/** The stream's role in the composition. Open, because layouts are plugins. */
-export type StreamRole = 'presenter' | 'presentation' | (string & {});
+/**
+ * The stream's role in the composition. Open, because layouts are plugins.
+ * `interpreter` is a sign language interpreter: shown over the picture, never
+ * laid out beside it.
+ */
+export type StreamRole = 'presenter' | 'presentation' | 'interpreter' | (string & {});
 
 export interface Stream {
   id: string;

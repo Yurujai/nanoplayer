@@ -22,6 +22,21 @@ export function slaveStreams(m: Manifest): Stream[] {
   return m.streams.filter((s) => !s.audio);
 }
 
+/** The role of a sign language interpreter's stream. */
+export const INTERPRETER_ROLE = 'interpreter';
+
+export function isInterpreter(stream: Stream): boolean {
+  return stream.role === INTERPRETER_ROLE;
+}
+
+/**
+ * The streams the layouts arrange: all but the interpreter, which goes over
+ * the picture. One video and an interpreter is not a "side by side" choice.
+ */
+export function mainStreams(m: Manifest): Stream[] {
+  return m.streams.filter((s) => !isInterpreter(s));
+}
+
 export function trimOf(m: Manifest): { start: number; end: number } | null {
   const t = m.annotations?.find((a): a is Extract<Annotation, { kind: 'trim' }> => a.kind === 'trim');
   return t ? { start: t.start, end: t.end } : null;

@@ -24,6 +24,7 @@ export default defineConfig({
       '@nanoplayer/playlist': src('../playlist/src/index.ts'),
       '@nanoplayer/plugin-h5p': src('../plugin-h5p/src/index.ts'),
       '@nanoplayer/plugin-time-links': src('../plugin-time-links/src/index.ts'),
+      '@nanoplayer/plugin-sign-language': src('../plugin-sign-language/src/index.ts'),
       '@nanoplayer/plugin-analytics': src('../plugin-analytics/src/index.ts'),
     },
   },

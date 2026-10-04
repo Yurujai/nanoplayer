@@ -77,6 +77,7 @@ first time HLS has to play: whoever plays MP4 does not pay for it.
 | [`@nanoplayer/playlist`](packages/playlist/) | Several lectures in a row: previous, next, a list, and the next one at the end |
 | [`@nanoplayer/plugin-h5p`](packages/plugin-h5p/) | H5P activities at a time: the video pauses and the activity opens over it |
 | [`@nanoplayer/plugin-time-links`](packages/plugin-time-links/) | Open a lecture at a minute from a link, and copy a link to the current one |
+| [`@nanoplayer/plugin-sign-language`](packages/plugin-sign-language/) | Sign language interpreter: show or hide it, its corner and size, remembered |
 | [`@nanoplayer/plugin-analytics`](packages/plugin-analytics/) | Player events, milestones and time watched to any analytics destination |
 | [`@nanoplayer/bundle`](packages/bundle/) | All of the above in one file, for the `<script>` tag; hls.js comes from its own tag |
 

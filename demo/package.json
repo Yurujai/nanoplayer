@@ -27,6 +27,7 @@
     "@nanoplayer/plugin-analytics": "workspace:*",
     "@nanoplayer/plugin-h5p": "workspace:*",
     "@nanoplayer/plugin-time-links": "workspace:*",
+    "@nanoplayer/plugin-sign-language": "workspace:*",
     "@nanoplayer/engine-hls": "workspace:*"
   },
   "devDependencies": {

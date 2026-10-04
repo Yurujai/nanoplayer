@@ -68,7 +68,7 @@
     <thead><tr><th>Field</th><th>Type</th><th>What it does</th></tr></thead>
     <tbody>
       <tr><td><code>id</code> <span class="req">required</span></td><td>string</td><td>Unique within the manifest.</td></tr>
-      <tr><td><code>role</code> <span class="req">required</span></td><td><code>presenter</code> · <code>presentation</code> · any</td><td>What the layouts arrange: speaker only, slides only, side by side, picture in picture.</td></tr>
+      <tr><td><code>role</code> <span class="req">required</span></td><td><code>presenter</code> · <code>presentation</code> · <code>interpreter</code> · any</td><td>What the layouts arrange: speaker only, slides only, side by side, picture in picture. An <code>interpreter</code> is not part of the layouts: it shows in a corner, over them.</td></tr>
       <tr><td><code>audio</code> <span class="req">required</span></td><td>boolean</td><td><strong>Exactly one</strong> stream carries the sound: it is the clock the others follow, and iPhone cannot play two at once.</td></tr>
       <tr><td><code>sources</code> <span class="req">required</span></td><td><a href="#sources">Source</a>[]</td><td>The same video in one or more formats or qualities.</td></tr>
       <tr><td><code>label</code></td><td>string</td><td>A readable name for the stream.</td></tr>
@@ -165,6 +165,9 @@ thumbs.jpg#xywh=160,0,160,90</code></pre>
         Thumbnail images are the exception: relative to their WebVTT.</li>
     <li><strong>Exactly one stream with <code>audio: true</code>.</strong> Two are
         rejected rather than failing only on iPhone.</li>
+    <li><strong>At most one <code>interpreter</code> stream</strong>, without the
+        sound, and never on its own: it interprets another stream. Its corner,
+        size and visibility are the viewer's, remembered across lectures.</li>
     <li><strong>Validation reports every error at once</strong>, each with the path
         to the field and why, and unknown fields are ignored: a manifest can carry
         data for your own code.</li>

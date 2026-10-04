@@ -59,6 +59,17 @@ ffmpeg -y -loglevel error \
   -movflags +faststart \
   slides.mp4
 
+# A stand-in for a sign language interpreter: smooth colour that never stops
+# moving (cheap to encode), and the same burned-in timecode, so its sync is
+# visible by eye too.
+echo "Generating interpreter.mp4 (640x360, 25fps, no audio)..."
+ffmpeg -y -loglevel error \
+  -f lavfi -i "gradients=size=640x360:rate=25:speed=0.02:n=3:duration=${DUR}" \
+  -vf "format=yuv420p,${BOX},$(label 'INTERPRETER 25fps'),$(tc 0xffffff)" \
+  -c:v libx264 -preset veryfast -pix_fmt yuv420p -crf "${CRF}" -g 50 -an \
+  -movflags +faststart \
+  interpreter.mp4
+
 echo "Generating audio.m4a (audio only)..."
 ffmpeg -y -loglevel error \
   -f lavfi -i "sine=frequency=330:sample_rate=44100:duration=${DUR}" \
@@ -116,6 +127,6 @@ stamp() { printf '%02d:%02d:%02d.000' $(( $1 / 3600 )) $(( $1 % 3600 / 60 )) $((
 } > thumbs.vtt
 
 echo
-ls -lh presenter.mp4 slides.mp4 intro.mp4 outro.mp4 poster.jpg thumbs.jpg audio.m4a
+ls -lh presenter.mp4 slides.mp4 interpreter.mp4 intro.mp4 outro.mp4 poster.jpg thumbs.jpg audio.m4a
 ls hls/*.m3u8 | sed "s/^/  /"
 echo "Done."

@@ -10,6 +10,7 @@ import '@nanoplayer/plugin-transcript';
 import '@nanoplayer/plugin-thumbnails';
 import '@nanoplayer/plugin-cast';
 import '@nanoplayer/plugin-h5p';
+import '@nanoplayer/plugin-sign-language';
 
 /** Shows each file as served, so the page and the example cannot drift apart. */
 async function show(file: string, into: string): Promise<Manifest> {

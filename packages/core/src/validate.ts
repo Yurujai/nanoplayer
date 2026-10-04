@@ -92,6 +92,19 @@ export function validateManifest(input: unknown): ValidationResult {
       checkSources(s['sources'], `${at}.sources`);
     });
 
+    // A sign language interpreter goes over a video with the lecture's sound:
+    // it never carries that sound, there is one, and there is something to interpret.
+    const interpreters = streams.filter((s: unknown) => isObj(s) && s['role'] === 'interpreter');
+    if (interpreters.length > 1) err('streams', `${interpreters.length} interpreter streams. There can only be one`);
+    streams.forEach((s: unknown, i: number) => {
+      if (isObj(s) && s['role'] === 'interpreter' && s['audio'] === true) {
+        err(`streams[${i}].audio`, 'The interpreter stream cannot carry the sound: the lecture\'s stream does');
+      }
+    });
+    if (interpreters.length > 0 && interpreters.length === streams.length) {
+      err('streams', 'An interpreter stream needs a stream with the lecture to interpret');
+    }
+
     // Exactly one audio stream: it is the clock master (S1), and iPhone cannot
     // play two. see docs/browser-quirks.md#ios-single-audio
     if (withAudio === 0) {

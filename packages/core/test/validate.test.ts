@@ -46,6 +46,19 @@ describe('validateManifest', () => {
     expect(pathsOf(validateManifest(dual({ thumbnails: { src: 'thumbs.vtt' } })))).toContain('thumbnails');
   });
 
+  it('takes a sign language interpreter as one more stream, without the sound', () => {
+    const interpreter = { id: 'sign', role: 'interpreter', audio: false,
+      sources: [{ src: 'sign.mp4', type: 'video/mp4' }] };
+    const base = dual();
+    expect(validateManifest({ ...base, streams: [...base.streams, interpreter] }).ok).toBe(true);
+    expect(pathsOf(validateManifest({ ...base, streams: [base.streams[0]!, { ...interpreter, audio: true }] })))
+      .toContain('streams[1].audio');
+    expect(pathsOf(validateManifest({ ...base, streams: [...base.streams, interpreter, { ...interpreter, id: 'sign2' }] })))
+      .toContain('streams');
+    const alone = validateManifest({ ...base, streams: [{ ...interpreter, audio: true }] });
+    expect(alone.ok ? [] : alone.errors.map((e) => e.message).join(' ')).toMatch(/needs a stream with the lecture/);
+  });
+
   it('requires an id and at least one stream', () => {
     expect(pathsOf(validateManifest({}))).toEqual(
       expect.arrayContaining(['id', 'streams']),
@@ -219,5 +232,17 @@ describe('helpers', () => {
     expect(trimOf(parseManifest(dual()))).toBeNull();
     const m = parseManifest(dual({ annotations: [{ kind: 'trim', start: 30, end: 90 }] }));
     expect(trimOf(m)).toEqual({ start: 30, end: 90 });
+  });
+});
+
+describe('main streams', () => {
+  it('are all but the interpreter, which goes over the picture', async () => {
+    const { mainStreams, isInterpreter } = await import('../src/manifest-queries.js');
+    const m = dual({ streams: [
+      ...dual().streams,
+      { id: 'sign', role: 'interpreter', audio: false, sources: [{ src: 's.mp4', type: 'video/mp4' }] },
+    ] });
+    expect(mainStreams(m as never).map((s) => s.id)).toEqual(['cam', 'slides']);
+    expect(isInterpreter(m.streams[2] as never)).toBe(true);
   });
 });

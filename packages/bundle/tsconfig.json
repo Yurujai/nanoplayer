@@ -20,6 +20,7 @@
       "@nanoplayer/playlist": ["../playlist/src/index.ts"],
       "@nanoplayer/plugin-h5p": ["../plugin-h5p/src/index.ts"],
       "@nanoplayer/plugin-time-links": ["../plugin-time-links/src/index.ts"],
+      "@nanoplayer/plugin-sign-language": ["../plugin-sign-language/src/index.ts"],
       "@nanoplayer/plugin-analytics": ["../plugin-analytics/src/index.ts"]
     }
   },

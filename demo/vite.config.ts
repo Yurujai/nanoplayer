@@ -41,6 +41,8 @@ export default defineConfig({
         new URL('../packages/plugin-h5p/src/index.ts', import.meta.url)),
       '@nanoplayer/plugin-time-links': fileURLToPath(
         new URL('../packages/plugin-time-links/src/index.ts', import.meta.url)),
+      '@nanoplayer/plugin-sign-language': fileURLToPath(
+        new URL('../packages/plugin-sign-language/src/index.ts', import.meta.url)),
     },
   },
   build: {

@@ -11,14 +11,15 @@ import '@nanoplayer/plugin-transcript';
 import '@nanoplayer/plugin-thumbnails';
 import '@nanoplayer/plugin-cast';
 import '@nanoplayer/plugin-time-links';
+import '@nanoplayer/plugin-sign-language';
 
 // The page lives under /video/ and the media at the site root.
 const MEDIA = '../media/';
 const TITLE = 'Introduction to thermodynamics';
 
-function manifestFor(dual: boolean, withBumpers: boolean): Manifest {
+function manifestFor(dual: boolean, withBumpers: boolean, withInterpreter: boolean): Manifest {
   return {
-    id: `demo-${dual ? 'dual' : 'single'}${withBumpers ? '-bumpers' : ''}`,
+    id: `demo-${dual ? 'dual' : 'single'}${withBumpers ? '-bumpers' : ''}${withInterpreter ? '-sign' : ''}`,
     title: TITLE,
     duration: 40,
     poster: `${MEDIA}poster.jpg`,
@@ -28,6 +29,10 @@ function manifestFor(dual: boolean, withBumpers: boolean): Manifest {
       ...(dual ? [
         { id: 'slides', role: 'presentation', label: 'Slides', audio: false,
           sources: [{ src: `${MEDIA}slides.mp4`, type: 'video/mp4', height: 540 }] },
+      ] : []),
+      ...(withInterpreter ? [
+        { id: 'interpreter', role: 'interpreter', label: 'Sign language interpreter', audio: false,
+          sources: [{ src: `${MEDIA}interpreter.mp4`, type: 'video/mp4' }] },
       ] : []),
     ],
     ...(withBumpers ? {
@@ -61,6 +66,7 @@ let controls: ControlBar | null = null;
 async function mount(): Promise<void> {
   const dual = $<HTMLInputElement>('#mode-dual').checked;
   const withBumpers = $<HTMLInputElement>('#bumpers').checked;
+  const withInterpreter = $<HTMLInputElement>('#interpreter').checked;
   const from = player && player.state !== 'idle' ? player.currentTime : 0;
   const wasPlaying = !!player && !player.paused;
 
@@ -72,7 +78,7 @@ async function mount(): Promise<void> {
   container.className = 'player';
   $('#player').replaceWith(container);
 
-  player = create(container, { manifest: manifestFor(dual, withBumpers), lang: 'en' });
+  player = create(container, { manifest: manifestFor(dual, withBumpers, withInterpreter), lang: 'en' });
   controls = attachControls(player, { label: TITLE });
 
   if (from > 0 || wasPlaying) {
@@ -83,7 +89,7 @@ async function mount(): Promise<void> {
   }
 }
 
-for (const sel of ['#mode-single', '#mode-dual', '#bumpers']) {
+for (const sel of ['#mode-single', '#mode-dual', '#bumpers', '#interpreter']) {
   $(sel).addEventListener('change', () => { void mount(); });
 }
 void mount();

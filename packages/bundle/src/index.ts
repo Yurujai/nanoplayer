@@ -35,6 +35,7 @@ import '@nanoplayer/plugin-thumbnails';
 import '@nanoplayer/plugin-cast';
 import '@nanoplayer/plugin-h5p';
 import '@nanoplayer/plugin-time-links';
+import '@nanoplayer/plugin-sign-language';
 import '@nanoplayer/plugin-analytics';
 
 export interface Config extends CreateConfig {
@@ -108,7 +109,8 @@ export const NanoPlayer = {
 // `create` beats the core's star-exported one. Guarded by test/create.test.ts.
 export {
   // manifest
-  isAudioOnly, isAudioOnlyManifest, masterStream, parseManifest, slaveStreams,
+  INTERPRETER_ROLE, isAudioOnly, isAudioOnlyManifest, isInterpreter, mainStreams, masterStream,
+  parseManifest, slaveStreams,
   trimOf, validateManifest,
   // strings
   BASE_LANGUAGE, StringRegistry, strings,

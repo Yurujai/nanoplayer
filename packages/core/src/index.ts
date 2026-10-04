@@ -5,7 +5,8 @@ export type {
 } from './manifest.js';
 export { parseManifest, validateManifest } from './validate.js';
 export {
-  isAudioOnly, isAudioOnlyManifest, masterStream, slaveStreams, trimOf,
+  INTERPRETER_ROLE, isAudioOnly, isAudioOnlyManifest, isInterpreter, mainStreams, masterStream,
+  slaveStreams, trimOf,
 } from './manifest-queries.js';
 export type { ValidationIssue, ValidationResult } from './validate.js';
 export type { TrimRange } from './trim-timeline.js';
