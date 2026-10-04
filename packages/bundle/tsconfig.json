@@ -18,7 +18,8 @@
       "@nanoplayer/plugin-thumbnails": ["../plugin-thumbnails/src/index.ts"],
       "@nanoplayer/plugin-cast": ["../plugin-cast/src/index.ts"],
       "@nanoplayer/playlist": ["../playlist/src/index.ts"],
-      "@nanoplayer/plugin-h5p": ["../plugin-h5p/src/index.ts"]
+      "@nanoplayer/plugin-h5p": ["../plugin-h5p/src/index.ts"],
+      "@nanoplayer/plugin-analytics": ["../plugin-analytics/src/index.ts"]
     }
   },
   "include": ["src"]

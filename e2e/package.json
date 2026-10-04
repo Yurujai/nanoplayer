@@ -21,7 +21,8 @@
     "@nanoplayer/plugin-thumbnails": "workspace:*",
     "@nanoplayer/plugin-cast": "workspace:*",
     "@nanoplayer/playlist": "workspace:*",
-    "@nanoplayer/plugin-h5p": "workspace:*"
+    "@nanoplayer/plugin-h5p": "workspace:*",
+    "@nanoplayer/plugin-analytics": "workspace:*"
   },
   "devDependencies": { "axe-core": "^4.10.0", "hls.js": "^1.5.0", "playwright": "^1.49.0" }
 }

@@ -81,6 +81,9 @@ importers:
       '@nanoplayer/playlist':
         specifier: workspace:*
         version: link:../packages/playlist
+      '@nanoplayer/plugin-analytics':
+        specifier: workspace:*
+        version: link:../packages/plugin-analytics
       '@nanoplayer/plugin-audio-tracks':
         specifier: workspace:*
         version: link:../packages/plugin-audio-tracks
@@ -142,6 +145,9 @@ importers:
       '@nanoplayer/playlist':
         specifier: workspace:*
         version: link:../playlist
+      '@nanoplayer/plugin-analytics':
+        specifier: workspace:*
+        version: link:../plugin-analytics
       '@nanoplayer/plugin-audio-tracks':
         specifier: workspace:*
         version: link:../plugin-audio-tracks
@@ -206,6 +212,16 @@ importers:
         version: 6.4.3(@types/node@26.1.2)
 
   packages/playlist:
+    dependencies:
+      '@nanoplayer/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.3(@types/node@26.1.2)
+
+  packages/plugin-analytics:
     dependencies:
       '@nanoplayer/core':
         specifier: workspace:*

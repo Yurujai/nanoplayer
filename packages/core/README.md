@@ -281,6 +281,39 @@ create('#player', {
 The activity id defaults to `urn:nanoplayer:video:<manifest id>`. A failing
 LRS never stops playback.
 
+### Analytics
+
+`@nanoplayer/plugin-analytics` sends player events to any analytics
+destination, in batches: every 10 s, every 20 events, and with `sendBeacon`
+as the page goes away. Off unless configured.
+
+```js
+create('#player', {
+  manifest,
+  plugins: {
+    analytics: {
+      endpoint: 'https://stats.example.org/collect',        // POSTs a JSON array
+      // send: (events) => events.forEach((e) => gtag('event', e.type, e)),
+      context: { course: 'PHY-101' },                        // added to every event
+      // events: ['play', 'pause', 'ended'] or 'all'; sample: 0.1
+    },
+  },
+});
+```
+
+Each event carries `type`, `time`, a random `session`, the manifest's `id` as
+`video`, `position`, `duration`, the event's own `data` and the `context`.
+Besides the bus events worth counting (play, pause, seeks, errors, stalls,
+quality, intro and outro…, not the per-second `time`), it derives two:
+
+| Event | |
+|---|---|
+| `milestone` | 25, 50 and 75 % **played through**, a seek past them does not count; 100 at the end |
+| `session:end` | Seconds really watched, and the milestones reached |
+
+No personal data: whoever needs to tie events to a student adds it to
+`context`, deliberately.
+
 ### Audio only
 
 Nothing needs declaring: the MIME type is enough.
