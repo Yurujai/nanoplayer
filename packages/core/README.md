@@ -387,7 +387,7 @@ new one does not touch the core.
 "annotations": [
   { "kind": "trim", "start": 12, "end": 3500 },
   { "kind": "chapter", "start": 60, "end": 900, "title": "First law" },
-  { "kind": "h5p", "start": 300, "data": { "library": "H5P.Blanks 1.14" } }
+  { "kind": "h5p", "start": 300, "data": { "src": "https://lms.example/h5p/embed.php?id=7", "title": "Quick check" } }
 ]
 ```
 
@@ -421,6 +421,19 @@ manifest, not the engine. If the manifest comes preloaded, the bar can show
 There can be only **one** trim, it needs `end`, and **it is rejected on a live
 stream**: trimming something that has not finished makes no sense.
 
+
+#### H5P
+
+With `@nanoplayer/plugin-h5p` loaded, each `h5p` annotation is marked on the
+bar, and playing through its `start` pauses the video and opens the activity
+over the whole player. `data.src` is the content's **embed URL**, the one
+Moodle, H5P.com or WordPress give; `data.title` names it. It is a dialog:
+focus goes into it, Escape or **Continue the video** closes it and playback
+goes on. Seeking over an activity does not open it.
+
+Only `http(s)` URLs are accepted, and the iframe is sandboxed so the activity
+cannot navigate the page. Results stay with whatever hosts the content: report
+them from there, or with the xAPI plugin for the video itself.
 
 ### Live
 

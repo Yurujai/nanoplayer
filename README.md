@@ -76,7 +76,8 @@ first time HLS has to play: whoever plays MP4 does not pay for it.
 | [`@nanoplayer/plugin-thumbnails`](packages/plugin-thumbnails/) | Thumbnails over the progress bar, from a WebVTT sprite file |
 | [`@nanoplayer/plugin-cast`](packages/plugin-cast/) | Chromecast and AirPlay through the Remote Playback API |
 | [`@nanoplayer/playlist`](packages/playlist/) | Several lectures in a row: previous, next, a list, and the next one at the end |
-| [`@nanoplayer/bundle`](packages/bundle/) | All of the above in one file, for the `<script>` tag; hls.js comes from its own tag. 41 KB gzip |
+| [`@nanoplayer/plugin-h5p`](packages/plugin-h5p/) | H5P activities at a time: the video pauses and the activity opens over it |
+| [`@nanoplayer/bundle`](packages/bundle/) | All of the above in one file, for the `<script>` tag; hls.js comes from its own tag. 42 KB gzip |
 
 ## What is missing
 
@@ -84,8 +85,6 @@ In order of what blocks the most people:
 
 - **Publishing.** Nothing is on npm and there is no release workflow. The
   packages are still at `0.0.0`.
-- **Planned plugins:** H5P. The
-  manifest's annotations are already the mechanism they will come in through.
 - **Demo.** The multi-instance case has nowhere to be seen, and spike S5 is not
   published on Pages. The live demo depends on a third-party public test
   channel.

@@ -26,7 +26,8 @@
     "@nanoplayer/plugin-xapi": "workspace:*",
     "@nanoplayer/plugin-thumbnails": "workspace:*",
     "@nanoplayer/plugin-cast": "workspace:*",
-    "@nanoplayer/playlist": "workspace:*"
+    "@nanoplayer/playlist": "workspace:*",
+    "@nanoplayer/plugin-h5p": "workspace:*"
   },
   "devDependencies": { "vite": "^6.0.0" }
 }

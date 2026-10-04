@@ -33,6 +33,7 @@ import '@nanoplayer/plugin-transcript';
 import '@nanoplayer/plugin-xapi';
 import '@nanoplayer/plugin-thumbnails';
 import '@nanoplayer/plugin-cast';
+import '@nanoplayer/plugin-h5p';
 
 export interface Config extends CreateConfig {
   /** Control bar, on by default. `false` leaves it out; an object configures it. */

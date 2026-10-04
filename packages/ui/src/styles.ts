@@ -193,6 +193,8 @@ button.np__btn[disabled]{opacity:.4;cursor:default}
 /* --- overlays --- */
 .np__overlay{position:absolute;z-index:var(--np-z-overlay);pointer-events:none}
 .np__overlay--fill{inset:0}
+/* Above the bar and the poster, and it takes clicks: an activity, not a layer. */
+.np__overlay--interactive{inset:0;z-index:var(--np-z-alert);pointer-events:auto}
 .np__overlay--center{inset:0;display:flex;align-items:center;justify-content:center}
 .np__overlay--captions{
   left:0;right:0;bottom:1.5rem;
@@ -386,6 +388,21 @@ button.np__skip:hover{background:rgba(0,0,0,.88)}
 button.np__skip:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:-3px}
 button.np__skip svg{width:1.25rem;height:1.25rem;fill:currentColor;pointer-events:none}
 .np--inactive button.np__skip{bottom:1.5rem}
+
+/* --- H5P activities, over the whole player --- */
+.np-h5p{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  background:rgba(10,12,16,.96);
+}
+.np-h5p:focus{outline:none}
+.np-h5p__header{display:flex;align-items:center;gap:.75rem;padding:.5rem .75rem}
+.np-h5p__title{margin:0;flex:1;font-size:1rem;font-weight:600;color:var(--np-color-control)}
+button.np-h5p__continue{
+  padding:.5rem 1rem;min-height:2.5rem;border:0;border-radius:var(--np-radius);
+  background:var(--np-color-control);color:#000;font:inherit;font-weight:600;cursor:pointer;
+}
+button.np-h5p__continue:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:2px}
+.np-h5p__frame{flex:1;width:100%;border:0;background:#fff}
 
 /* --- panels below the player ---
    Outside .np, on the host page: colours inherit from it, light or dark. */

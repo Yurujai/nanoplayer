@@ -96,6 +96,12 @@ export interface OverlayDecl {
    * - `fill`     — the whole player
    */
   position?: 'captions' | 'center' | 'fill';
+  /**
+   * An activity rather than a layer: it covers the whole player, bar
+   * included, and takes clicks. Its owner then answers for its accessibility,
+   * focus included, as with a panel.
+   */
+  interactive?: boolean;
 }
 
 export interface OverlayHandle {
@@ -133,8 +139,9 @@ export interface UiSlots {
   addTimelinePreview(decl: TimelinePreviewDecl): () => void;
   /**
    * Reserves a layer over the video. Unlike `bar` and `settings`, this hands out
-   * DOM: a layer is **content** (a caption, an activity), not interactive
-   * controls, which must stay under the UI's control.
+   * DOM: a layer is **content** (a caption, a notice), not player controls,
+   * which must stay under the UI's control. An `interactive` one is an
+   * activity that replaces the video for a while.
    */
   addOverlay(decl: OverlayDecl): OverlayHandle;
   /**

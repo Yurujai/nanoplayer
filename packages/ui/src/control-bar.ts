@@ -202,6 +202,7 @@ export class ControlBar implements UiSlots {
   addOverlay(decl: OverlayDecl): OverlayHandle {
     const el = this.#root.ownerDocument.createElement('div');
     el.className = `np__overlay np__overlay--${decl.position ?? 'fill'}`;
+    if (decl.interactive) el.classList.add('np__overlay--interactive');
     el.dataset['overlay'] = decl.id;
     this.#root.insertBefore(el, this.#bar);
     return { element: el, remove: () => el.remove() };

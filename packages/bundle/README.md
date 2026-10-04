@@ -2,8 +2,8 @@
 
 The whole player in one file, with the interface, captions, chapters, picture
 in picture, cast, audio tracks, quality, media session, resume, transcript,
-xAPI, thumbnails, playlists and the HLS engine already included. **133 KB, 41 KB
-gzip.**
+xAPI, thumbnails, playlists, H5P and the HLS engine already included. **136 KB,
+42 KB gzip.**
 
 It is the package for installing with one `<script>` tag and three lines: no
 build, no tooling and no npm.

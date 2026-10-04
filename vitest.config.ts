@@ -22,6 +22,7 @@ export default defineConfig({
       '@nanoplayer/plugin-thumbnails': source('packages/plugin-thumbnails/src/index.ts'),
       '@nanoplayer/plugin-cast': source('packages/plugin-cast/src/index.ts'),
       '@nanoplayer/playlist': source('packages/playlist/src/index.ts'),
+      '@nanoplayer/plugin-h5p': source('packages/plugin-h5p/src/index.ts'),
       '@nanoplayer/engine-hls': source('packages/engine-hls/src/index.ts'),
     },
   },

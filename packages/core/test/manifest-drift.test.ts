@@ -95,7 +95,7 @@ describe('drift between types and validator', () => {
       annotations: [
         { kind: 'trim', start: 12, end: 3500 },
         { kind: 'chapter', start: 60, end: 900, title: 'First law' },
-        { kind: 'h5p', start: 300, end: 330, data: { library: 'H5P.Blanks 1.14' } },
+        { kind: 'h5p', start: 300, end: 330, data: { src: 'https://lms.example/h5p/embed.php?id=7' } },
       ],
       textTracks: [
         { src: 'es.vtt', lang: 'es', label: 'Español', kind: 'subtitles', default: true },
