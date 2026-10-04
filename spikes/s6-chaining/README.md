@@ -15,7 +15,7 @@ seams, whether unlocking in the gesture or not, and unmuting the incoming piece
 does not pause it. It is a single device with a single Safari: the per-element
 policy is historical on iOS and still has to be confirmed on an earlier iOS.
 
-> Throwaway code. What survives are the conclusions in §5.
+> Throwaway code. What survives are the conclusions in §6.
 
 ---
 

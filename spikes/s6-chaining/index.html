@@ -335,7 +335,9 @@
   $('#sel-variant').addEventListener('change', adjustLead);
   adjustLead();
 
-  $('#rvfc-note').textContent = window.HAS_RVFC
+  // Asked here: chain.js's HAS_RVFC is a `const`, never on `window`, so the
+  // note always claimed the browser lacked it.
+  $('#rvfc-note').textContent = 'requestVideoFrameCallback' in HTMLVideoElement.prototype
     ? 'requestVideoFrameCallback available: gaps are measured on presented frames.'
     : 'No requestVideoFrameCallback: estimated with requestAnimationFrame. The numbers come out coarser and are NOT comparable with those of a browser that has it.';
 
