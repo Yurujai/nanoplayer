@@ -28,6 +28,18 @@ export class VolumeControl {
 
     this.#listeners.on(this.#button, 'click', () => this.toggleMute());
     this.#listeners.on(this.#slider, 'input', () => this.set(Number(this.#slider.value)));
+    // From the player, not assumed: painted only on change, the full slider showed
+    // no fill until moved, and a muted start (autoplay 'muted') showed full volume.
+    this.#listeners.add(player.on('volumechange', () => this.#sync()));
+    this.#sync();
+  }
+
+  /** What the player has now: muted reads as zero, the slider's own idea of silence. */
+  #sync(): void {
+    const v = this.player.muted ? 0 : this.player.volume;
+    if (this.player.volume > 0) this.#previous = this.player.volume;
+    this.#slider.value = String(v);
+    this.#render(v);
   }
 
   /**
