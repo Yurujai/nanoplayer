@@ -249,3 +249,56 @@ describe('control bar · shape', () => {
     expect(host.classList.contains('np--ratio')).toBe(false);
   });
 });
+
+describe('control bar · lifetime', () => {
+  const MANIFEST = {
+    id: 'x',
+    streams: [{ id: 'a', role: 'presenter', audio: true, sources: [{ src: 'a.mp4', type: 'video/mp4' }] }],
+  };
+
+  it('goes with its player', async () => {
+    const { Player } = await import('@nanoplayer/core');
+    const { attachControls } = await import('../src/control-bar.js');
+    const player = new Player({ container: host, manifest: MANIFEST });
+    attachControls(player);
+    player.destroy();
+    expect(host.querySelector('.np__bar')).toBeNull();
+    expect(host.querySelector('.np__stage')).toBeNull();
+    expect(host.classList.contains('np')).toBe(false);
+    expect(host.getAttribute('role')).toBeNull();
+  });
+
+  it('removed alone, it hands the stream boxes back to the player', async () => {
+    const { Player } = await import('@nanoplayer/core');
+    const { attachControls } = await import('../src/control-bar.js');
+    const box = document.createElement('div');
+    box.dataset['stream'] = 'a';
+    host.appendChild(box);
+    const bar = attachControls(new Player({ container: host, manifest: MANIFEST }));
+    expect(box.parentElement?.classList.contains('np__stage')).toBe(true);
+    bar.destroy();
+    expect(box.parentElement).toBe(host);
+  });
+});
+
+describe('plugin controls · focus', () => {
+  it('keeps focus on a toggle pressed from the keyboard, though the bar is rebuilt', async () => {
+    const { Player } = await import('@nanoplayer/core');
+    const { attachControls } = await import('../src/control-bar.js');
+    const bar = attachControls(new Player({ container: host, manifest: {
+      id: 'x', streams: [{ id: 'a', role: 'presenter', audio: true, sources: [{ src: 'a.mp4', type: 'video/mp4' }] }],
+    } }), { poster: false });
+    const row = host.querySelector<HTMLElement>('.np__row:not(.np__row--progress)')!;
+    row.getBoundingClientRect = () => ({ width: 800, height: 40 }) as DOMRect;
+    let on = false;
+    bar.addBarControl({
+      id: 'toggle', icon: '<svg></svg>', label: () => (on ? 'On' : 'Off'),
+      pressed: () => on, onActivate: () => { on = !on; },
+    });
+    bar.refresh();
+    host.querySelector<HTMLButtonElement>('[data-control="toggle"]')!.focus();
+    host.querySelector<HTMLButtonElement>('[data-control="toggle"]')!.click();
+    expect(document.activeElement?.getAttribute('data-control')).toBe('toggle');
+    expect(document.activeElement?.getAttribute('aria-pressed')).toBe('true');
+  });
+});

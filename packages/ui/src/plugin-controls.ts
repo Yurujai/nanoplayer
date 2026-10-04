@@ -47,6 +47,11 @@ export class PluginControls {
       .sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100));
     const fit = this.#howManyFit();
 
+    // Rebuilding drops the focused button, and focus fell to <body>: pressing a
+    // toggle from the keyboard lost the viewer's place (test: "keeps focus").
+    const focused = this.doc.activeElement instanceof HTMLElement
+      && this.element.contains(this.doc.activeElement)
+      ? this.doc.activeElement.dataset['control'] : undefined;
     this.element.textContent = '';
     this.#buttons.clear();
     for (const c of available.slice(0, fit)) {
@@ -57,6 +62,7 @@ export class PluginControls {
       this.element.appendChild(b);
       this.#buttons.set(c.id, b);
     }
+    if (focused) this.#buttons.get(focused)?.focus();
 
     this.#removeOverflow?.();
     this.#removeOverflow = null;

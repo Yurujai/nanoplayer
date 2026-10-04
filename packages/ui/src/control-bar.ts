@@ -332,6 +332,8 @@ export class ControlBar implements UiSlots {
       this.#progress.render();
     }));
     l.add(p.on('state:change', () => this.#render()));
+    // A destroyed player left its bar behind, listeners and all (test: "goes with its player").
+    l.add(p.on('destroy', () => this.destroy()));
     l.add(p.on('time', () => this.#progress.render()));
     l.add(p.on('play', () => {
       this.#announce(this.#t(p.phase === 'intro' ? 'ui.chain.intro' : 'ui.status.playing'));
@@ -444,6 +446,9 @@ export class ControlBar implements UiSlots {
     this.#bar.remove();
     this.#skipButton.remove();
     this.#liveRegion.remove();
+    // The stream boxes go back to the container: a player can outlive its controls.
+    for (const box of [...this.#stage.children]) this.#root.insertBefore(box, this.#stage);
+    this.#stage.remove();
     this.#root.classList.remove('np', 'np--ratio');
     this.#root.style.removeProperty('aspect-ratio');
     this.#root.removeAttribute('role');

@@ -2,7 +2,8 @@
 
 The whole player in one file, with the interface, captions, chapters, picture
 in picture, cast, audio tracks, quality, media session, resume, transcript,
-xAPI, thumbnails and the HLS engine already included. **130 KB, 40 KB gzip.**
+xAPI, thumbnails, playlists and the HLS engine already included. **133 KB, 41 KB
+gzip.**
 
 It is the package for installing with one `<script>` tag and three lines: no
 build, no tooling and no npm.
@@ -95,6 +96,24 @@ import '@nanoplayer/bundle/nanoplayer.css';
 
 Checked in CI with the CSP really set by header, not simulated: zero violations
 and the styles applied.
+
+## Playlists
+
+Several lectures in a row, each with the same configuration:
+
+```js
+const list = NanoPlayer.createPlaylist('#player', {
+  items: ['/api/video/1', '/api/video/2', { manifest: '/api/video/3', title: 'Entropy' }],
+  // start: 0, autoAdvance: true, loop: false, and any create() option
+});
+list.next(); list.previous(); list.go(2); list.player;  // the current Player
+```
+
+The bar gains previous and next, and the settings menu the list. When a
+lecture ends the next one starts; `loop` goes from the last back to the first.
+Each item is a fresh player in the same container: a player belongs to one
+manifest. With npm, `@nanoplayer/playlist` does the same given a `create`
+function.
 
 ## HLS
 

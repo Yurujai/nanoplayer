@@ -11,7 +11,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createContext, runInContext } from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
-const PACKAGES = ['core', 'ui', 'engine-hls', 'plugin-captions', 'plugin-chapters', 'plugin-pip', 'plugin-audio-tracks', 'plugin-media-session', 'plugin-quality', 'plugin-resume', 'plugin-transcript', 'plugin-xapi', 'plugin-thumbnails', 'plugin-cast', 'bundle'];
+const PACKAGES = ['core', 'ui', 'engine-hls', 'plugin-captions', 'plugin-chapters', 'plugin-pip', 'plugin-audio-tracks', 'plugin-media-session', 'plugin-quality', 'plugin-resume', 'plugin-transcript', 'plugin-xapi', 'plugin-thumbnails', 'plugin-cast', 'playlist', 'bundle'];
 const root = new URL('../packages/', import.meta.url);
 
 let failures = 0;

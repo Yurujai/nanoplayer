@@ -18,6 +18,9 @@ import {
   PluginRegistry, VERSION, type CreateConfig, type EngineFactory,
 } from '@nanoplayer/core';
 import { createHlsEngineFactory, type HlsConstructor } from '@nanoplayer/engine-hls';
+import {
+  createPlaylist as createPlaylistWith, Playlist, type PlaylistItem,
+} from '@nanoplayer/playlist';
 import { attachControls, type ControlBarOptions } from '@nanoplayer/ui';
 import '@nanoplayer/plugin-captions';
 import '@nanoplayer/plugin-chapters';
@@ -64,10 +67,32 @@ export function create(target: string | HTMLElement, config: Config): Player {
   return player;
 }
 
+export interface PlaylistConfig extends Omit<Config, 'manifest' | 'loop'> {
+  items: readonly PlaylistItem[];
+  start?: number;
+  /** Start the next one when one ends. On by default. */
+  autoAdvance?: boolean;
+  /** Here `loop` is the whole list: after the last, the first. */
+  loop?: boolean;
+}
+
+/** Several lectures in a row, each a player with controls and the rest of `config`. */
+export function createPlaylist(target: string | HTMLElement, config: PlaylistConfig): Playlist {
+  const { items, start, autoAdvance, loop, ...player } = config;
+  return createPlaylistWith(target, {
+    items,
+    ...(start !== undefined ? { start } : {}),
+    ...(autoAdvance !== undefined ? { autoAdvance } : {}),
+    ...(loop !== undefined ? { loop } : {}),
+    create: (el, manifest) => create(el, { ...player, manifest }),
+  });
+}
+
 /** The global for the `<script>` case: its `create` is the one with controls. */
 export const NanoPlayer = {
   VERSION,
   create,
+  createPlaylist,
   attachControls,
   registry,
   plugins,
@@ -135,5 +160,6 @@ export type {
 } from '@nanoplayer/ui';
 
 export {
-  Player, PlayerRegistry, PluginRegistry, plugins, registry, VERSION, attachControls,
+  Player, PlayerRegistry, PluginRegistry, plugins, registry, VERSION, attachControls, Playlist,
 };
+export type { PlaylistItem };

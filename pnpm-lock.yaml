@@ -78,6 +78,9 @@ importers:
       '@nanoplayer/engine-hls':
         specifier: workspace:*
         version: link:../packages/engine-hls
+      '@nanoplayer/playlist':
+        specifier: workspace:*
+        version: link:../packages/playlist
       '@nanoplayer/plugin-audio-tracks':
         specifier: workspace:*
         version: link:../packages/plugin-audio-tracks
@@ -133,6 +136,9 @@ importers:
       '@nanoplayer/engine-hls':
         specifier: workspace:*
         version: link:../engine-hls
+      '@nanoplayer/playlist':
+        specifier: workspace:*
+        version: link:../playlist
       '@nanoplayer/plugin-audio-tracks':
         specifier: workspace:*
         version: link:../plugin-audio-tracks
@@ -189,6 +195,16 @@ importers:
       hls.js:
         specifier: ^1.5.0
         version: 1.6.17
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.3(@types/node@26.1.2)
+
+  packages/playlist:
+    dependencies:
+      '@nanoplayer/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
       vite:
         specifier: ^6.0.0
         version: 6.4.3(@types/node@26.1.2)

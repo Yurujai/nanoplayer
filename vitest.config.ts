@@ -21,6 +21,7 @@ export default defineConfig({
       '@nanoplayer/plugin-xapi': source('packages/plugin-xapi/src/index.ts'),
       '@nanoplayer/plugin-thumbnails': source('packages/plugin-thumbnails/src/index.ts'),
       '@nanoplayer/plugin-cast': source('packages/plugin-cast/src/index.ts'),
+      '@nanoplayer/playlist': source('packages/playlist/src/index.ts'),
       '@nanoplayer/engine-hls': source('packages/engine-hls/src/index.ts'),
     },
   },
