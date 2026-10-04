@@ -147,6 +147,20 @@ describe('SettingsMenu · contract with plugins', () => {
     });
   });
 
+  it('an action closes the menu, then runs, so it may move focus', () => {
+    const m = new SettingsMenu(host, t);
+    let menuOpenWhenRun: boolean | undefined;
+    m.addPanel(panel('speed', { priority: 10 }));
+    m.addPanel({ id: 'help', label: 'Help', priority: 60, onActivate: () => { menuOpenWhenRun = m.isOpen; } });
+    m.open();
+    const item = host.querySelector<HTMLElement>('[data-panel="help"]')!;
+    expect(item.getAttribute('role')).toBe('menuitem');
+    expect(item.hasAttribute('aria-haspopup'), 'it opens nothing').toBe(false);
+    item.click();
+    expect(menuOpenWhenRun).toBe(false);
+    expect(m.isOpen).toBe(false);
+  });
+
   it('does not open with nothing to offer', () => {
     const m = new SettingsMenu(host, t);
     m.open();

@@ -103,6 +103,13 @@ hid this behaviour.
 | `F` | Fullscreen |
 | `0`–`9` | Jump to that percentage |
 | `Home` / `End` | Start or end |
+| `?` | This list, in a dialog |
+
+`?` opens the list in a dialog inside the player (so it works in full screen
+too), and **Settings → Keyboard shortcuts** opens the same for whoever reaches
+for the mouse. Focus moves into it and stays there; Escape closes it and puts
+focus back. The dialog is built from the same table as the shortcuts, and a
+test fails if a key is missing from it.
 
 Shortcuts give way to keys the focused control already uses: arrows on a slider
 belong to it, and space on a button activates it.

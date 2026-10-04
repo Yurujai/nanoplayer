@@ -24,6 +24,7 @@ import { PluginControls } from './plugin-controls.js';
 import { Poster } from './poster.js';
 import { ProgressBar } from './progress-bar.js';
 import { SettingsMenu } from './settings-menu.js';
+import { ShortcutsDialog } from './shortcuts-dialog.js';
 import { injectStyles } from './styles.js';
 import { VideoGestures } from './video-gestures.js';
 import { VolumeControl } from './volume-control.js';
@@ -77,6 +78,7 @@ export class ControlBar implements UiSlots {
   #loading!: LoadingIndicator;
   #error!: ErrorDisplay;
   #gestures!: VideoGestures;
+  #shortcutsDialog!: ShortcutsDialog;
   #autoHide: AutoHide;
   #poster: Poster | null = null;
   #resizeObserver: ResizeObserver | null = null;
@@ -175,6 +177,7 @@ export class ControlBar implements UiSlots {
     this.#root.appendChild(this.#skipButton);
 
     this.#root.appendChild(this.#bar);
+    this.#shortcutsDialog = new ShortcutsDialog(this.#root, this.#t);
     this.#addOwnPanels();
   }
 
@@ -253,6 +256,14 @@ export class ControlBar implements UiSlots {
 
   /** Registered through the same slot plugins use: if the UI needed a shortcut, the API would be wrong. */
   #addOwnPanels(): void {
+    // Discoverable without the keyboard too: whoever reaches for the mouse may
+    // not know "?" exists.
+    this.#menu.addPanel({
+      id: 'shortcuts',
+      label: this.#t('ui.keys.title'),
+      priority: 60,
+      onActivate: () => this.#shortcutsDialog.open(),
+    });
     this.#menu.addPanel({
       id: 'speed',
       label: this.#t('ui.speed'),
@@ -357,7 +368,8 @@ export class ControlBar implements UiSlots {
       toggleMute: () => this.#volume.toggleMute(),
       stepVolume: (direction) => this.#volume.step(direction),
       toggleFullscreen: () => this.#fullscreen.toggle(),
-      isMenuOpen: () => this.#menu.isOpen,
+      showHelp: () => this.#shortcutsDialog.open(),
+      isMenuOpen: () => this.#menu.isOpen || this.#shortcutsDialog.isOpen,
       used: () => this.#wake(),
     });
     l.on(this.#root, 'keydown', (ev: KeyboardEvent) => shortcuts.handle(ev));
@@ -444,6 +456,7 @@ export class ControlBar implements UiSlots {
     this.#loading.destroy();
     this.#error.destroy();
     this.#gestures.destroy();
+    this.#shortcutsDialog.destroy();
     for (const panel of this.#panels) panel.remove();
     this.#panels = [];
     this.#bar.remove();

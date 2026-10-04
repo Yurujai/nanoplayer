@@ -434,13 +434,47 @@ button.np__skip svg{width:1.25rem;height:1.25rem;fill:currentColor;pointer-event
 }
 .np-h5p:focus{outline:none}
 .np-h5p__header{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .75rem;padding:.5rem .75rem}
-.np-h5p__title{margin:0;flex:1;font-size:1rem;font-weight:600;color:var(--np-color-control)}
+
 button.np-h5p__continue{
   padding:.5rem 1rem;min-height:2.5rem;border:0;border-radius:var(--np-radius);
   background:var(--np-color-control);color:#000;font:inherit;font-weight:600;cursor:pointer;
 }
 button.np-h5p__continue:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:2px}
 .np-h5p__frame{flex:1;width:100%;border:0;background:#fff}
+
+/* --- dialogs over the player --- */
+.np__dialog-layer{
+  position:absolute;inset:0;z-index:var(--np-z-alert);
+  display:flex;align-items:center;justify-content:center;
+  padding:.6rem;background:rgba(0,0,0,.6);
+}
+.np__dialog{
+  width:min(28rem,100%);max-height:100%;overflow-y:auto;
+  padding:.9rem 1rem 1rem;border-radius:var(--np-radius);
+  background:rgba(20,22,26,.97);box-shadow:0 8px 28px rgba(0,0,0,.5);
+  font-size:.875rem;line-height:1.4;
+}
+.np__dialog-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.6rem}
+/* Every property set: the host page's h2 styles reach inside the player. */
+.np__dialog-title,.np-h5p__title{
+  margin:0;flex:1;font:600 1rem/1.3 var(--np-font);
+  text-transform:none;letter-spacing:normal;color:var(--np-color-control);
+}
+button.np__dialog-close{
+  padding:.4rem .85rem;min-height:2.25rem;border:0;border-radius:var(--np-radius);
+  background:rgba(255,255,255,.14);color:var(--np-color-control);font:inherit;cursor:pointer;
+}
+button.np__dialog-close:hover{background:rgba(255,255,255,.24)}
+button.np__dialog-close:focus-visible{outline:3px solid var(--np-color-focus);outline-offset:2px}
+.np__keys{width:100%;border-collapse:collapse}
+.np__keys th{text-align:left;font-weight:600;color:var(--np-color-control-dim);font-size:.75rem;
+  text-transform:uppercase;letter-spacing:.05em;padding:0 .4rem .35rem}
+.np__keys td{padding:.4rem;border-top:1px solid rgba(255,255,255,.1);vertical-align:top}
+.np__keys td:first-child{white-space:nowrap}
+.np__keys kbd{
+  display:inline-block;min-width:1.6em;padding:.1em .45em;border-radius:4px;text-align:center;
+  background:rgba(255,255,255,.14);font:inherit;font-weight:600;
+}
 
 /* --- panels below the player ---
    Outside .np, on the host page: colours inherit from it, light or dark. */
@@ -483,7 +517,8 @@ button.np-h5p__continue:focus-visible{outline:3px solid var(--np-color-focus);ou
 }
 /* Forced colours drop translucent backgrounds: borders keep controls visible. */
 @media (forced-colors:active){
-  button.np__btn,button.np__skip,button.np__error-retry{border:1px solid ButtonText}
+  button.np__btn,button.np__skip,button.np__error-retry,button.np__dialog-close{border:1px solid ButtonText}
+  .np__dialog{border:1px solid CanvasText}
   .np__error-box{border:1px solid CanvasText}
   .np__bar{background:Canvas}
 }

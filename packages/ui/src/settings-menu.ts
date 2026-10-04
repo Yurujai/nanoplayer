@@ -36,9 +36,19 @@ export interface SettingsGroupPanel {
   priority?: number;
 }
 
-export type SettingsPanel = SettingsChoicePanel | SettingsGroupPanel;
+/** An entry that does something rather than choose. */
+export interface SettingsAction {
+  id: string;
+  label: string;
+  /** Runs once the menu has closed and focus is back on the gear, so it may move it. */
+  onActivate: () => void;
+  priority?: number;
+}
+
+export type SettingsPanel = SettingsChoicePanel | SettingsGroupPanel | SettingsAction;
 
 const isGroup = (p: SettingsPanel): p is SettingsGroupPanel => 'panels' in p;
+const isAction = (p: SettingsPanel): p is SettingsAction => 'onActivate' in p;
 
 /** Less room than this above the controls, and the menu covers the player instead. */
 const MIN_MENU_HEIGHT = 160;
@@ -209,12 +219,13 @@ export class SettingsMenu {
     this.#setRovingIndex(menu, 0);
   }
 
-  /** The open panel, or `null` for the main one. */
-  #current(): SettingsPanel | null {
+  /** The open panel, or `null` for the main one. An action never opens. */
+  #current(): SettingsChoicePanel | SettingsGroupPanel | null {
     const [top, child] = this.#path;
     if (top === undefined) return null;
     const panel = this.#panels.get(top);
-    if (!panel || child === undefined) return panel ?? null;
+    if (!panel || isAction(panel)) return null;
+    if (child === undefined) return panel;
     return isGroup(panel) ? (panel.panels.find((p) => p.id === child) ?? null) : null;
   }
 
@@ -264,6 +275,19 @@ export class SettingsMenu {
 
   #panelRow(panel: SettingsPanel): HTMLElement {
     const doc = this.#popup.ownerDocument;
+    if (isAction(panel)) {
+      const item = doc.createElement('button');
+      item.type = 'button';
+      item.className = 'np__menu-item';
+      item.dataset['panel'] = panel.id;
+      item.setAttribute('role', 'menuitem');
+      item.textContent = panel.label;
+      item.addEventListener('click', () => {
+        this.close();
+        panel.onActivate();
+      });
+      return item;
+    }
     const current = isGroup(panel)
       ? undefined
       : panel.options.find((o) => o.value === panel.getValue());

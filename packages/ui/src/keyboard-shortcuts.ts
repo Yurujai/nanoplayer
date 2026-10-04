@@ -10,6 +10,8 @@ export interface ShortcutActions {
   toggleMute(): void;
   stepVolume(direction: 1 | -1): void;
   toggleFullscreen(): void;
+  showHelp(): void;
+  /** A menu or dialog is open: keys belong to it. */
   isMenuOpen(): boolean;
   /** A shortcut ran: the bar should show itself. */
   used(): void;
@@ -21,6 +23,24 @@ interface Shortcut {
   seeks: boolean;
   run(player: Player): void;
 }
+
+/**
+ * What the help dialog lists, one row per action. Kept beside the table above,
+ * and a test checks every key there is listed here: a shortcut nobody can
+ * discover may as well not exist.
+ */
+export const SHORTCUT_HELP: ReadonlyArray<{ keys: readonly string[]; label: string }> = [
+  { keys: [' ', 'k'], label: 'ui.keys.playPause' },
+  { keys: ['ArrowLeft', 'ArrowRight'], label: 'ui.keys.seekShort' },
+  { keys: ['j', 'l'], label: 'ui.keys.seekLong' },
+  { keys: ['ArrowUp', 'ArrowDown'], label: 'ui.keys.volume' },
+  { keys: ['m'], label: 'ui.keys.mute' },
+  { keys: ['f'], label: 'ui.keys.fullscreen' },
+  { keys: ['0', '9'], label: 'ui.keys.percent' },
+  { keys: ['Home', 'End'], label: 'ui.keys.ends' },
+  { keys: ['?'], label: 'ui.keys.help' },
+  { keys: ['Escape'], label: 'ui.keys.escape' },
+];
 
 /** Keys the focused control already uses: taking them would break native behaviour. */
 const CONTROL_KEYS = new Set([
@@ -54,12 +74,18 @@ export class KeyboardShortcuts {
       { keys: ['ArrowDown'], seeks: false, run: () => actions.stepVolume(-1) },
       { keys: ['m', 'M'], seeks: false, run: () => actions.toggleMute() },
       { keys: ['f', 'F'], seeks: false, run: () => actions.toggleFullscreen() },
+      { keys: ['?'], seeks: false, run: () => actions.showHelp() },
       { keys: ['Home'], seeks: true, run: (p) => p.seek(0) },
       { keys: ['End'], seeks: true, run: (p) => p.seek(p.duration || 0) },
       ...['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'].map((key) => ({
         keys: [key], seeks: true, run: (p: Player) => p.seek((Number(key) / 10) * (p.duration || 0)),
       })),
     ];
+  }
+
+  /** Every key the table answers to, for checking the help against it. */
+  get keys(): string[] {
+    return this.#shortcuts.flatMap((s) => [...s.keys]);
   }
 
   handle(ev: KeyboardEvent): void {

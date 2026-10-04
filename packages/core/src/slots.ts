@@ -53,7 +53,16 @@ export interface SettingsGroupDecl {
   priority?: number;
 }
 
-export type SettingsPanelDecl = SettingsChoiceDecl | SettingsGroupDecl;
+/** An entry that does something rather than choose: copy a link, open a dialog. */
+export interface SettingsActionDecl {
+  id: string;
+  label: string;
+  /** Runs once the menu has closed, so it may move focus elsewhere. */
+  onActivate: () => void;
+  priority?: number;
+}
+
+export type SettingsPanelDecl = SettingsChoiceDecl | SettingsGroupDecl | SettingsActionDecl;
 
 /**
  * A named segment on the progress bar: a chapter, an activity. Times are in

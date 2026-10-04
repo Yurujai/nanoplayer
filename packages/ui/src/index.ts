@@ -6,7 +6,7 @@ export type { ControlBarOptions } from './control-bar.js';
 export { Poster } from './poster.js';
 export { SettingsMenu } from './settings-menu.js';
 export type {
-  SettingsChoicePanel, SettingsGroupPanel, SettingsOption, SettingsPanel,
+  SettingsAction, SettingsChoicePanel, SettingsGroupPanel, SettingsOption, SettingsPanel,
 } from './settings-menu.js';
 export { applyLayout, layoutsFor } from './layouts.js';
 export type { LayoutDef, LayoutId } from './layouts.js';

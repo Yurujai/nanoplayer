@@ -75,7 +75,7 @@ export type { VttCue } from './vtt.js';
 // --- UI slots ---------------------------------------------------------------
 export type {
   BarControlDecl, OverlayDecl, OverlayHandle, PanelDecl, PanelHandle,
-  SettingsChoiceDecl, SettingsGroupDecl, SettingsOptionDecl, SettingsPanelDecl,
+  SettingsActionDecl, SettingsChoiceDecl, SettingsGroupDecl, SettingsOptionDecl, SettingsPanelDecl,
   TimelineImage, TimelineMarkerDecl, TimelineMarkersDecl, TimelinePreviewDecl, UiSlots,
 } from './slots.js';
 
