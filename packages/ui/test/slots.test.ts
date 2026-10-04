@@ -226,3 +226,26 @@ describe('panel slot', () => {
     expect(host.querySelector('[data-control="panel-notes"]')).toBeNull();
   });
 });
+
+describe('control bar · shape', () => {
+  const MANIFEST = {
+    id: 'x',
+    streams: [{ id: 'a', role: 'presenter', audio: true, sources: [{ src: 'a.mp4', type: 'video/mp4' }] }],
+  };
+
+  it('a fixed aspect ratio shapes the player', async () => {
+    const { Player } = await import('@nanoplayer/core');
+    const { attachControls } = await import('../src/control-bar.js');
+    attachControls(new Player({ container: host, manifest: MANIFEST }), { aspectRatio: '4:3' });
+    expect(host.style.aspectRatio).toBe('4 / 3');
+    expect(host.classList.contains('np--ratio')).toBe(true);
+  });
+
+  it('ignores a ratio it cannot read', async () => {
+    const { Player } = await import('@nanoplayer/core');
+    const { attachControls } = await import('../src/control-bar.js');
+    attachControls(new Player({ container: host, manifest: MANIFEST }), { aspectRatio: 'wide' });
+    expect(host.style.aspectRatio).toBe('');
+    expect(host.classList.contains('np--ratio')).toBe(false);
+  });
+});

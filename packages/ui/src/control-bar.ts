@@ -41,6 +41,19 @@ export interface ControlBarOptions {
   label?: string;
   /** Show the poster and play button while there is no media. On by default. */
   poster?: boolean;
+  /** What the time readout counts: from the start (default) or down to the end. */
+  timeDisplay?: 'elapsed' | 'remaining';
+  /**
+   * A fixed shape, `'16:9'` or `'4:3'`, the videos fitted inside it. Without
+   * it the player is as wide as its container and as tall as the video.
+   */
+  aspectRatio?: string;
+}
+
+/** `'16:9'` or `'16/9'` to CSS's `16 / 9`; anything else is ignored. */
+function cssRatio(ratio: string): string | null {
+  const m = /^\s*(\d+(?:\.\d+)?)\s*[:/]\s*(\d+(?:\.\d+)?)\s*$/.exec(ratio);
+  return m && Number(m[1]) > 0 && Number(m[2]) > 0 ? `${m[1]} / ${m[2]}` : null;
 }
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -83,6 +96,12 @@ export class ControlBar implements UiSlots {
 
     if (options.injectStyles !== false) injectStyles(this.#root.ownerDocument);
     this.#build(options.label);
+    this.#progress.remaining = options.timeDisplay === 'remaining';
+    const ratio = options.aspectRatio ? cssRatio(options.aspectRatio) : null;
+    if (ratio) {
+      this.#root.style.aspectRatio = ratio;
+      this.#root.classList.add('np--ratio');
+    }
     this.#connect();
     this.#render();
     if (options.poster !== false) this.#poster = new Poster(player);
@@ -425,7 +444,8 @@ export class ControlBar implements UiSlots {
     this.#bar.remove();
     this.#skipButton.remove();
     this.#liveRegion.remove();
-    this.#root.classList.remove('np');
+    this.#root.classList.remove('np', 'np--ratio');
+    this.#root.style.removeProperty('aspect-ratio');
     this.#root.removeAttribute('role');
     this.#root.removeAttribute('aria-label');
   }

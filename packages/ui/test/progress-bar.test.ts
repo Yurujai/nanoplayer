@@ -82,3 +82,14 @@ describe('progress bar · thumbnails', () => {
     expect(tip.textContent).toBe('2:30');
   });
 });
+
+describe('progress bar · remaining time', () => {
+  it('counts down to the end when asked', () => {
+    const { progress } = bar({ currentTime: 150 });
+    progress.render();
+    expect(progress.time.textContent).toBe('2:30 / 10:00');
+    progress.remaining = true;
+    progress.render();
+    expect(progress.time.textContent).toBe('−7:30 / 10:00');
+  });
+});

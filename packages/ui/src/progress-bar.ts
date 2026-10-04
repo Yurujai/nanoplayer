@@ -35,6 +35,8 @@ export class ProgressBar {
   /** Duration the segments were laid out for: they are rebuilt only when it changes. */
   #segmentsFor = -1;
   #dragging = false;
+  /** Count down to the end instead of up from the start. */
+  remaining = false;
   /** Seconds left in the intro or outro, from `chain:time`. */
   #bumperLeft: number | null = null;
 
@@ -209,7 +211,10 @@ export class ProgressBar {
     const label = this.#segmentAt(t);
     const spoken = spokenTime(t, this.t.lang);
     this.#range.setAttribute('aria-valuetext', label ? `${spoken}, ${label}` : spoken);
-    this.time.textContent = `${formatTime(t)} / ${formatTime(this.player.duration)}`;
+    const d = this.player.duration;
+    this.time.textContent = this.remaining
+      ? `−${formatTime(Math.max(0, (d || 0) - t))} / ${formatTime(d)}`
+      : `${formatTime(t)} / ${formatTime(d)}`;
     this.segment.textContent = label ?? '';
   }
 

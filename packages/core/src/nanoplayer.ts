@@ -13,6 +13,7 @@
  * playback works without configuration.
  */
 import type { EngineFactory } from './engine.js';
+import type { PlayerError } from './errors.js';
 import type { Catalogues } from './i18n.js';
 import type { Manifest } from './manifest.js';
 import { Player, type ManifestResolver, type PlayerOptions } from './player.js';
@@ -41,8 +42,18 @@ export interface CreateConfig {
   syncProfile?: SyncProfile;
   /** Registry to coordinate with. The page's shared one by default; `false` isolates the player. */
   registry?: PlayerRegistry | false;
-  /** Start playing as soon as possible, subject to the browser's autoplay policy. */
-  autoplay?: boolean;
+  /**
+   * Start playing on creation, which gives up the lazy lifecycle: the media
+   * downloads at once. Browsers block autoplay with sound until the viewer
+   * interacts with the site, so:
+   *
+   * - `true` tries with sound; refused, the play button stays.
+   * - `'muted'` starts muted, which browsers allow.
+   * - `'any'` tries with sound and, refused, retries muted.
+   */
+  autoplay?: boolean | 'muted' | 'any';
+  /** Start over at the end. The intro is not replayed: it introduces, once. */
+  loop?: boolean;
   /** UI language. Defaults to the document's. The bar and plugins inherit it. */
   lang?: string;
   /**
@@ -101,12 +112,28 @@ export function create(
     void plugins.activate(player, config.plugins ?? {}, manifest);
   });
 
-  if (config.autoplay) {
-    // An autoplay block already travels on the bus as `media/blocked`.
-    void player.play().catch(() => {});
+  if (config.loop) {
+    player.on('ended', () => {
+      player.seek(0);
+      void player.play().catch(() => {});
+    });
   }
 
+  if (config.autoplay) void autoplay(player, config.autoplay);
+
   return player;
+}
+
+/** A refusal already travels on the bus as `media/blocked`; the UI shows play again. */
+async function autoplay(player: Player, mode: true | 'muted' | 'any'): Promise<void> {
+  if (mode === 'muted') player.setMuted(true);
+  try {
+    await player.play();
+  } catch (error) {
+    if (mode !== 'any' || (error as Partial<PlayerError>).code !== 'media/blocked') return;
+    player.setMuted(true);
+    await player.play().catch(() => {});
+  }
 }
 
 /**

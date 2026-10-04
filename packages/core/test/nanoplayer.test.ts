@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import type { EngineFactory } from '../src/engine.js';
 import { create, NanoPlayer, VERSION, registry } from '../src/nanoplayer.js';
+import { Player } from '../src/player.js';
 import { PlayerRegistry } from '../src/registry.js';
 
 /** Fake engine: happy-dom's `canPlayType` returns '', so the native engine plays nothing. */
@@ -108,5 +109,62 @@ describe('public surface', () => {
     // Path from the repo root: under happy-dom `import.meta.url` is an http URL.
     const pkg = JSON.parse(readFileSync('packages/core/package.json', 'utf8'));
     expect(VERSION).toBe(pkg.version);
+  });
+});
+
+describe('NanoPlayer.create · autoplay and loop', () => {
+  const blocked = Object.assign(new Error('blocked'), { code: 'media/blocked', retryable: false });
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('true tries with sound, and a refusal leaves it there', async () => {
+    const play = vi.spyOn(Player.prototype, 'play').mockRejectedValue(blocked);
+    const p = create('#p', { manifest: MANIFEST as never, registry: false, autoplay: true });
+    await settle();
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(p.muted).toBe(false);
+  });
+
+  it("'muted' starts muted, which browsers allow", async () => {
+    const play = vi.spyOn(Player.prototype, 'play').mockResolvedValue();
+    const p = create('#p', { manifest: MANIFEST as never, registry: false, autoplay: 'muted' });
+    await settle();
+    expect(p.muted).toBe(true);
+    expect(play).toHaveBeenCalledTimes(1);
+  });
+
+  it("'any' retries muted only when the browser blocks sound", async () => {
+    const play = vi.spyOn(Player.prototype, 'play')
+      .mockRejectedValueOnce(blocked).mockResolvedValueOnce();
+    const p = create('#p', { manifest: MANIFEST as never, registry: false, autoplay: 'any' });
+    await settle();
+    expect(play).toHaveBeenCalledTimes(2);
+    expect(p.muted).toBe(true);
+  });
+
+  it("'any' does not retry a real failure", async () => {
+    const play = vi.spyOn(Player.prototype, 'play')
+      .mockRejectedValue(Object.assign(new Error('x'), { code: 'media/network', retryable: true }));
+    const p = create('#p', { manifest: MANIFEST as never, registry: false, autoplay: 'any' });
+    await settle();
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(p.muted).toBe(false);
+  });
+
+  it('loop starts over at the end', async () => {
+    const p = create('#p', { manifest: MANIFEST as never, registry: false, loop: true });
+    const seek = vi.spyOn(p, 'seek').mockImplementation(() => {});
+    const play = vi.spyOn(p, 'play').mockResolvedValue();
+    p.bus.emit('ended', { at: 60 });
+    expect(seek).toHaveBeenCalledWith(0);
+    expect(play).toHaveBeenCalled();
+  });
+
+  it('without loop the end is the end', () => {
+    const p = create('#p', { manifest: MANIFEST as never, registry: false });
+    const play = vi.spyOn(p, 'play').mockResolvedValue();
+    p.bus.emit('ended', { at: 60 });
+    expect(play).not.toHaveBeenCalled();
   });
 });

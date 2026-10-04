@@ -48,6 +48,11 @@ export const CSS = `
 /* A live stream not on air has no video, hence no height for its notice. */
 .np__stage>[data-stream]:not(:has(video)){aspect-ratio:16/9;background:#000}
 .np__stage video{display:block;width:100%;height:auto}
+/* A fixed shape: the stage fills it, flex stretches the stream boxes, and each
+   video is fitted inside its box. */
+.np--ratio .np__stage{height:100%}
+.np--ratio .np__stage>[data-stream]{min-height:0}
+.np--ratio .np__stage video{height:100%;object-fit:contain}
 
 /* --- poster --- */
 .np__poster{

@@ -15,6 +15,25 @@ await player.attach();
 attachControls(player);
 ```
 
+## Options
+
+```ts
+attachControls(player, { timeDisplay: 'remaining', aspectRatio: '16:9' });
+```
+
+| Option | Default | |
+|---|---|---|
+| `timeDisplay` | `'elapsed'` | `'remaining'` counts down to the end: "−7:30 / 10:00" |
+| `aspectRatio` | none | A fixed shape, `'16:9'` or `'4:3'`, the videos fitted inside. Without it the player is as wide as its container and as tall as the video |
+| `hideAfterMs` | `2500` | Idle time before the bar hides; `0` keeps it visible |
+| `lang`, `strings` | the player's | Labels; see [Languages](#languages) |
+| `label` | "Video player" | Accessible name of the player region |
+| `poster` | `true` | Poster and play button until there is media |
+| `injectStyles` | `true` | Off when importing `nanoplayer.css` instead |
+
+With the bundle, the same options go under `controls`:
+`NanoPlayer.create('#p', { manifest, controls: { aspectRatio: '16:9' } })`.
+
 ## Accessibility
 
 Not an intention: it is checked in CI and **blocks the merge**.

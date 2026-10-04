@@ -471,6 +471,24 @@ A trim on a live stream is rejected: it makes no sense.
 
 ---
 
+## Playback options
+
+```js
+create('#player', { manifest, autoplay: 'muted', loop: true });
+```
+
+| Option | | |
+|---|---|---|
+| `autoplay` | `true` | Tries with sound. Browsers usually refuse until the viewer has interacted with the site; then the play button stays |
+| | `'muted'` | Starts muted, which browsers allow |
+| | `'any'` | Tries with sound and, refused, retries muted |
+| `loop` | `boolean` | Starts over at the end. The intro is not replayed |
+| `muted`, `volume` | | Initial state |
+
+Autoplay gives up the lazy lifecycle: the media downloads as soon as the
+player is created. Sound that starts on its own needs a way to stop it (WCAG
+1.4.2); the control bar provides one, and `'muted'` avoids the question.
+
 ## Reference
 
 ### Manifest
