@@ -79,13 +79,23 @@ function plain(payload: unknown): Record<string, unknown> {
   }
 }
 
-/** POSTed as JSON; `sendBeacon` when the page is going away, as fetch may not finish. */
+/**
+ * POSTed as JSON; by `sendBeacon` when the page is going away, as a fetch may
+ * not finish. The beacon goes as `text/plain`: with `application/json` it is
+ * refused cross-origin, the type is not CORS-safelisted, and the last batch,
+ * the one with the session summary, was lost.
+ */
 function endpointSender(endpoint: string) {
   return (events: AnalyticsEvent[], leaving: boolean) => {
     const body = JSON.stringify(events);
-    const beacon = () => typeof navigator !== 'undefined'
-      && navigator.sendBeacon?.(endpoint, new Blob([body], { type: 'application/json' }));
-    if (leaving && beacon()) return;
+    const beacon = () => {
+      try {
+        return navigator.sendBeacon(endpoint, new Blob([body], { type: 'text/plain;charset=UTF-8' }));
+      } catch {
+        return false;
+      }
+    };
+    if (leaving && typeof navigator !== 'undefined' && 'sendBeacon' in navigator && beacon()) return;
     void fetch(endpoint, {
       method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body,
     }).catch(() => {});

@@ -141,5 +141,25 @@ describe('analytics plugin', () => {
     player.bus.emit('play', { at: 0 });
     window.dispatchEvent(new Event('pagehide'));
     expect(beacon).toHaveBeenCalledWith('https://stats.example/collect', expect.any(Blob));
+    const blob = (beacon.mock.calls[0] as unknown as [string, Blob])[1];
+    expect(blob.type, 'CORS-safelisted, or it is refused cross-origin').toBe('text/plain;charset=utf-8');
+    expect(JSON.parse(await blob.text())[0].type).toBe('play');
+  });
+
+  it('a beacon that throws falls back to fetch', async () => {
+    vi.stubGlobal('navigator', { ...navigator, sendBeacon: () => { throw new TypeError('refused'); } });
+    const fetchMock = vi.fn(async () => new Response(''));
+    vi.stubGlobal('fetch', fetchMock);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const player = create(host, {
+      manifest: lecture, engines, registry: false,
+      plugins: { analytics: { endpoint: 'https://stats.example/collect' } },
+    });
+    await player.resolve();
+    await settle();
+    player.bus.emit('play', { at: 0 });
+    window.dispatchEvent(new Event('pagehide'));
+    expect(fetchMock).toHaveBeenCalledWith('https://stats.example/collect', expect.objectContaining({ keepalive: true }));
   });
 });
