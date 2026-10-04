@@ -95,6 +95,11 @@ export interface Manifest {
   outro?: Bumper;
   annotations?: Annotation[];
   textTracks?: TextTrackDef[];
+  /**
+   * A WebVTT file whose cues name an image for each stretch of the video,
+   * usually a sprite and its region: `thumbs.jpg#xywh=0,0,160,90`.
+   */
+  thumbnails?: string;
   live?: boolean;
   /**
    * Image shown after pressing play while a live stream is not on air, apart

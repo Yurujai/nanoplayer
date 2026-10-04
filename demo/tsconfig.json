@@ -14,6 +14,7 @@
       "@nanoplayer/plugin-quality": ["../packages/plugin-quality/src/index.ts"],
       "@nanoplayer/plugin-resume": ["../packages/plugin-resume/src/index.ts"],
       "@nanoplayer/plugin-transcript": ["../packages/plugin-transcript/src/index.ts"],
+      "@nanoplayer/plugin-thumbnails": ["../packages/plugin-thumbnails/src/index.ts"],
       "@nanoplayer/engine-hls": ["../packages/engine-hls/src/index.ts"]
     }
   },

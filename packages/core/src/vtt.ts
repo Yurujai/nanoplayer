@@ -1,4 +1,5 @@
-export interface TranscriptCue {
+/** A WebVTT cue as plain text. */
+export interface VttCue {
   /** Media time in seconds, as in the file. */
   start: number;
   end: number;
@@ -28,12 +29,12 @@ function plain(markup: string): string {
 }
 
 /**
- * The cues of a WebVTT file as plain text. Parsed here, not read from the
- * `<track>`: the captions plugin owns those, and keeps disabled, unloaded, every
- * one not showing.
+ * The cues of a WebVTT file as plain text, for plugins that need them without
+ * a `<track>`: the captions plugin owns those, and keeps disabled, unloaded,
+ * every one not showing.
  */
-export function parseVtt(source: string): TranscriptCue[] {
-  const cues: TranscriptCue[] = [];
+export function parseVtt(source: string): VttCue[] {
+  const cues: VttCue[] = [];
   for (const block of source.replace(/\r\n?/g, '\n').split(/\n{2,}/)) {
     const lines = block.split('\n');
     // Header, NOTE, STYLE and REGION blocks have no timing line.

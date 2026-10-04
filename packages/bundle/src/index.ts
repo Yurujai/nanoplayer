@@ -28,6 +28,7 @@ import '@nanoplayer/plugin-quality';
 import '@nanoplayer/plugin-resume';
 import '@nanoplayer/plugin-transcript';
 import '@nanoplayer/plugin-xapi';
+import '@nanoplayer/plugin-thumbnails';
 
 export interface Config extends CreateConfig {
   /** Control bar, on by default. `false` leaves it out; an object configures it. */
@@ -99,6 +100,8 @@ export {
   CHAIN_LEAD_MS, CHAIN_WATCH_MS, FIRST_FRAME_TIMEOUT_MS, firstFrame,
   // plugins
   topoSort,
+  // WebVTT
+  parseVtt,
 } from '@nanoplayer/core';
 
 export type {
@@ -116,7 +119,7 @@ export type {
   LiveStatus, RetryPolicy,
   BarControlDecl, OverlayDecl, OverlayHandle, PanelDecl, PanelHandle,
   SettingsChoiceDecl, SettingsGroupDecl, SettingsOptionDecl, SettingsPanelDecl,
-  TimelineMarkerDecl, TimelineMarkersDecl, UiSlots, ActivationResult, PluginConfig, PluginContext, PluginImpl, PluginManifest,
+  TimelineImage, TimelineMarkerDecl, TimelineMarkersDecl, TimelinePreviewDecl, UiSlots, ActivationResult, PluginConfig, PluginContext, PluginImpl, PluginManifest,
   CreateConfig,
 } from '@nanoplayer/core';
 

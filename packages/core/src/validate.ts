@@ -37,6 +37,9 @@ export function validateManifest(input: unknown): ValidationResult {
   if (input['liveWaitingImage'] !== undefined && input['live'] !== true) {
     warn('liveWaitingImage', 'Only used for live streams: `live: true` is missing');
   }
+  if (input['thumbnails'] !== undefined && !isStr(input['thumbnails'])) {
+    err('thumbnails', 'Must be the URL of a WebVTT file if present');
+  }
   if (input['duration'] !== undefined && (!isNum(input['duration']) || input['duration'] <= 0)) {
     err('duration', 'Must be a positive number if present');
   }

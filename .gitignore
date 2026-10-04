@@ -11,6 +11,8 @@ demo/public/media/*.mp4
 demo/public/media/*.jpg
 demo/public/media/*.m4a
 demo/public/media/hls/
+# Generated with thumbs.jpg, for whatever duration gen-media.sh was given.
+demo/public/media/thumbs.vtt
 
 # Stray screenshots
 *.png

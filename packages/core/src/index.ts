@@ -65,11 +65,15 @@ export type { BatchResolverOptions, RegistryOptions } from './registry.js';
 export { backoff, LiveTracker } from './live.js';
 export type { LiveStatus, RetryPolicy } from './live.js';
 
+// --- WebVTT -----------------------------------------------------------------
+export { parseVtt } from './vtt.js';
+export type { VttCue } from './vtt.js';
+
 // --- UI slots ---------------------------------------------------------------
 export type {
   BarControlDecl, OverlayDecl, OverlayHandle, PanelDecl, PanelHandle,
   SettingsChoiceDecl, SettingsGroupDecl, SettingsOptionDecl, SettingsPanelDecl,
-  TimelineMarkerDecl, TimelineMarkersDecl, UiSlots,
+  TimelineImage, TimelineMarkerDecl, TimelineMarkersDecl, TimelinePreviewDecl, UiSlots,
 } from './slots.js';
 
 // --- plugins ----------------------------------------------------------------

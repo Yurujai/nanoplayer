@@ -72,6 +72,22 @@ export interface TimelineMarkersDecl {
   markers: readonly TimelineMarkerDecl[];
 }
 
+/** A region of an image, in its own pixels; without a size, the whole image. */
+export interface TimelineImage {
+  url: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+}
+
+/** A picture for each point of the bar, shown while hovering it. */
+export interface TimelinePreviewDecl {
+  id: string;
+  /** For a time in **media time**, as markers; `null` while there is none yet. */
+  imageAt(mediaTime: number): TimelineImage | null;
+}
+
 export interface OverlayDecl {
   id: string;
   /**
@@ -113,6 +129,8 @@ export interface UiSlots {
   addSettingsPanel(panel: SettingsPanelDecl): () => void;
   /** Named segments on the progress bar; the UI builds marks and announcements. */
   addTimelineMarkers(decl: TimelineMarkersDecl): () => void;
+  /** Pictures over the hover time of the progress bar. */
+  addTimelinePreview(decl: TimelinePreviewDecl): () => void;
   /**
    * Reserves a layer over the video. Unlike `bar` and `settings`, this hands out
    * DOM: a layer is **content** (a caption, an activity), not interactive

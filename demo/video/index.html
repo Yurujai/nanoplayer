@@ -57,6 +57,8 @@
         <strong>⚙ Settings → Descriptions (screen reader)</strong> to hear what is on
         screen. Alternative audio, such as an audio-described track, shows up under
         <strong>Audio</strong> when the media carries it.</li>
+    <li><strong>Thumbnails.</strong> Hover the progress bar: a picture of that
+        point shows above the time.</li>
     <li><strong>Chapters.</strong> Three of them, marked on the progress bar. Hover
         the bar to see where each one falls, or jump to one from
         <strong>⚙ Settings → Chapters</strong>.</li>
@@ -102,6 +104,7 @@ import '@nanoplayer/plugin-media-session';
 import '@nanoplayer/plugin-quality';
 import '@nanoplayer/plugin-resume';
 import '@nanoplayer/plugin-transcript';
+import '@nanoplayer/plugin-thumbnails';
 
 const player = create('#player', { manifest: '/api/video/123' });
 attachControls(player);</code></pre>

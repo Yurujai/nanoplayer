@@ -19,6 +19,7 @@ const MANIFEST: Record<keyof Manifest, Status> = {
   textTracks: 'validated',
   live: 'validated',
   liveWaitingImage: 'validated',
+  thumbnails: 'validated',
   title: 'free',   // optional text: any string will do
   poster: 'free',  // optional URL; if it fails, it degrades to black
 };
@@ -100,6 +101,7 @@ describe('drift between types and validator', () => {
         { src: 'es.vtt', lang: 'es', label: 'Español', kind: 'subtitles', default: true },
         { src: 'en.vtt', lang: 'en', label: 'English', kind: 'subtitles' },
       ],
+      thumbnails: 'thumbs.vtt',
     } satisfies Manifest;
 
     const r = validateManifest(complete);

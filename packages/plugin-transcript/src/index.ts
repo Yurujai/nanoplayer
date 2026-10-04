@@ -4,13 +4,11 @@
  * for reading at one's own pace what the captions only flash by.
  */
 import {
-  plugins, strings,
+  parseVtt, plugins, strings,
   type Player, type PluginContext, type PluginImpl, type TextTrackDef, type Translate,
-  type UiSlots,
+  type VttCue,
 } from '@nanoplayer/core';
-import { parseVtt, type TranscriptCue } from './vtt.js';
 
-export { parseVtt, type TranscriptCue } from './vtt.js';
 
 strings.register('es', {
   'transcript.label': 'Transcripción',
@@ -88,9 +86,9 @@ class TranscriptView {
   readonly element: HTMLElement;
   readonly #list: HTMLOListElement;
   readonly #status: HTMLElement;
-  readonly #cache = new Map<string, Promise<TranscriptCue[]>>();
+  readonly #cache = new Map<string, Promise<VttCue[]>>();
   #track: TextTrackDef;
-  #cues: TranscriptCue[] = [];
+  #cues: VttCue[] = [];
   #buttons: HTMLButtonElement[] = [];
   #current = -1;
   #touchedAt = -Infinity;
@@ -185,7 +183,7 @@ class TranscriptView {
   }
 
   /** In visible time; what a trim leaves out cannot be jumped to, so it is not listed. */
-  #reachable(cues: TranscriptCue[]): TranscriptCue[] {
+  #reachable(cues: VttCue[]): VttCue[] {
     const trim = this.player.trim;
     return cues
       .filter((c) => !trim || (c.end > trim.start && c.start < trim.end))
@@ -196,7 +194,7 @@ class TranscriptView {
       }));
   }
 
-  #render(cues: TranscriptCue[]): void {
+  #render(cues: VttCue[]): void {
     this.#cues = cues;
     this.#current = -1;
     this.#list.textContent = '';

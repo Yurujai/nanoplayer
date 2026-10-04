@@ -8,6 +8,7 @@ import '@nanoplayer/plugin-media-session';
 import '@nanoplayer/plugin-quality';
 import '@nanoplayer/plugin-resume';
 import '@nanoplayer/plugin-transcript';
+import '@nanoplayer/plugin-thumbnails';
 
 // The page lives under /video/ and the media at the site root.
 const MEDIA = '../media/';
@@ -31,6 +32,7 @@ function manifestFor(dual: boolean, withBumpers: boolean): Manifest {
       intro: { sources: [{ src: `${MEDIA}intro.mp4`, type: 'video/mp4' }] },
       outro: { sources: [{ src: `${MEDIA}outro.mp4`, type: 'video/mp4' }] },
     } : {}),
+    thumbnails: `${MEDIA}thumbs.vtt`,
     textTracks: [
       { src: `${MEDIA}en.vtt`, lang: 'en', label: 'English', kind: 'subtitles' },
       { src: `${MEDIA}es.vtt`, lang: 'es', label: 'Español', kind: 'subtitles' },

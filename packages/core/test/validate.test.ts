@@ -40,6 +40,12 @@ describe('validateManifest', () => {
     }
   });
 
+  it('takes thumbnails as the URL of a WebVTT file', () => {
+    expect(validateManifest(dual({ thumbnails: 'thumbs.vtt' })).ok).toBe(true);
+    expect(pathsOf(validateManifest(dual({ thumbnails: '' })))).toContain('thumbnails');
+    expect(pathsOf(validateManifest(dual({ thumbnails: { src: 'thumbs.vtt' } })))).toContain('thumbnails');
+  });
+
   it('requires an id and at least one stream', () => {
     expect(pathsOf(validateManifest({}))).toEqual(
       expect.arrayContaining(['id', 'streams']),

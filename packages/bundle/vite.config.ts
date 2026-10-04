@@ -19,6 +19,7 @@ export default defineConfig({
       '@nanoplayer/plugin-resume': src('../plugin-resume/src/index.ts'),
       '@nanoplayer/plugin-transcript': src('../plugin-transcript/src/index.ts'),
       '@nanoplayer/plugin-xapi': src('../plugin-xapi/src/index.ts'),
+      '@nanoplayer/plugin-thumbnails': src('../plugin-thumbnails/src/index.ts'),
     },
   },
   build: {

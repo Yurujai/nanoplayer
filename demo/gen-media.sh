@@ -96,7 +96,26 @@ ffmpeg -y -loglevel error -i slides.mp4 \
 echo "Generating poster.jpg (a presenter frame)..."
 ffmpeg -y -loglevel error -ss 3 -i presenter.mp4 -frames:v 1 -vf scale=960:-1 poster.jpg
 
+# Progress bar thumbnails: one 160x90 frame every 5 s, tiled in one sheet, and
+# the WebVTT naming each region. Generated together: the duration varies.
+STEP=5; COLS=5; TW=160; TH=90
+COUNT=$(( (DUR + STEP - 1) / STEP ))
+ROWS=$(( (COUNT + COLS - 1) / COLS ))
+echo "Generating thumbs.jpg and thumbs.vtt (${COUNT} frames)..."
+ffmpeg -y -loglevel error -i presenter.mp4 \
+  -vf "fps=1/${STEP},scale=${TW}:${TH},tile=${COLS}x${ROWS}" -frames:v 1 thumbs.jpg
+stamp() { printf '%02d:%02d:%02d.000' $(( $1 / 3600 )) $(( $1 % 3600 / 60 )) $(( $1 % 60 )); }
+{
+  echo "WEBVTT"
+  for (( i = 0; i < COUNT; i++ )); do
+    start=$(( i * STEP )); end=$(( start + STEP > DUR ? DUR : start + STEP ))
+    echo
+    echo "$(stamp $start) --> $(stamp $end)"
+    echo "thumbs.jpg#xywh=$(( i % COLS * TW )),$(( i / COLS * TH )),${TW},${TH}"
+  done
+} > thumbs.vtt
+
 echo
-ls -lh presenter.mp4 slides.mp4 intro.mp4 outro.mp4 poster.jpg audio.m4a
+ls -lh presenter.mp4 slides.mp4 intro.mp4 outro.mp4 poster.jpg thumbs.jpg audio.m4a
 ls hls/*.m3u8 | sed "s/^/  /"
 echo "Done."

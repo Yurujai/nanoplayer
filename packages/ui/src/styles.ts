@@ -129,6 +129,13 @@ button.np__btn[disabled]{opacity:.4;cursor:default}
   background:rgba(20,22,26,.94);color:var(--np-color-control);
   font-size:.78rem;white-space:nowrap;pointer-events:none;
 }
+.np__thumb{
+  display:block;margin:0 auto .3rem;border-radius:3px;
+  background:#000 no-repeat;
+}
+/* A whole image per point, of unknown size: fitted into a 16:9 box. */
+.np__thumb--whole{width:10rem;height:5.625rem;background-size:contain;background-position:center}
+.np__tip span:last-child{display:block;text-align:center}
 .np__plugins{display:inline-flex;align-items:center}
 
 /* --- sliders: native range inputs keep keyboard, touch and announcements --- */

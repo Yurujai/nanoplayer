@@ -210,6 +210,30 @@ own picker.
 The panel sits right after the player's element, on the page, so it inherits
 the page's colours and fonts. It is not shown in full screen.
 
+### Thumbnails
+
+```json
+"thumbnails": "thumbs.vtt"
+```
+
+A WebVTT file whose cues name the picture for each stretch, usually a region
+of one sprite sheet so a single request serves the whole bar:
+
+```text
+WEBVTT
+
+00:00:00.000 --> 00:00:05.000
+thumbs.jpg#xywh=0,0,160,90
+
+00:00:05.000 --> 00:00:10.000
+thumbs.jpg#xywh=160,0,160,90
+```
+
+With `@nanoplayer/plugin-thumbnails` loaded, hovering the progress bar shows
+the picture above the time. Image URLs are relative to the WebVTT file. Times
+are media time, like annotations, so a trim does not shift them. The file is
+fetched when playback starts or on the first hover, not with the page.
+
 ### Progress to the LMS (xAPI)
 
 `@nanoplayer/plugin-xapi` reports what was watched as [xAPI Video

@@ -1,4 +1,6 @@
-import type { Player, TimelineMarkerDecl, Translate } from '@nanoplayer/core';
+import type {
+  Player, TimelineImage, TimelineMarkerDecl, TimelinePreviewDecl, Translate,
+} from '@nanoplayer/core';
 import { createRange, Listeners } from './dom.js';
 import { formatTime, spokenTime } from './format.js';
 
@@ -28,6 +30,7 @@ export class ProgressBar {
   readonly #tip: HTMLElement;
   readonly #listeners = new Listeners();
   readonly #markers = new Map<string, readonly TimelineMarkerDecl[]>();
+  readonly #previews = new Map<string, TimelinePreviewDecl>();
   #segments: Segment[] = [];
   /** Duration the segments were laid out for: they are rebuilt only when it changes. */
   #segmentsFor = -1;
@@ -87,6 +90,12 @@ export class ProgressBar {
       this.#segmentsFor = -1;
       this.render();
     };
+  }
+
+  /** Pictures over the hover time, from whoever has them. */
+  setPreview(decl: TimelinePreviewDecl): () => void {
+    this.#previews.set(decl.id, decl);
+    return () => { this.#previews.delete(decl.id); };
   }
 
   setBumperTime(current: number, duration: number): void {
@@ -230,10 +239,39 @@ export class ProgressBar {
       this.#tip.hidden = true;
       return;
     }
-    this.#tip.textContent = text;
-    // Clamped so it does not overflow the player's sides.
-    this.#tip.style.left = `${Math.min(92, Math.max(8, frac * 100))}%`;
+    const image = this.player.manifest?.live ? null : this.#imageAt(frac * (this.player.duration || 0));
+    const label = this.doc.createElement('span');
+    label.textContent = text;
+    this.#tip.replaceChildren(...(image ? [this.#thumb(image)] : []), label);
     this.#tip.hidden = false;
+    // Clamped by its own width, so a picture does not overflow the player's sides.
+    const half = this.#tip.offsetWidth / 2;
+    const x = frac * box.width;
+    this.#tip.style.left = `${Math.min(box.width - half, Math.max(half, x))}px`;
+  }
+
+  #imageAt(visible: number): TimelineImage | null {
+    const media = this.player.toMediaTime(visible);
+    for (const preview of this.#previews.values()) {
+      const image = preview.imageAt(media);
+      if (image) return image;
+    }
+    return null;
+  }
+
+  /** A sprite region as a background, so one sheet serves many points. */
+  #thumb(image: TimelineImage): HTMLElement {
+    const thumb = this.doc.createElement('span');
+    thumb.className = 'np__thumb';
+    thumb.style.backgroundImage = `url("${image.url.replace(/"/g, '%22')}")`;
+    if (image.width && image.height) {
+      thumb.style.width = `${image.width}px`;
+      thumb.style.height = `${image.height}px`;
+      thumb.style.backgroundPosition = `-${image.x ?? 0}px -${image.y ?? 0}px`;
+    } else {
+      thumb.classList.add('np__thumb--whole');
+    }
+    return thumb;
   }
 
   /**

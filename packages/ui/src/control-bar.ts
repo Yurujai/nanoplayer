@@ -9,7 +9,7 @@ import { hasEngine, strings } from '@nanoplayer/core';
 import type {
   BarControlDecl, Catalogues, OverlayDecl, OverlayHandle, PanelDecl, PanelHandle,
   Player, PlayerError,
-  SettingsPanelDecl, TimelineMarkersDecl, Translate, UiSlots,
+  SettingsPanelDecl, TimelineMarkersDecl, TimelinePreviewDecl, Translate, UiSlots,
 } from '@nanoplayer/core';
 import { AutoHide } from './auto-hide.js';
 import { createButton, Listeners } from './dom.js';
@@ -169,6 +169,10 @@ export class ControlBar implements UiSlots {
 
   addTimelineMarkers(decl: TimelineMarkersDecl): () => void {
     return this.#progress.setMarkers(decl.id, decl.markers);
+  }
+
+  addTimelinePreview(decl: TimelinePreviewDecl): () => void {
+    return this.#progress.setPreview(decl);
   }
 
   /**

@@ -23,7 +23,8 @@
     "@nanoplayer/plugin-quality": "workspace:*",
     "@nanoplayer/plugin-resume": "workspace:*",
     "@nanoplayer/plugin-transcript": "workspace:*",
-    "@nanoplayer/plugin-xapi": "workspace:*"
+    "@nanoplayer/plugin-xapi": "workspace:*",
+    "@nanoplayer/plugin-thumbnails": "workspace:*"
   },
   "devDependencies": { "vite": "^6.0.0" }
 }
